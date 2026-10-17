@@ -23,7 +23,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 - [x] 🔴 **T03** Add README skeleton (what it is, status, planned run steps, background note about thesis prototype)
   `docs: add README skeleton`
   Done when: README says the earlier prototype is background only and no code was copied.
-- [ ] 🔴 **T04** Add `.gitignore` and `.env.example`
+- [x] 🔴 **T04** Add `.gitignore` and `.env.example`
   `chore: add gitignore and env example`
 - [ ] 🔴 **T05** `go mod init`, add `cmd/fleetflow/main.go` that prints a startup line
   `chore: initialize go module and main entrypoint`

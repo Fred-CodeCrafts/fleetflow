@@ -1,0 +1,29 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+fleetflow
+
+# Test artifacts
+*.test
+*.out
+coverage.txt
+
+# Environment files
+.env
+.env.local
+!.env.example
+
+# IDE and Editor configurations
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Operating System files
+.DS_Store
+Thumbs.db
