@@ -1,0 +1,46 @@
+// Package driver holds FleetFlow's driver record: the domain type, the rules a
+// driver must satisfy, and the service that applies them (DESIGN 3.7).
+//
+// The layer order is handler (HTTP) → Service → Repository. The Repository
+// interface is declared in this package so the service owns the seam: a memory
+// store backs the unit tests and a database-free run, and a Postgres store can
+// replace it later without the service noticing. Nothing here imports net/http
+// or a database package.
+package driver
+
+import (
+	"strings"
+
+	"fleetflow/internal/domain"
+)
+
+// Error codes. They travel in API error bodies, so they are part of the public
+// contract and must stay stable (see domain.Error and DESIGN 3.8).
+const (
+	codeNameRequired = "driver_name_required"
+)
+
+// Driver is one person who can be given a vehicle. Unlike a vehicle it carries
+// no status: a driver is either on file or not, and any availability is derived
+// from the trips that reference them. Contact is free-form operator metadata
+// (for example a phone number or an email), not an enum, so the service does
+// not constrain it.
+type Driver struct {
+	ID      string
+	Name    string
+	Contact string
+}
+
+// New validates the client-supplied fields and returns a Driver. The id is left
+// empty: Service.Create assigns one, and a repository fills it in when it loads
+// a row.
+//
+// The rule is the one a client can actually get wrong (PRD US-1): the name must
+// not be blank. Human fields (name, contact) are trimmed.
+func New(name, contact string) (Driver, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return Driver{}, domain.Invalid(codeNameRequired, "driver name is required")
+	}
+	return Driver{Name: name, Contact: strings.TrimSpace(contact)}, nil
+}

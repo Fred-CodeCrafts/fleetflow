@@ -6,3 +6,4 @@ This file is deleted when the trial is over and is not part of the project.
 
 | branch | slice | files | tests |
 |---|---|---|---|
+| feat/driver | driver entity | internal/driver/* | go test ./internal/driver/... |
