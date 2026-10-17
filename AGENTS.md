@@ -100,6 +100,18 @@ Tests go in the same commit as the code they cover, or in the commit immediately
 - [ ] No secrets, no large binaries, no copied code from other folders.
 - [ ] The commit message follows section 2.
 
+**Running the race detector on this machine.** Windows has no C compiler, so
+`go test -race` fails there with `cgo: C compiler "gcc" not found`. WSL
+(`kali-linux`) has gcc/clang and Go 1.25.5 in `~/tools/go`; run the suite from
+PowerShell with:
+
+```powershell
+wsl.exe bash -lc "cd '/mnt/c/Users/frede/documents/fleet project/Fleetflow'; ~/tools/go/bin/go test -race -count=1 ./..."
+```
+
+Do not tick a task whose "done when" requires `-race` until this command has
+actually been run and passed.
+
 ---
 
 ## 6. When to push
