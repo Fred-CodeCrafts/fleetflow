@@ -31,3 +31,10 @@ func buildStaticCosts(g *graph.Graph) []float64 {
 	}
 	return costs
 }
+
+// NewStaticMetric returns an immutable free-flow metric for g, the same costs a
+// baseline engine uses. It is version 0 because it comes from no customization
+// pass. Vehicles that never contact an engine can route on it.
+func NewStaticMetric(g *graph.Graph) *Metric {
+	return NewMetric(buildStaticCosts(g), 0)
+}

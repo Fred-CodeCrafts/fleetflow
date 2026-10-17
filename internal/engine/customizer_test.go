@@ -92,6 +92,29 @@ func TestBuildStaticCosts_AreFreeFlow(t *testing.T) {
 	}
 }
 
+func TestNewStaticMetric_IsFreeFlowAtVersionZero(t *testing.T) {
+	g := loadFixture(t)
+
+	m := NewStaticMetric(g)
+	if m.Version() != 0 {
+		t.Errorf("Version() = %d, want 0", m.Version())
+	}
+	for i, e := range g.Edges {
+		if got := m.Cost(i); got != e.FreeFlowS {
+			t.Errorf("edge %s: cost = %f, want free-flow %f", e.ID, got, e.FreeFlowS)
+		}
+	}
+
+	// The static route for A -> D is the one the engine tests expect.
+	p, err := NewDijkstraRouter(g).Route(m, "A", "D")
+	if err != nil {
+		t.Fatalf("unexpected error routing on the static metric: %v", err)
+	}
+	if got := edgeIDs(g, p.Edges); len(got) != 2 || got[0] != "e_AC" || got[1] != "e_CD" {
+		t.Errorf("static route = %v, want [e_AC e_CD]", got)
+	}
+}
+
 // edgeIndex returns the index of the edge with the given ID.
 func edgeIndex(t *testing.T, g *graph.Graph, id string) int {
 	t.Helper()
