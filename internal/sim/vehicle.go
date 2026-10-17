@@ -51,6 +51,11 @@ type Vehicle struct {
 	arriveS      float64
 	lastRouteS   float64
 	routeChanges int
+
+	// freeFlowS accumulates the free-flow time of the edges this trip has
+	// actually entered, which is the baseline the fairness check measures time
+	// lost against.
+	freeFlowS float64
 }
 
 // newVehicle creates a pending vehicle for the given trip.

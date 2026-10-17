@@ -20,13 +20,56 @@ type Metrics struct {
 	SaturatedEdges    int
 	SaturatedEdgesPct float64
 	UtilizationStdDev float64
+
+	// Fairness is the US-6 fairness check. It is reported beside the headline
+	// figures above, not as one of them: none of it says that FleetFlow wins.
+	Fairness Fairness
+}
+
+// Fairness holds the fairness check that sits next to the headline metrics but
+// is not a headline result. It records what the trip times cost against free
+// flow and how the two populations of vehicles were treated, so a result can be
+// read honestly either way rather than only when the fleet looks good.
+type Fairness struct {
+	// MeanTimeLostS is the mean, over completed trips, of the actual trip
+	// duration minus the free-flow duration of the route the vehicle actually
+	// drove, in simulated seconds. Time lost is what congestion and detours cost
+	// the vehicle; the baseline follows the driven route, not a theoretical best
+	// one, so a detour is not scored as free-flow time.
+	MeanTimeLostS float64
+	// TotalTimeLostS is the sum of those per-trip differences, in simulated
+	// seconds.
+	TotalTimeLostS float64
+
+	// FleetTrips is how many completed trips were driven by fleet vehicles, and
+	// MeanFleetTripS is their mean duration in simulated seconds. Zero when no
+	// fleet trip has finished.
+	FleetTrips     int
+	MeanFleetTripS float64
+	// BackgroundTrips and MeanBackgroundTripS are the same for background
+	// vehicles, which never use the routing service.
+	BackgroundTrips     int
+	MeanBackgroundTripS float64
 }
 
 // Collect computes the metrics of the run at its current state.
 func (s *Sim) Collect() Metrics {
 	m := Metrics{TotalVehicles: len(s.vehicles)}
 
-	trips := append([]float64(nil), s.completed...)
+	trips := make([]float64, 0, len(s.completed))
+	var timeLostTotal float64
+	var fleetSum, backgroundSum float64
+	for _, t := range s.completed {
+		trips = append(trips, t.durationS)
+		timeLostTotal += t.durationS - t.freeFlowS
+		if t.fleet {
+			m.Fairness.FleetTrips++
+			fleetSum += t.durationS
+		} else {
+			m.Fairness.BackgroundTrips++
+			backgroundSum += t.durationS
+		}
+	}
 	sort.Float64s(trips)
 	m.CompletedTrips = len(trips)
 	if len(trips) > 0 {
@@ -36,6 +79,14 @@ func (s *Sim) Collect() Metrics {
 		}
 		m.AverageTripS = sum / float64(len(trips))
 		m.P95TripS = percentile(trips, 95)
+		m.Fairness.MeanTimeLostS = timeLostTotal / float64(len(trips))
+		m.Fairness.TotalTimeLostS = timeLostTotal
+	}
+	if m.Fairness.FleetTrips > 0 {
+		m.Fairness.MeanFleetTripS = fleetSum / float64(m.Fairness.FleetTrips)
+	}
+	if m.Fairness.BackgroundTrips > 0 {
+		m.Fairness.MeanBackgroundTripS = backgroundSum / float64(m.Fairness.BackgroundTrips)
 	}
 
 	for _, v := range s.vehicles {

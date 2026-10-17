@@ -62,6 +62,15 @@ func DefaultConfig() Config {
 	}
 }
 
+// completedTrip is one finished trip as the fairness check needs it: how long it
+// took, what free flow would have cost on the route actually driven, and which
+// population the vehicle belonged to.
+type completedTrip struct {
+	durationS float64
+	freeFlowS float64
+	fleet     bool
+}
+
 // Sim advances vehicles over the road graph. It is not safe for concurrent use;
 // the API layer drives it from a single goroutine and publishes snapshots for
 // readers.
@@ -72,7 +81,7 @@ type Sim struct {
 	vehicles []*Vehicle
 
 	nowS      float64
-	completed []float64
+	completed []completedTrip
 
 	// Background vehicles never contact an engine, so they route on a fixed
 	// free-flow metric of their own.
@@ -133,7 +142,13 @@ func (s *Sim) Vehicles() []*Vehicle { return s.vehicles }
 
 // CompletedTrips returns the durations of the trips finished so far, in
 // simulated seconds.
-func (s *Sim) CompletedTrips() []float64 { return s.completed }
+func (s *Sim) CompletedTrips() []float64 {
+	durations := make([]float64, len(s.completed))
+	for i, t := range s.completed {
+		durations[i] = t.durationS
+	}
+	return durations
+}
 
 // Occupancy returns the live per-edge vehicle counts. Callers that keep them
 // should use Snapshot instead.
@@ -342,20 +357,41 @@ func (s *Sim) advanceVehicle(v *Vehicle, dt float64) {
 		if v.leg >= len(v.route) {
 			v.state = VehicleArrived
 			v.arriveS = s.nowS - remaining
-			s.completed = append(s.completed, v.arriveS-v.departS)
+			s.completeTrip(v)
 			return
 		}
-		s.occ.Enter(v.route[v.leg])
+		s.enterEdge(v, v.route[v.leg])
 	}
+}
+
+// enterEdge drives a vehicle onto an edge. It charges the edge's free-flow time
+// against the trip as the edge is entered, so the fairness baseline is the route
+// the vehicle actually drove: edges dropped by a reroute are never charged, and
+// an edge taken twice is charged twice.
+func (s *Sim) enterEdge(v *Vehicle, edgeIndex int) {
+	v.freeFlowS += s.g.Edges[edgeIndex].FreeFlowS
+	s.occ.Enter(edgeIndex)
+}
+
+// completeTrip records an arrived vehicle's trip, together with the free-flow
+// time accumulated over the route it actually drove.
+func (s *Sim) completeTrip(v *Vehicle) {
+	s.completed = append(s.completed, completedTrip{
+		durationS: v.arriveS - v.departS,
+		freeFlowS: v.freeFlowS,
+		fleet:     v.IsFleet(),
+	})
 }
 
 // placeOnRoute puts a vehicle on the network with the given edge route, starting
 // at atS. An empty route means the vehicle is already at its destination.
 func (s *Sim) placeOnRoute(v *Vehicle, route []int, atS float64) {
+	v.freeFlowS = 0 // each placement is a fresh trip
+
 	if len(route) == 0 {
 		v.state = VehicleArrived
 		v.arriveS = atS
-		s.completed = append(s.completed, atS-v.departS)
+		s.completeTrip(v)
 		return
 	}
 
@@ -363,5 +399,5 @@ func (s *Sim) placeOnRoute(v *Vehicle, route []int, atS float64) {
 	v.leg = 0
 	v.travelledM = 0
 	v.state = VehicleRunning
-	s.occ.Enter(route[0])
+	s.enterEdge(v, route[0])
 }
