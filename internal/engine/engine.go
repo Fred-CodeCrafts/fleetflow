@@ -31,6 +31,10 @@ type Engine struct {
 	states    []*weights.EdgeState
 	edgeIndex map[string]int
 
+	// static selects baseline mode: the metric is fixed to free-flow times and
+	// reports are ignored.
+	static bool
+
 	active  atomic.Pointer[Metric]
 	version atomic.Uint64
 }
@@ -39,6 +43,17 @@ type Engine struct {
 // the parameters must be valid; the engine publishes its first, free-flow metric
 // before returning.
 func New(g *graph.Graph, router Router, params weights.Params) (*Engine, error) {
+	return newEngine(g, router, params, false)
+}
+
+// NewBaseline creates an engine in baseline mode: the metric is fixed to
+// free-flow times and reports are accepted but ignored, so it always returns
+// static shortest paths. It is the comparison arm for the dynamic engine.
+func NewBaseline(g *graph.Graph, router Router) (*Engine, error) {
+	return newEngine(g, router, weights.DefaultParams(), true)
+}
+
+func newEngine(g *graph.Graph, router Router, params weights.Params, static bool) (*Engine, error) {
 	if g == nil {
 		return nil, errors.New("graph is required")
 	}
@@ -53,15 +68,24 @@ func New(g *graph.Graph, router Router, params weights.Params) (*Engine, error) 
 		graph:     g,
 		router:    router,
 		params:    params,
-		states:    make([]*weights.EdgeState, len(g.Edges)),
+		static:    static,
 		edgeIndex: make(map[string]int, len(g.Edges)),
 	}
 	for i, edge := range g.Edges {
-		e.states[i] = weights.NewEdgeState()
 		e.edgeIndex[edge.ID] = i
 	}
 
-	e.Customize()
+	if static {
+		e.publish(buildStaticCosts(g))
+		return e, nil
+	}
+
+	e.states = make([]*weights.EdgeState, len(g.Edges))
+	for i := range e.states {
+		e.states[i] = weights.NewEdgeState()
+	}
+	e.publish(buildDynamicCosts(g, e.states, params))
+
 	return e, nil
 }
 
@@ -79,6 +103,9 @@ func (e *Engine) Report(edgeID string, speedMPS float64, now time.Time) error {
 	if !ok {
 		return fmt.Errorf("%w: %s", ErrEdgeNotFound, edgeID)
 	}
+	if e.static {
+		return nil // baseline mode has no weights to update
+	}
 	e.states[i].Observe(speedMPS, e.graph.Edges[i].SpeedLimitMPS, e.params.Gamma, now)
 	return nil
 }
@@ -95,9 +122,20 @@ func (e *Engine) Route(fromID, toID string) (*Path, error) {
 }
 
 // Customize rebuilds the metric from the current edge states and publishes it
-// atomically. Older snapshots stay valid until no query references them.
+// atomically. Older snapshots stay valid until no query references them. In
+// baseline mode the metric never changes, so the active snapshot is returned
+// unchanged.
 func (e *Engine) Customize() *Metric {
-	m := NewMetric(buildDynamicCosts(e.graph, e.states, e.params), e.version.Add(1))
+	if e.static {
+		return e.active.Load()
+	}
+	return e.publish(buildDynamicCosts(e.graph, e.states, e.params))
+}
+
+// publish stores a freshly built cost slice as the active snapshot and bumps the
+// version.
+func (e *Engine) publish(costs []float64) *Metric {
+	m := NewMetric(costs, e.version.Add(1))
 	e.active.Store(m)
 	return m
 }

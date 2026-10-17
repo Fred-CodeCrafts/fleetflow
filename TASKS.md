@@ -74,7 +74,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   `feat(engine): publish active metric with atomic pointer`
 - [x] 🔴 **T23** Add periodic customization loop with clean shutdown
   `feat(engine): run customization on an interval`
-- [ ] 🔴 **T24** Add baseline engine (weights disabled, fixed free-flow metric)
+- [x] 🔴 **T24** Add baseline engine (weights disabled, fixed free-flow metric)
   `feat(engine): add static baseline mode`
 - [ ] 🔴 **T25** Add race test: queries during customization and reports
   `test(engine): add race test for queries during customization`

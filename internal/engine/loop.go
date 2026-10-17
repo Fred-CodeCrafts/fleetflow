@@ -7,8 +7,11 @@ import (
 
 // DecayStale applies decay to every edge that has gone quiet since its last
 // report. It is meant to be called once per customization cycle, before the
-// metric is rebuilt.
+// metric is rebuilt. Baseline mode has no weights, so it does nothing.
 func (e *Engine) DecayStale(now time.Time) {
+	if e.static {
+		return
+	}
 	for i := range e.states {
 		e.states[i].Decay(now, e.params.Lambda, e.params.Hold)
 	}
