@@ -174,7 +174,7 @@ Plain `net/http`. JSON in and out. `POST /api/reports` and `POST /api/route` req
 | `GET /healthz` | Liveness |
 | `GET /readyz` | Readiness: graph loaded, DB reachable when configured |
 
-Every entity follows handler → service → repository, including vehicles and drivers. Consistency matters more than saving a file: new contributors and AI agents can predict where anything goes. Repository interfaces are defined in the service package (or `domain/`), with `postgres/` and `memory/` implementations behind them. Services are unit-tested against `memory/`; integration tests run against a real Postgres (e.g. in Docker). The routing core (`graph`, `weights`, `engine`) imports nothing from the HTTP or database layers.
+Every entity follows handler → service → repository, including vehicles, drivers, trips, runs and API keys. Consistency matters more than saving a file: new contributors and AI agents can predict where anything goes. Repository interfaces are defined in the service package (or `domain/`), with `postgres/` and `memory/` implementations behind them. Services are unit-tested against `memory/`; integration tests run against a real Postgres (e.g. in Docker). The routing core (`graph`, `weights`, `engine`) imports nothing from the HTTP or database layers.
 
 Fleet records (vehicles, drivers, trips, completed-trip history, saved comparison runs) live in PostgreSQL and survive a server restart; schema changes go through versioned migrations. API keys are stored hashed, never in plain text, and never written to logs. Live congestion state stays in memory on the single instance. `GET /api/metrics` reports trip and congestion metrics plus the engineering numbers: route query latency (p50, p99), customization time and metric age.
 
@@ -357,6 +357,7 @@ Deployment deadline is **24 October**. Commit after each step, as described in `
 | Live updates | Server-Sent Events | Simpler than WebSockets, enough for one-way streaming |
 | Dashboard | Canvas, no map tiles | No outside dependencies, works offline |
 | State | In memory (single instance) for congestion; PostgreSQL for fleet records | Persistent records survive restarts, congestion rebuilds from fresh reports |
+| Architecture | Handler → service → repository per entity; the routing core (`graph`, `weights`, `engine`) imports no HTTP or database package | Predictable layout for contributors and agents, and the hot path cannot reach the database by accident (PRD US-5, US-12) |
 | Deployment | Cloud Run for submission, Fly for preview | Competition rule, with Fly kept as a convenience |
 | Database | PostgreSQL, hosted externally (Cloud SQL vs. free tier TBD) | Fleet records must survive restarts; congestion stays in memory |
 | Simulated reports | Through the public API (`POST /api/reports`, `POST /api/route`) | Simulated and external traffic take the same validated path (PRD US-7), and one run clock keeps refresh and streaming in step |
