@@ -88,3 +88,16 @@ func TestLoadFromFile_Fixture(t *testing.T) {
 		t.Errorf("expected derived values on e_AB, got FreeFlowS=%f, Capacity=%f", eAB.FreeFlowS, eAB.Capacity)
 	}
 }
+
+func TestLoadFromFile_GeneratedGraph(t *testing.T) {
+	g, err := LoadFromFile("../../data/graph.json")
+	if err != nil {
+		t.Fatalf("failed to load generated data/graph.json: %v", err)
+	}
+	if len(g.Nodes) != 36 {
+		t.Errorf("expected 36 nodes in generated graph, got %d", len(g.Nodes))
+	}
+	if len(g.Edges) != 120 {
+		t.Errorf("expected 120 edges in generated graph, got %d", len(g.Edges))
+	}
+}

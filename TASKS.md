@@ -37,7 +37,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   `feat(graph): derive free-flow time and capacity per edge`
 - [x] 🔴 **T09** Add a tiny hand-made test graph in `data/` for tests
   `test(graph): add small test graph fixture`
-- [ ] 🔴 **T10** Add generated grid-city graph script (fallback map)
+- [x] 🔴 **T10** Add generated grid-city graph script (fallback map)
   `feat(scripts): generate grid city graph`
   Done when: running the script writes `data/graph.json` that loads without errors.
 
