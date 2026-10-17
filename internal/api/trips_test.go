@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -91,5 +92,83 @@ func TestTrips_Answer503WithoutAService(t *testing.T) {
 	}
 	if code := field(t, decodeBody(t, rec), "code"); code != "fleet_unavailable" {
 		t.Errorf("code = %q, want fleet_unavailable", code)
+	}
+}
+
+// setTripStatus drives POST /api/trips/{id}/status.
+func setTripStatus(t *testing.T, s *Server, tripID, body string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	return postJSON(t, s, "/api/trips/"+tripID+"/status", body)
+}
+
+// TestTrips_AdvanceStatusThroughItsLife follows one trip from planned to
+// completed and checks the list agrees, since a dashboard reads the list rather
+// than the reply to the move.
+func TestTrips_AdvanceStatusThroughItsLife(t *testing.T) {
+	s := fleetServer(t)
+	id := field(t, decodeBody(t, postJSON(t, s, "/api/trips", `{"origin":"Depot","destination":"Port"}`)), "id")
+
+	for _, want := range []string{"in_progress", "completed"} {
+		rec := setTripStatus(t, s, id, `{"status":"`+want+`"}`)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("moving to %s: status = %d: %s", want, rec.Code, rec.Body)
+		}
+		if got := field(t, decodeBody(t, rec), "status"); got != want {
+			t.Errorf("status = %q, want %q", got, want)
+		}
+	}
+
+	list := listOf(t, decodeBody(t, getJSON(t, s, "/api/trips")), "trips")
+	if len(list) != 1 {
+		t.Fatalf("list returned %d trips, want 1", len(list))
+	}
+	if got := field(t, list[0].(map[string]any), "status"); got != "completed" {
+		t.Errorf("listed status = %q, want completed", got)
+	}
+}
+
+// TestTrips_RefuseAMoveBackwards keeps a finished trip finished: it is a record of
+// what happened, not a state to rewind.
+func TestTrips_RefuseAMoveBackwards(t *testing.T) {
+	s := fleetServer(t)
+	id := field(t, decodeBody(t, postJSON(t, s,
+		"/api/trips", `{"origin":"A","destination":"B","status":"completed"}`)), "id")
+
+	rec := setTripStatus(t, s, id, `{"status":"planned"}`)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409: %s", rec.Code, rec.Body)
+	}
+	if code := field(t, decodeBody(t, rec), "code"); code != "trip_status_regressed" {
+		t.Errorf("code = %q, want trip_status_regressed", code)
+	}
+}
+
+// TestTrips_RejectAnUnknownStatusOnAMove covers a mistyped token and a missing
+// one: a move has no default, because there is no "whatever comes next".
+func TestTrips_RejectAnUnknownStatusOnAMove(t *testing.T) {
+	s := fleetServer(t)
+	id := field(t, decodeBody(t, postJSON(t, s, "/api/trips", `{"origin":"A","destination":"B"}`)), "id")
+
+	for _, body := range []string{`{"status":"flying"}`, `{}`} {
+		rec := setTripStatus(t, s, id, body)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("body %s: status = %d, want 400: %s", body, rec.Code, rec.Body)
+		}
+		if code := field(t, decodeBody(t, rec), "code"); code != "trip_status_unknown" {
+			t.Errorf("body %s: code = %q, want trip_status_unknown", body, code)
+		}
+	}
+}
+
+func TestTrips_MovingAnUnknownTripIsNotFound(t *testing.T) {
+	s := fleetServer(t)
+
+	rec := setTripStatus(t, s, "nobody", `{"status":"in_progress"}`)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404: %s", rec.Code, rec.Body)
+	}
+	if code := field(t, decodeBody(t, rec), "code"); code != "trip_not_found" {
+		t.Errorf("code = %q, want trip_not_found", code)
 	}
 }

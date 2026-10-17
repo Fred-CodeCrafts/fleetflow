@@ -172,6 +172,7 @@ func (s *Server) routes() {
 
 	s.mux.Handle("GET /api/trips", s.public(s.handleListTrips))
 	s.mux.Handle("POST /api/trips", s.public(s.handleCreateTrip))
+	s.mux.Handle("POST /api/trips/{id}/status", s.public(s.handleSetTripStatus))
 }
 
 // public wraps a handler with what every public endpoint shares: the per-client

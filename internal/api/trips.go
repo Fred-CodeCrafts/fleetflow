@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"fleetflow/internal/domain"
 	"fleetflow/internal/trip"
 )
 
@@ -11,6 +12,10 @@ import (
 // trip is planned; the status token is not optional to the domain, so the
 // transport supplies the default rather than making every client spell it out.
 const defaultTripStatus = "planned"
+
+// codeTripIDRequired is reported when a trip endpoint is reached without a trip
+// id in the path.
+const codeTripIDRequired = "trip_id_required"
 
 // tripView is a trip as the API writes it. VehicleID is left out when the trip
 // has no vehicle, so "unassigned" reads the same as "absent".
@@ -102,4 +107,43 @@ func (s *Server) handleCreateTrip(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Location", "/api/trips/"+created.ID)
 	writeJSON(w, http.StatusCreated, viewOfTrip(created))
+}
+
+// setTripStatusRequest is the body of POST /api/trips/{id}/status (DESIGN 3.5).
+// The status is required: unlike a create, there is no sensible default for a
+// move, and a blank one is a client mistake rather than "whatever comes next".
+type setTripStatusRequest struct {
+	Status string `json:"status"`
+}
+
+// handleSetTripStatus answers POST /api/trips/{id}/status, moving a trip along
+// its life — planned, then in progress, then completed.
+//
+// Whether the move makes sense is the domain's to decide, and it decides it in
+// the store, where the vehicle carrying the trip is moved with it. This handler
+// only says which trip the request names.
+func (s *Server) handleSetTripStatus(w http.ResponseWriter, r *http.Request) {
+	if s.trips == nil {
+		writeError(w, r, errNoFleet)
+		return
+	}
+
+	tripID := r.PathValue("id")
+	if tripID == "" {
+		writeError(w, r, domain.Invalid(codeTripIDRequired, "a trip id is required in the path"))
+		return
+	}
+
+	var req setTripStatusRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeError(w, r, err)
+		return
+	}
+
+	updated, err := s.trips.SetStatus(r.Context(), tripID, req.Status)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, viewOfTrip(updated))
 }
