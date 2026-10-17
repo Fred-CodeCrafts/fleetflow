@@ -133,7 +133,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 - [x] 🔴 **T39** Add fleet records in PostgreSQL: vehicles, drivers, trips (handler → service → repository per entity + `internal/store` migrations + API)
   `feat(fleet): add vehicles, drivers and trips with persistence`
   Done when: every entity follows handler → service → repository with the interface in the service package and `postgres/` + `memory/` behind it; vehicle create/list with validation, driver create and assign/unassign with one-vehicle enforcement, trip create/assign with availability rules in one transaction; records survive a server restart; concurrent double-assign is rejected; schema changes come from versioned migrations; pooling and indexes on filtered FK/status columns; unit tests use `memory/`, integration tests use real Postgres.
-- [ ] 🔴 **T39a** Drive trip and vehicle status from the run (planned to in progress to completed)
+- [x] 🔴 **T39a** Drive trip and vehicle status from the run (planned to in progress to completed)
   `feat(fleet): update trip and vehicle status from the simulation`
   Done when: assigning a trip marks the vehicle on trip, finishing it frees the vehicle, and the trip list shows both transitions.
 - [ ] 🟡 **T39b** Save and list finished comparison runs (US-9)
