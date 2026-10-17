@@ -1,6 +1,6 @@
 # TASKS.md
 
-Task list for FleetFlow, matching `DESIGN.md` and `AGENTS.md`.
+Task list for FleetFlow. `PRD.md` is the source of truth; this file, `DESIGN.md`, and `AGENTS.md` follow it.
 
 **How to use this file**
 - One task = one commit (or a few tiny ones). Do them in order.
@@ -101,6 +101,9 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   `feat(sim): add rerouting with hysteresis`
 - [x] 🔴 **T34** Add trip metrics (average, p95, route changes, saturated edges, utilization std dev)
   `feat(sim): collect trip and congestion metrics`
+- [ ] 🟡 **T34a** Add time lost versus free-flow time and fleet vs. background trip times (US-6 fairness check)
+  `feat(sim): add time lost and fairness metrics`
+  Done when: both numbers reach the metrics endpoint and are labelled as a fairness check, not a headline result.
 - [x] 🔴 **T35** Run baseline and FleetFlow on the same seed in tests
   `test(sim): compare baseline and dynamic runs on same seed`
   Done when: both runs finish and produce metrics. (Whether FleetFlow wins comes later, in tuning.)
@@ -113,99 +116,126 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   `feat(api): add report endpoint`
 - [ ] 🔴 **T38** Add `POST /api/route`
   `feat(api): add route endpoint`
-- [ ] 🔴 **T39** Add `POST /api/sim/start` and `POST /api/sim/reset`
+  Done when: a query returns the ordered edges and cost from the current weights, and an unreachable destination returns a clear error (US-5).
+- [ ] 🔴 **T39** Add fleet records in PostgreSQL: vehicles, drivers, trips (`internal/fleet` + `internal/store` migrations + API)
+  `feat(fleet): add vehicles, drivers and trips with persistence`
+  Done when: vehicle create/list with validation, driver create and assign/unassign with one-vehicle enforcement, trip create/assign with availability rules, records survive a server restart, concurrent double-assign is rejected, and schema changes come from versioned migrations.
+- [ ] 🔴 **T39a** Drive trip and vehicle status from the run (planned to in progress to completed)
+  `feat(fleet): update trip and vehicle status from the simulation`
+  Done when: assigning a trip marks the vehicle on trip, finishing it frees the vehicle, and the trip list shows both transitions.
+- [ ] 🟡 **T39b** Save and list finished comparison runs (US-9)
+  `feat(fleet): save and list comparison runs`
+  Done when: a finished run is stored with its seed and metrics and is still viewable after a server restart.
+- [ ] 🔴 **T40** Add API key auth on `POST /api/reports` and `POST /api/route` (`internal/auth`)
+  `feat(auth): require api key on reports and route`
+  Done when: missing or wrong key returns 401 and does nothing, keys are stored hashed and never logged, and the README shows an example request for each endpoint.
+- [ ] 🔴 **T40a** Send simulated reports and route requests through the public API (US-7)
+  `feat(sim): report through the public api`
+  Done when: the simulator's fleet service is an HTTP client against `/api/reports` and `/api/route`, so simulated traffic takes the same validated path as an external client, and a seeded run stays deterministic (reports are sent synchronously). Needs T37 and T40.
+- [ ] 🔴 **T41** Add `POST /api/sim/start` and `POST /api/sim/reset`
   `feat(api): add simulation control endpoints`
-- [ ] 🔴 **T40** Add `GET /api/metrics`
+- [ ] 🔴 **T42** Add `GET /api/metrics`
   `feat(api): add metrics endpoint`
-- [ ] 🔴 **T41** Add `GET /api/stream` (Server-Sent Events) for positions, congestion and metrics
+- [ ] 🔴 **T42a** Measure and report route query latency (p50, p99) (US-6)
+  `feat(engine): measure route query latency`
+  Done when: a query records its duration without taking a lock or blocking, and the metrics endpoint reports p50 and p99 next to the customization time.
+- [ ] 🔴 **T43** Add `GET /api/stream` (Server-Sent Events) for positions, congestion and metrics
   `feat(api): stream simulation state over sse`
-- [ ] 🔴 **T42** Run simulation only while a stream client is connected
+  Done when: each vehicle is labeled simulated or live.
+- [ ] 🔴 **T44** Run simulation only while a stream client is connected
   `feat(api): tie simulation loop to open stream`
   Done when: closing the browser tab stops the simulation (needed for default Cloud Run CPU behavior).
-- [ ] 🟡 **T43** Add API handler tests for bad input
+- [ ] 🟡 **T45** Add API handler tests for bad input (including bad reports and bad keys)
   `test(api): cover invalid requests`
+- [ ] 🟡 **T46** Document the reports format and reject invalid/out-of-range values (US-14, should)
+  `docs(api): document reports format and validation`
+  Done when: format is documented, bad values get a clear error, and the dashboard labels simulated vs. live.
 
 ## Day 6 (Thu 22 Oct): Dashboard
 
-- [ ] 🔴 **T44** Add `web/` with static page, embedded via `go:embed`
+- [ ] 🔴 **T47** Add `web/` with static page, embedded via `go:embed`
   `feat(web): serve embedded dashboard page`
-- [ ] 🔴 **T45** Draw road graph on canvas
+- [ ] 🔴 **T48** Add fleet views: vehicles, drivers, trips, trip history and saved runs
+  `feat(web): add fleet management views`
+  Done when: dispatcher can manage vehicles/drivers/trips and review history from the dashboard.
+- [ ] 🔴 **T49** Draw road graph on canvas
   `feat(web): draw road network on canvas`
-- [ ] 🔴 **T46** Connect to SSE stream and draw vehicles
+- [ ] 🔴 **T50** Connect to SSE stream and draw vehicles
   `feat(web): render vehicles from stream`
-- [ ] 🔴 **T47** Color edges by congestion
+- [ ] 🔴 **T51** Color edges by congestion
   `feat(web): color roads by congestion`
-- [ ] 🔴 **T48** Show two panels side by side (Baseline, FleetFlow)
+- [ ] 🔴 **T52** Show two panels side by side (Baseline, FleetFlow)
   `feat(web): add side-by-side comparison panels`
-- [ ] 🔴 **T49** Add metrics strip (average trip time, p95, saturated %, route changes)
+- [ ] 🔴 **T53** Add metrics strip (average trip time, p95, saturated %, route changes, query latency)
   `feat(web): show comparison metrics`
-- [ ] 🔴 **T50** Add controls: start, reset, seed, vehicles, fleet share
+  Done when: the strip states how capacity is derived (lanes and length), so the saturation figure is not a black box (US-6).
+- [ ] 🔴 **T54** Add controls: start, reset, seed, vehicles, fleet share
   `feat(web): add simulation controls`
-- [ ] 🔴 **T51** Auto-reconnect on stream drop
+  Done when: start loads a ready-made demo scenario, so one click shows a run (US-7).
+- [ ] 🔴 **T55** Auto-reconnect on stream drop, label each vehicle simulated or live
   `feat(web): reconnect stream automatically`
-- [ ] 🟡 **T52** Mobile-friendly layout and basic styling pass
+- [ ] 🟡 **T56** Mobile-friendly layout and basic styling pass
   `style(web): improve layout and styling`
 
 ## Day 7 (Fri 23 Oct): Deploy and tune
 
-- [ ] 🔴 **T53** Add multi-stage `Dockerfile` that listens on `$PORT`
+- [ ] 🔴 **T57** Add multi-stage `Dockerfile` that listens on `$PORT`
   `build: add dockerfile`
   Done when: `docker run -p 8080:8080` serves the dashboard locally.
-- [ ] 🔴 **T54** Deploy to **Cloud Run** (`max-instances=1`, `min-instances=1`)
+- [ ] 🔴 **T58** Deploy to **Cloud Run** (`max-instances=1`, `min-instances=1`) with PostgreSQL connected
   `docs: add cloud run deployment steps`
-  Done when: the public URL loads and a demo run completes. Put the URL in the README.
-- [ ] 🟡 **T55** Add `fly.toml` and test a Fly preview deploy
+  Done when: the public URL loads, a demo run completes, and fleet records survive a restart. Put the URL in the README. Record the Postgres hosting choice and cost.
+- [ ] 🟡 **T59** Add `fly.toml` and test a Fly preview deploy
   `build: add fly.io config for preview deploys`
-- [ ] 🔴 **T56** Tune parameters (alpha, beta, gamma, lambda, delta, hold, threshold) until the demo scenario shows a clear, honest difference
+- [ ] 🔴 **T60** Tune parameters (alpha, beta, gamma, lambda, delta, hold, threshold) until the demo scenario shows a clear, honest difference
   `chore(weights): tune default parameters from experiments`
   Done when: results are recorded in `docs/results.md` with seeds, including any cases where FleetFlow does not win.
-- [ ] 🟡 **T57** Add multi-seed batch script that prints mean and spread
+- [ ] 🟡 **T61** Add multi-seed batch script that prints mean and spread
   `feat(scripts): add multi-seed comparison script`
-- [ ] 🟡 **T58** Test several fleet shares (for example 25%, 50%, 100%)
+- [ ] 🟡 **T62** Test several fleet shares (for example 25%, 50%, 100%)
   `docs: record results across fleet shares`
-- [ ] 🟡 **T59** Add `NOTICE` with attributions (OpenStreetMap data if used, libraries)
+- [ ] 🟡 **T63** Add `NOTICE` with attributions (OpenStreetMap data if used, libraries)
   `docs: add notice with third-party attributions`
 
 ## Day 8 (Sat 24 Oct): Ship
 
-- [ ] 🔴 **T60** Final README: what it is, screenshot or GIF, run locally, deploy, limitations, license, attribution
+- [ ] 🔴 **T64** Final README: what it is, screenshot or GIF, run locally, deploy, limitations, license, attribution, API key example requests
   `docs: finalize readme`
-- [ ] 🔴 **T61** Verify a fresh clone builds and runs from the README steps only
+- [ ] 🔴 **T65** Verify a fresh clone builds and runs from the README steps only
   `docs: fix setup steps found during clean-clone check`
-- [ ] 🔴 **T62** Run `go vet`, `gofmt`, `go test -race ./...` and fix findings
+- [ ] 🔴 **T66** Run `go vet`, `gofmt`, `go test -race ./...` and fix findings
   `chore: fix lint and race findings`
-- [ ] 🔴 **T63** Tag release `v0.1.0`
+- [ ] 🔴 **T67** Tag release `v0.1.0`
   `chore: release v0.1.0`
-- [ ] 🔴 **T64** Confirm deployed Cloud Run link works from another network or device
+- [ ] 🔴 **T68** Confirm deployed Cloud Run link works from another network or device
 
 ## 25 to 27 Oct: Pitch and submission
 
-- [ ] 🔴 **T65** Write the project summary (500 words maximum)
-- [ ] 🔴 **T66** Record the demo video (3 minutes maximum): problem, side-by-side run, result, how it works
-- [ ] 🔴 **T67** Build the presentation deck (PDF plus PPT/Keynote backup on a flash drive)
-- [ ] 🔴 **T68** Record the backup presentation video (15 minutes maximum): technology, business model, future plan
-- [ ] 🔴 **T69** Prepare for Q&A (see list below) and rehearse the live demo with a backup device
+- [ ] 🔴 **T69** Write the project summary (500 words maximum)
+- [ ] 🔴 **T70** Record the demo video (3 minutes maximum): problem, side-by-side run, result, how it works
+- [ ] 🔴 **T71** Build the presentation deck (PDF plus PPT/Keynote backup on a flash drive)
+- [ ] 🔴 **T72** Record the backup presentation video (15 minutes maximum): technology, business model, future plan
+- [ ] 🔴 **T73** Prepare for Q&A (see list below) and rehearse the live demo with a backup device
 
 ---
 
 ## Stretch (only if everything above is done)
 
-- [ ] 🟢 **S1** Fleetbase adapter: read orders and vehicles via its API, return routes from FleetFlow (verify their endpoints in the docs first)
-  `feat(adapter): add fleetbase integration`
-- [ ] 🟢 **S2** Customizable Contraction Hierarchies router behind the existing `Router` interface
-- [ ] 🟢 **S3** OSM-based Jakarta extract replacing the generated grid
-- [ ] 🟢 **S4** ADK agent that suggests parameter settings
-- [ ] 🟢 **S5** Optional SUMO adapter
+- [ ] 🟢 **S1** Post-sprint roadmap items from PRD section 9 (in order): real-fleet pilot, driver GPS web app, map matching, organizations and roles, persisted congestion state, CCH router, Fleetbase adapter
+- [ ] 🟢 **S2** OSM-based Jakarta extract replacing the generated grid
+- [ ] 🟢 **S3** ADK agent that suggests parameter settings
+- [ ] 🟢 **S4** Optional SUMO adapter
 
 ## Cut order if time runs short
 
-1. S1 to S5 (all stretch work)
-2. T57 and T58 (batch script and fleet-share sweep)
-3. T52 (styling pass)
-4. T26 (metric age tracking)
-5. T55 (Fly preview)
+1. S1 to S4 (all stretch work)
+2. T46 (US-14 reports docs; demote to could if tight)
+3. T61 and T62 (batch script and fleet-share sweep)
+4. T34a and T39b (fairness metrics and saved runs; both should-have)
+5. T56 (styling pass)
+6. T59 (Fly preview)
 
-**Never cut:** the side-by-side dashboard (T48, T49), the Cloud Run deployment (T54), and the honest results record (T56).
+**Never cut:** fleet records in Postgres (T39, T39a, T48), API keys (T40), simulated traffic on the public API (T40a), route query latency (T42a), the side-by-side dashboard (T52, T53), the Cloud Run deployment (T58), and the honest results record (T60).
 
 ---
 
@@ -214,7 +244,8 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 - Why not just use Fleetbase or Google Maps? (They decide who goes where or optimize each vehicle separately. FleetFlow coordinates which roads the fleet uses.)
 - What is the evidence? (Simulation only, across several seeds, including where it does not help.)
 - What happens when avoided roads stop reporting? (Hold time, slow decay and hysteresis, and the route-change metric to detect it.)
-- What would real deployment need? (Real GPS ingestion, validated capacity data, persistent state, more than one instance.)
+- What would real deployment need? (Real GPS ingestion via the reports API, validated capacity data, PostgreSQL, UU PDP review before any pilot.)
+- How do outside systems authenticate? (API key on reports and route; 401 on missing or wrong key; keys stored hashed.)
 - Is the project new? (Yes: new repo with a visible history starting after 11 Oct. The earlier thesis prototype is background only and nothing was copied.)
 
 ---
