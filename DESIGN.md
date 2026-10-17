@@ -180,7 +180,7 @@ Server-Sent Events are used instead of WebSockets because they are one-way, simp
 - Fleet management views: vehicle list with status, driver list with vehicle assignment, trip creation (origin/destination picker from map or known places) with assignment and status display, trip history and saved comparison runs.
 - Two panels side by side (Baseline and FleetFlow) with vehicles as dots and edges colored by congestion.
 - Live fleet map: vehicle markers move as positions arrive over SSE with auto-reconnect; each vehicle is labeled simulated or live.
-- Metrics strip: average trip time, 95th percentile trip time, saturated roads (%), route changes, fleet vs. background trip times.
+- Metrics strip: average trip time, 95th percentile trip time, saturated roads (%), route changes, route query latency, fleet vs. background trip times, with the capacity derivation stated so the saturation figure is not a black box.
 - Controls: start, reset, seed, number of vehicles, fleet share.
 
 ### 3.7 Persistence (`internal/store`)
