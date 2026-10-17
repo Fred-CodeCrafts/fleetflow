@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"fleetflow/internal/domain"
+	"fleetflow/internal/driver"
 	"fleetflow/internal/engine"
 	"fleetflow/internal/graph"
 	"fleetflow/internal/vehicle"
@@ -63,7 +64,10 @@ type Server struct {
 	// is built without WithVehicles, which leaves those endpoints answering 503
 	// rather than dereferencing a nil service.
 	vehicles *vehicle.Service
-	mux      *http.ServeMux
+	// drivers backs the driver endpoints, including assignment. Nil when built
+	// without WithDrivers.
+	drivers *driver.Service
+	mux     *http.ServeMux
 	// handler is the mux wrapped in the shared middleware, built once so every
 	// request pays for the chain only in the handler, not in ServeHTTP.
 	handler  http.Handler
@@ -90,6 +94,12 @@ func WithEngine(e *engine.Engine) Option {
 // and write through. Without it those endpoints answer 503.
 func WithVehicles(svc *vehicle.Service) Option {
 	return func(s *Server) { s.vehicles = svc }
+}
+
+// WithDrivers gives the server the driver service, including assignment. Without
+// it the driver endpoints answer 503.
+func WithDrivers(svc *driver.Service) Option {
+	return func(s *Server) { s.drivers = svc }
 }
 
 // WithDatabaseCheck registers the readiness probe for the database. Without it,
@@ -146,6 +156,10 @@ func (s *Server) routes() {
 	// the two above never do.
 	s.mux.Handle("GET /api/vehicles", s.public(s.handleListVehicles))
 	s.mux.Handle("POST /api/vehicles", s.public(s.handleCreateVehicle))
+	s.mux.Handle("POST /api/vehicles/{id}/driver", s.public(s.handleAssignDriver))
+
+	s.mux.Handle("GET /api/drivers", s.public(s.handleListDrivers))
+	s.mux.Handle("POST /api/drivers", s.public(s.handleCreateDriver))
 }
 
 // public wraps a handler with what every public endpoint shares: the per-client

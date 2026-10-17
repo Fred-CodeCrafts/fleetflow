@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"fleetflow/internal/driver"
+	drivermemory "fleetflow/internal/driver/memory"
 	"fleetflow/internal/vehicle"
 	vehiclememory "fleetflow/internal/vehicle/memory"
 )
@@ -16,7 +18,10 @@ import (
 func fleetServer(t *testing.T) *Server {
 	t.Helper()
 
-	return testServer(t, WithVehicles(vehicle.NewService(vehiclememory.New())))
+	return testServer(t,
+		WithVehicles(vehicle.NewService(vehiclememory.New())),
+		WithDrivers(driver.NewService(drivermemory.New())),
+	)
 }
 
 // getJSON sends a GET to path and returns the recorder the server wrote to.
