@@ -6,10 +6,13 @@ package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"fleetflow/internal/api"
 	"fleetflow/internal/auth"
@@ -31,10 +34,56 @@ import (
 	"fleetflow/internal/weights"
 )
 
+// issueKeyTimeout bounds the database work behind -issue-key, so an operator
+// command that cannot reach the database fails rather than hangs.
+const issueKeyTimeout = 10 * time.Second
+
+// issueAPIKey stores a new API key and prints it once, then returns so the process
+// exits without serving.
+//
+// There is no endpoint that mints keys. Minting a credential is an operator
+// action, not an API feature, and a route for it would need the very
+// authentication it is handing out. A database is required: a key that vanishes at
+// the next restart is worse than no key, because it fails later and less clearly.
+//
+// The plaintext goes to stdout and nowhere else. That one line is the only moment
+// the key exists in readable form — the store keeps only its digest — so it must
+// not pass through the logger.
+func issueAPIKey(dsn, name string) {
+	if dsn == "" {
+		log.Fatal("issuing an API key needs a database: a key that vanishes at restart is worse than none")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), issueKeyTimeout)
+	defer cancel()
+
+	pool, err := store.Open(ctx, dsn)
+	if err != nil {
+		log.Fatalf("database configured but unusable: %v", err)
+	}
+	defer pool.Close()
+
+	plaintext, record, err := auth.NewService(authpostgres.New(pool)).Issue(ctx, auth.IssueInput{Name: name})
+	if err != nil {
+		log.Fatalf("could not issue an api key: %v", err)
+	}
+
+	fmt.Println(plaintext)
+	log.Printf("issued api key %q (prefix %s, id %s)", record.Name, record.Prefix, record.ID)
+}
+
 func main() {
+	issueKeyName := flag.String("issue-key", "", "issue an API key with this name, print it once, and exit")
+	flag.Parse()
+
 	cfg, err := config.Load(os.Getenv)
 	if err != nil {
 		log.Fatalf("invalid configuration: %v", err)
+	}
+
+	if *issueKeyName != "" {
+		issueAPIKey(cfg.DatabaseDSN, *issueKeyName)
+		return
 	}
 
 	g, err := graph.LoadFromFile(cfg.GraphPath)
