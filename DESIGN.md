@@ -10,12 +10,15 @@ Status: draft v0.1 (17 October 2026). Parameter values are starting points, to b
 ## 1. Goals and non-goals
 
 ### Goals
+- Manage fleet records: vehicles, drivers with one-vehicle assignment, and trips (planned, in progress, completed), stored in PostgreSQL with rules enforced so nothing is lost or contradictory.
 - Show that a fleet which routes with live, smoothed congestion weights finishes trips faster and saturates fewer roads than a fleet using static shortest paths.
 - Make that visible in a live dashboard comparing both modes side by side on the same demand and seed.
 - Ship as one small Go service that is easy to run, deploy and read.
+- Let outside systems use the reports and route API with an API key, and accept real vehicle reports alongside simulated ones.
 
 ### Non-goals (for this competition)
-- Real GPS ingestion, accounts, multi-stop optimization, dispatch or order management (that is what Fleetbase and similar tools do).
+- Driver mobile or web app for sending GPS, raw-GPS map matching, multi-org roles and billing, city-scale routing, persisted congestion weights, real-fleet validation (all roadmap, see PRD section 9).
+- Multi-stop optimization and dispatch/order management (fleet-tool territory, not this sprint).
 - Real-world validation. All results come from simulation and must be described that way.
 - Matching a full traffic simulator such as SUMO.
 
@@ -31,24 +34,24 @@ One Go binary contains the routing engine, the simulator, the HTTP API and the e
 ```mermaid
 flowchart LR
     subgraph Binary["fleetflow (single Go binary)"]
-        SIM["Simulator<br/>(vehicles, demand, seeds)"]
+        API["HTTP API + SSE<br/>(owns the run clock)"]
         subgraph ENG["Engine (per mode)"]
             WS["Weight store<br/>(per-edge state)"]
             CUST["Customizer<br/>(every delta seconds)"]
             MET["Active metric<br/>(immutable snapshot)"]
             RT["Router<br/>(shortest path)"]
         end
-        API["HTTP API + SSE"]
+        SIM["Simulator<br/>(vehicles, demand, seeds)"]
         WEB["Dashboard<br/>(embedded static files)"]
     end
 
-    SIM -- "reports (edge, speed)" --> WS
+    SIM -- "POST /api/reports<br/>(edge, speed)" --> API
+    SIM -- "POST /api/route" --> API
+    API -- "report" --> WS
+    API -- "route request" --> RT
     WS -- "read costs" --> CUST
     CUST -- "atomic swap" --> MET
-    SIM -- "route request" --> RT
     RT -- "load once per query" --> MET
-    API --> SIM
-    API --> ENG
     API -- "stream" --> WEB
     EXT["External client<br/>(e.g. Fleetbase adapter)"] -- "POST /api/reports, /api/route" --> API
 ```
@@ -56,6 +59,8 @@ flowchart LR
 ### Why this shape
 - **Single binary:** the easiest thing to build, test and deploy in a week.
 - **Engine behind an interface:** the simulator and the HTTP API both use the same `Engine` interface, so external clients get the same behavior as the simulator.
+- **The simulator is a client of the API:** it sends reports and route requests over the public HTTP endpoints, so simulated traffic is validated, authenticated and measured exactly like an external client. Only the weight refresh stays internal.
+- **One run clock:** the server owns simulated time, so weight refresh, streaming and "stop when nobody is watching" cannot drift apart.
 - **Immutable metric snapshot:** route queries never wait for weight updates.
 
 ---
@@ -138,32 +143,47 @@ v_edge = v_free / (1 + 0.15 * (N / capacity)^4)
   where `N` is the number of vehicles on that edge. This is the classic BPR volume-delay shape, reused to turn occupancy into speed.
 - **Demand:** seeded random origin-destination pairs and departure times, identical for baseline and FleetFlow runs.
 - **Vehicle groups:**
-  - **Fleet vehicles** (a configurable share, the fleet share): ask the engine for routes and send speed reports.
-  - **Background vehicles:** use static free-flow routes and never contact the engine, but add to congestion.
+  - **Fleet vehicles** (a configurable share, the fleet share): request routes and send speed reports through the public API (`POST /api/route`, `POST /api/reports`), so they behave exactly like an external client. Reports are sent synchronously, one call per step, which keeps a seeded run deterministic.
+  - **Background vehicles:** use static free-flow routes and never contact the API, but add to congestion.
+- **Test seam:** `internal/sim` depends on a small `FleetService` interface. Production wires it to an HTTP client against the server's own base URL; tests inject the engine directly or a fake, so the simulator's logic is exercised without a network.
+- **Run clock:** simulated time belongs to the server's run loop, which advances the simulator, refreshes the weights every `delta`, and stops when no client holds an open stream.
 - **Rerouting policy:** a fleet vehicle requests a route at departure and then every `K` simulated seconds. It switches only if the new route is cheaper by more than a threshold (default 10%), which is the hysteresis that limits oscillation.
 - **Determinism:** one seeded random source per run. Same seed gives the same demand.
 
 ### 3.5 HTTP API (`internal/api`)
-Plain `net/http`. JSON in and out.
+Plain `net/http`. JSON in and out. `POST /api/reports` and `POST /api/route` require a valid API key (missing or wrong key returns 401 and does nothing).
 
 | Method and path | Purpose |
 |---|---|
-| `POST /api/reports` | Submit `{vehicle_id, edge_id, speed_mps, ts}` |
+| `POST /api/reports` | Submit `{vehicle_id, edge_id, speed_mps, ts}`; documented format, invalid or out-of-range values rejected with a clear error |
 | `POST /api/route` | `{from_node, to_node}` returns `{edges, cost_s, metric_version}` |
 | `GET /api/metrics` | Current counters and comparison metrics |
-| `GET /api/stream` | Server-Sent Events: vehicle positions, edge congestion, metrics |
+| `GET /api/stream` | Server-Sent Events: vehicle positions, edge congestion, metrics (each vehicle labeled simulated or live) |
 | `POST /api/sim/start` | Start a run with `{seed, vehicles, fleet_share, delta, params...}` |
 | `POST /api/sim/reset` | Stop and clear the run |
+| `GET /api/vehicles`, `POST /api/vehicles` | List and create vehicles `{name/plate, type, status}` with validation |
+| `GET /api/drivers`, `POST /api/drivers` | List and create drivers `{name, contact}` |
+| `POST /api/vehicles/{id}/driver` | Assign or unassign a driver (one vehicle per driver enforced) |
+| `GET /api/trips`, `POST /api/trips` | List and create trips `{origin, destination, vehicle_id}` with assignment rules (vehicle must be available, not offline or on a trip; enforced atomically so concurrent requests cannot double-assign) |
 | `GET /healthz` | Liveness |
+
+Fleet records (vehicles, drivers, trips, completed-trip history, saved comparison runs) live in PostgreSQL and survive a server restart; schema changes go through versioned migrations. API keys are stored hashed, never in plain text, and never written to logs. Live congestion state stays in memory on the single instance.
 
 Server-Sent Events are used instead of WebSockets because they are one-way, simpler, and work through both Cloud Run and Fly.
 
 ### 3.6 Dashboard (`web/`)
 - Static HTML, CSS and vanilla JavaScript embedded into the binary with `go:embed`.
 - Draws the road graph on a `<canvas>` from node coordinates, so it needs no map tiles or outside services.
+- Fleet management views: vehicle list with status, driver list with vehicle assignment, trip creation (origin/destination picker from map or known places) with assignment and status display, trip history and saved comparison runs.
 - Two panels side by side (Baseline and FleetFlow) with vehicles as dots and edges colored by congestion.
+- Live fleet map: vehicle markers move as positions arrive over SSE with auto-reconnect; each vehicle is labeled simulated or live.
 - Metrics strip: average trip time, 95th percentile trip time, saturated roads (%), route changes, fleet vs. background trip times.
 - Controls: start, reset, seed, number of vehicles, fleet share.
+
+### 3.7 Persistence (`internal/store`)
+- PostgreSQL for vehicles, drivers, trips, saved runs, and hashed API keys. Live congestion state stays in memory (see `internal/weights`).
+- Versioned migrations only, never hand-edited schema. Assignment rules (one vehicle per driver, no double trip assignment) enforced in the database and under concurrency.
+- No real driver locations are collected during the competition; Indonesia's data protection law (UU PDP) is reviewed before any pilot.
 
 ---
 
@@ -230,7 +250,7 @@ The Fly path is easy for iteration, but the playbook says projects must be deplo
 - Dashboard and graph data are embedded, so the container needs no volumes.
 
 ### Cloud Run settings
-- `max-instances=1`, because state is in memory (more instances would each have separate state).
+- `max-instances=1`, because live congestion state is in memory (PostgreSQL holds fleet records externally, but each instance would still build its own congestion view).
 - `min-instances=1` for demo day, so the first request is not a cold start.
 - The simulator runs in background goroutines, and Cloud Run throttles CPU outside of requests by default. Either set CPU to always allocated, or run the simulation only while a client holds an open `/api/stream` connection. This design uses the second option as the default so it also works with default settings.
 - Request timeout raised for long-lived SSE connections, with the dashboard auto-reconnecting.
@@ -250,6 +270,9 @@ fleetflow/
 │   ├── graph/                 # graph types and JSON loader
 │   ├── weights/               # edge state, smoothing, decay, cost
 │   ├── engine/                # customizer, metric snapshot, router
+│   ├── fleet/                 # vehicles, drivers, trips, history (PostgreSQL records)
+│   ├── store/                 # PostgreSQL connection, versioned migrations
+│   ├── auth/                  # API key issue/verify (hashed storage, no plaintext logs)
 │   ├── sim/                   # vehicles, demand, rerouting policy
 │   └── api/                   # HTTP handlers, SSE
 ├── web/                       # embedded dashboard (HTML, CSS, JS)
@@ -276,17 +299,19 @@ Deployment deadline is **24 October**. Commit after each step, as described in `
 | 2 | Sun 18 Oct | Weight store (smoothing, decay, cost) with tests |
 | 3 | Mon 19 Oct | Engine: customizer, atomic metric, Dijkstra router, race tests |
 | 4 | Tue 20 Oct | Simulator: demand, edge speed model, fleet vs. background vehicles, baseline mode |
-| 5 | Wed 21 Oct | API and SSE stream, metrics endpoint |
-| 6 | Thu 22 Oct | Dashboard: canvas map, side-by-side panels, controls, metrics strip |
+| 5 | Wed 21 Oct | API and SSE stream, metrics endpoint, PostgreSQL records, API keys |
+| 6 | Thu 22 Oct | Dashboard: canvas map, side-by-side panels, controls, metrics strip, simulated/live labels |
 | 7 | Fri 23 Oct | Dockerfile, Cloud Run deployment (and Fly preview), tuning runs |
 | 8 | Sat 24 Oct | Buffer, README polish, shipped and verified |
 | | 25 to 27 Oct | Demo video, 500-word summary, deck, pitch practice |
 
-**Cut order if time runs short:** Fleetbase adapter, then multi-seed batch script, then fairness metric, then OSM extract (use the generated grid), then hysteresis tuning. Never cut the side-by-side dashboard comparison.
+**Cut order if time runs short:** US-14 reports docs, then multi-seed batch script and fleet-share sweep, then styling pass, then Fly preview. Never cut PostgreSQL fleet records, API keys, the side-by-side dashboard comparison, the Cloud Run deployment, or the honest results record.
 
 ---
 
-## 10. Optional: Fleetbase integration
+## 10. Optional: Fleetbase integration (post-sprint roadmap)
+
+- Implemented as a small separate adapter that talks to Fleetbase over its REST API or webhooks and to FleetFlow over `/api/route` and `/api/reports` (using the API key from US-13).
 
 - Implemented as a small separate adapter that talks to Fleetbase over its REST API or webhooks and to FleetFlow over `/api/route` and `/api/reports`.
 - Keeps FleetFlow a separate service, so AGPL-3.0 obligations of Fleetbase do not extend to this repo. This is not legal advice, so check Fleetbase's licensing page before bundling anything.
@@ -304,8 +329,10 @@ Deployment deadline is **24 October**. Commit after each step, as described in `
 | Simulator | Own mesoscopic model | Runs without SUMO installed, deterministic, easy to deploy |
 | Live updates | Server-Sent Events | Simpler than WebSockets, enough for one-way streaming |
 | Dashboard | Canvas, no map tiles | No outside dependencies, works offline |
-| State | In memory, one instance | Simplest for an MVP, with limits noted in section 7 |
+| State | In memory (single instance) for congestion; PostgreSQL for fleet records | Persistent records survive restarts, congestion rebuilds from fresh reports |
 | Deployment | Cloud Run for submission, Fly for preview | Competition rule, with Fly kept as a convenience |
+| Database | PostgreSQL, hosted externally (Cloud SQL vs. free tier TBD) | Fleet records must survive restarts; congestion stays in memory |
+| Post-sprint order | Pilot, driver app, map matching, orgs/roles, persisted weights, CCH, Fleetbase adapter | Per PRD section 9 |
 
 ---
 
@@ -313,4 +340,5 @@ Deployment deadline is **24 October**. Commit after each step, as described in `
 
 - Is an additional Fly.io deployment acceptable alongside the required Cloud Run one?
 - Which area of Jakarta, and how many nodes, makes the best demo within the time available?
-- Should the stretch goal be a CCH router or the Fleetbase adapter?
+- Where to host PostgreSQL (Cloud SQL vs. an external free tier) and the cost during the competition?
+- Do we need a plan for who maintains the project after the competition?
