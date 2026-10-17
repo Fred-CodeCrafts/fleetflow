@@ -72,7 +72,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   `feat(engine): build metric snapshot from edge state`
 - [x] 🔴 **T22** Publish metric with `atomic.Pointer` and load once per query
   `feat(engine): publish active metric with atomic pointer`
-- [ ] 🔴 **T23** Add periodic customization loop with clean shutdown
+- [x] 🔴 **T23** Add periodic customization loop with clean shutdown
   `feat(engine): run customization on an interval`
 - [ ] 🔴 **T24** Add baseline engine (weights disabled, fixed free-flow metric)
   `feat(engine): add static baseline mode`
