@@ -112,7 +112,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 
 - [x] 🔴 **T36** Add HTTP server with `GET /healthz`
   `feat(api): add server and health endpoint`
-- [ ] 🔴 **T36a** Add `GET /readyz`, env-validated config, and graceful shutdown
+- [x] 🔴 **T36a** Add `GET /readyz`, env-validated config, and graceful shutdown
   `feat(api): add readiness, config validation and graceful shutdown`
   Done when: bad env fails fast with a clear error; `/readyz` reports graph loaded and DB reachable when configured; SIGTERM stops the customizer and simulation and drains requests.
 - [ ] 🔴 **T36b** Add typed domain errors, request limits, request IDs, timeouts and rate limits
