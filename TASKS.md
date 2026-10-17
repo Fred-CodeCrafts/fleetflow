@@ -51,7 +51,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   `feat(weights): smooth congestion with moving average`
 - [x] 🔴 **T14** Add cost function `free_flow * (1 + alpha * rho^beta)`, with tests
   `feat(weights): add edge cost function`
-- [ ] 🔴 **T15** Add decay with hold time, with tests (no report → decays; recent report → does not)
+- [x] 🔴 **T15** Add decay with hold time, with tests (no report → decays; recent report → does not)
   `feat(weights): decay stale edges toward free-flow`
 - [ ] 🔴 **T16** Add parameter struct with defaults and validation
   `feat(weights): add tunable parameters with defaults`
