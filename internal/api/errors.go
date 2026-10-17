@@ -27,6 +27,8 @@ func statusFor(err error) int {
 	// concerns, so translate them here instead of teaching the hot path about
 	// status codes.
 	switch {
+	case errors.Is(err, errBodyTooLarge):
+		return http.StatusRequestEntityTooLarge
 	case errors.Is(err, engine.ErrEdgeNotFound):
 		return http.StatusNotFound
 	case errors.Is(err, engine.ErrNoMetric):

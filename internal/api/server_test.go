@@ -79,8 +79,9 @@ func TestUnknownPathIsNotFound(t *testing.T) {
 	}
 }
 
-// decodeJSON reads a JSON object body, failing the test when it is not JSON.
-func decodeJSON(t *testing.T, rec *httptest.ResponseRecorder) map[string]any {
+// decodeBody reads a JSON object response body, failing the test when it is not
+// JSON.
+func decodeBody(t *testing.T, rec *httptest.ResponseRecorder) map[string]any {
 	t.Helper()
 
 	var body map[string]any
@@ -100,7 +101,7 @@ func TestReadyz_WithoutDatabase(t *testing.T) {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
 
-	body := decodeJSON(t, rec)
+	body := decodeBody(t, rec)
 	if body["status"] != "ok" {
 		t.Errorf("status = %v, want ok", body["status"])
 	}
@@ -121,7 +122,7 @@ func TestReadyz_DatabaseReachable(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
-	if got := decodeJSON(t, rec)["database"]; got != "reachable" {
+	if got := decodeBody(t, rec)["database"]; got != "reachable" {
 		t.Errorf("database = %v, want reachable", got)
 	}
 }
@@ -138,7 +139,7 @@ func TestReadyz_DatabaseUnreachable(t *testing.T) {
 		t.Fatalf("status = %d, want 503", rec.Code)
 	}
 
-	body := decodeJSON(t, rec)
+	body := decodeBody(t, rec)
 	if body["status"] != "unavailable" {
 		t.Errorf("status = %v, want unavailable", body["status"])
 	}
