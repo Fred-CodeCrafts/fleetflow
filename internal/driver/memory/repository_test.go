@@ -116,4 +116,103 @@ func TestMethodsHonourACancelledContext(t *testing.T) {
 	if _, err := repo.List(ctx); !errors.Is(err, context.Canceled) {
 		t.Errorf("List error = %v, want context.Canceled", err)
 	}
+	if _, err := repo.Assign(ctx, "a1", "v1"); !errors.Is(err, context.Canceled) {
+		t.Errorf("Assign error = %v, want context.Canceled", err)
+	}
+}
+
+func TestAssignGivesADriverAVehicle(t *testing.T) {
+	repo := memory.New()
+	ctx := context.Background()
+	if _, err := repo.Create(ctx, driver.Driver{ID: "a1", Name: "Ada Lovelace"}); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	got, err := repo.Assign(ctx, "a1", "v1")
+	if err != nil {
+		t.Fatalf("Assign: %v", err)
+	}
+	if got.VehicleID != "v1" {
+		t.Errorf("Assign returned VehicleID %q, want v1", got.VehicleID)
+	}
+
+	// The change must live in the store, not only in the returned copy.
+	list, err := repo.List(ctx)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(list) != 1 || list[0].VehicleID != "v1" {
+		t.Errorf("List returned %+v, want the vehicle to be assigned", list)
+	}
+
+	// An empty vehicle takes it away again.
+	got, err = repo.Assign(ctx, "a1", "")
+	if err != nil {
+		t.Fatalf("Assign unassign: %v", err)
+	}
+	if got.VehicleID != "" {
+		t.Errorf("Assign returned VehicleID %q after unassigning, want empty", got.VehicleID)
+	}
+}
+
+func TestAssignRejectsAnUnknownDriver(t *testing.T) {
+	repo := memory.New()
+
+	_, err := repo.Assign(context.Background(), "nobody", "v1")
+	if err == nil {
+		t.Fatal("Assign accepted an unknown driver")
+	}
+	if kind := domain.KindOf(err); kind != domain.KindNotFound {
+		t.Errorf("Assign kind = %s, want not found", kind)
+	}
+}
+
+func TestAssignRefusesAVehicleAnotherDriverHolds(t *testing.T) {
+	repo := memory.New()
+	ctx := context.Background()
+	for _, id := range []string{"a1", "a2"} {
+		if _, err := repo.Create(ctx, driver.Driver{ID: id, Name: "Driver " + id}); err != nil {
+			t.Fatalf("Create(%s): %v", id, err)
+		}
+	}
+	if _, err := repo.Assign(ctx, "a1", "v1"); err != nil {
+		t.Fatalf("Assign: %v", err)
+	}
+
+	_, err := repo.Assign(ctx, "a2", "v1")
+	if err == nil {
+		t.Fatal("Assign let two drivers hold the same vehicle")
+	}
+	if kind := domain.KindOf(err); kind != domain.KindConflict {
+		t.Errorf("Assign kind = %s, want conflict", kind)
+	}
+
+	// A rejected assignment must leave both drivers as they were.
+	list, err := repo.List(ctx)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if list[0].VehicleID != "v1" || list[1].VehicleID != "" {
+		t.Errorf("List = %+v, want the rejected assignment to change nothing", list)
+	}
+}
+
+// TestAssignToTheSameDriverIsNotAConflict covers the check that a driver does not
+// collide with itself when it keeps the vehicle it already has.
+func TestAssignToTheSameDriverIsNotAConflict(t *testing.T) {
+	repo := memory.New()
+	ctx := context.Background()
+	if _, err := repo.Create(ctx, driver.Driver{ID: "a1", Name: "Ada"}); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	for i := 0; i < 2; i++ {
+		got, err := repo.Assign(ctx, "a1", "v1")
+		if err != nil {
+			t.Fatalf("Assign %d: %v", i, err)
+		}
+		if got.VehicleID != "v1" {
+			t.Errorf("Assign %d returned VehicleID %q, want v1", i, got.VehicleID)
+		}
+	}
 }

@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"strings"
 
 	"fleetflow/internal/domain"
 )
@@ -13,10 +14,12 @@ import (
 // transport substitutes its own message for these, so the code is what a
 // developer debugging a report has to go on.
 const (
-	codeCreateFailed = "driver_create_failed"
-	codeListFailed   = "driver_list_failed"
-	codeCanceled     = "request_cancelled"
-	codeIDFailed     = "driver_id_failed"
+	codeCreateFailed   = "driver_create_failed"
+	codeListFailed     = "driver_list_failed"
+	codeAssignFailed   = "driver_assign_failed"
+	codeCanceled       = "request_cancelled"
+	codeIDFailed       = "driver_id_failed"
+	codeDriverRequired = "driver_id_required"
 )
 
 // Repository stores and retrieves drivers. It is declared here, in the service
@@ -34,6 +37,15 @@ type Repository interface {
 
 	// List returns every stored driver, oldest first.
 	List(ctx context.Context) ([]Driver, error)
+
+	// Assign gives the driver vehicleID, or takes its vehicle away when
+	// vehicleID is empty, and returns the stored record.
+	//
+	// A driver that does not exist, and a vehicle that another driver already
+	// holds, are reported as domain errors because they are outcomes a client can
+	// act on. Implementations must apply an assignment as a single step: two
+	// requests racing for the same vehicle must not both succeed.
+	Assign(ctx context.Context, driverID, vehicleID string) (Driver, error)
 }
 
 // CreateInput is one create request as the transport receives it, so that
@@ -78,6 +90,26 @@ func (s *Service) List(ctx context.Context) ([]Driver, error) {
 		return nil, storageError(codeListFailed, err)
 	}
 	return found, nil
+}
+
+// Assign gives the driver a vehicle, or takes its vehicle away when vehicleID is
+// empty, and returns the stored driver.
+//
+// The id is checked here rather than left to the store, because a blank id is a
+// caller mistake the store would have to invent an error for. Whether the
+// vehicle exists and whether it is already taken are the store's to answer: the
+// database holds the constraint, and a memory store can only see its own drivers.
+func (s *Service) Assign(ctx context.Context, driverID, vehicleID string) (Driver, error) {
+	driverID = strings.TrimSpace(driverID)
+	if driverID == "" {
+		return Driver{}, domain.Invalid(codeDriverRequired, "driver id is required")
+	}
+
+	updated, err := s.repo.Assign(ctx, driverID, strings.TrimSpace(vehicleID))
+	if err != nil {
+		return Driver{}, storageError(codeAssignFailed, err)
+	}
+	return updated, nil
 }
 
 // idBytes is the size of a generated driver id: 128 random bits, written as

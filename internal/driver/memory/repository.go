@@ -72,3 +72,37 @@ func (r *Repository) List(ctx context.Context) ([]driver.Driver, error) {
 	copy(found, r.drivers)
 	return found, nil
 }
+
+// Assign gives driverID the vehicle vehicleID, or clears its vehicle when
+// vehicleID is empty, and returns the stored driver.
+//
+// It enforces the rule a memory store can actually see: a vehicle belongs to at
+// most one driver, so a second driver cannot claim one already held. It cannot
+// check that a vehicle exists, because this store holds no vehicles — that is a
+// foreign key, and it is the Postgres implementation and its integration tests
+// that cover it.
+func (r *Repository) Assign(ctx context.Context, driverID, vehicleID string) (driver.Driver, error) {
+	if err := ctx.Err(); err != nil {
+		return driver.Driver{}, err
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	pos, exists := r.index[driverID]
+	if !exists {
+		return driver.Driver{}, domain.NotFound("driver_not_found", "driver %s does not exist", driverID)
+	}
+
+	if vehicleID != "" {
+		for i, d := range r.drivers {
+			if i != pos && d.VehicleID == vehicleID {
+				return driver.Driver{}, domain.Conflict("driver_vehicle_taken",
+					"vehicle %s already belongs to driver %s", vehicleID, d.ID)
+			}
+		}
+	}
+
+	r.drivers[pos].VehicleID = vehicleID
+	return r.drivers[pos], nil
+}

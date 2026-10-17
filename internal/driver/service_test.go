@@ -142,6 +142,10 @@ func (s stubRepo) List(context.Context) ([]driver.Driver, error) {
 	return nil, s.err
 }
 
+func (s stubRepo) Assign(context.Context, string, string) (driver.Driver, error) {
+	return driver.Driver{}, s.err
+}
+
 func TestServiceHidesRawStorageError(t *testing.T) {
 	raw := errors.New("pq: dial tcp 10.0.0.7:5432: connection refused")
 	svc := driver.NewService(stubRepo{err: raw})
@@ -192,5 +196,95 @@ func TestServiceReportsCancelledRequestAsUnavailable(t *testing.T) {
 	}
 	if code, _, _ := domain.Public(err); code != "request_cancelled" {
 		t.Errorf("Create code = %q, want request_cancelled", code)
+	}
+}
+
+func TestServiceAssignGivesTheDriverAVehicle(t *testing.T) {
+	svc := newService()
+	ctx := context.Background()
+
+	d, err := svc.Create(ctx, driver.CreateInput{Name: "Ada Lovelace"})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	got, err := svc.Assign(ctx, d.ID, "v1")
+	if err != nil {
+		t.Fatalf("Assign: %v", err)
+	}
+	if got.VehicleID != "v1" {
+		t.Errorf("Assign returned VehicleID %q, want v1", got.VehicleID)
+	}
+
+	// The assignment must be visible through List, not only in the result.
+	list, err := svc.List(ctx)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(list) != 1 || list[0].VehicleID != "v1" {
+		t.Errorf("List returned %+v, want the assigned driver", list)
+	}
+}
+
+// TestServiceAssignTrimsTheVehicleID covers the wire: a client that sends
+// "  " means "no vehicle", and the service must not store whitespace as if it
+// named a vehicle.
+func TestServiceAssignTrimsTheVehicleID(t *testing.T) {
+	svc := newService()
+	ctx := context.Background()
+
+	d, err := svc.Create(ctx, driver.CreateInput{Name: "Ada Lovelace"})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if _, err := svc.Assign(ctx, d.ID, " v1 "); err != nil {
+		t.Fatalf("Assign: %v", err)
+	}
+
+	got, err := svc.Assign(ctx, d.ID, "   ")
+	if err != nil {
+		t.Fatalf("Assign unassign: %v", err)
+	}
+	if got.VehicleID != "" {
+		t.Errorf("Assign stored VehicleID %q, want empty", got.VehicleID)
+	}
+}
+
+func TestServiceAssignRejectsABlankDriverID(t *testing.T) {
+	svc := newService()
+
+	_, err := svc.Assign(context.Background(), "   ", "v1")
+	if err == nil {
+		t.Fatal("Assign accepted a blank driver id")
+	}
+	if kind := domain.KindOf(err); kind != domain.KindInvalid {
+		t.Errorf("Assign kind = %s, want invalid", kind)
+	}
+	if code, _, ok := domain.Public(err); !ok || code != "driver_id_required" {
+		t.Errorf("Assign code = %q (ok=%v), want driver_id_required", code, ok)
+	}
+}
+
+// TestServiceAssignKeepsTheRepositoryOutcome checks the classification path for
+// Assign specifically: the code in the body has to name the operation that
+// failed, not reuse Create's.
+func TestServiceAssignKeepsTheRepositoryOutcome(t *testing.T) {
+	svc := driver.NewService(stubRepo{err: errors.New("pq: connection refused")})
+
+	_, err := svc.Assign(context.Background(), "a1", "v1")
+	if err == nil {
+		t.Fatal("Assign succeeded although the repository failed")
+	}
+	if code, _, ok := domain.Public(err); !ok || code != "driver_assign_failed" {
+		t.Errorf("Assign code = %q (ok=%v), want driver_assign_failed", code, ok)
+	}
+
+	taken := domain.Conflict("driver_vehicle_taken", "vehicle v1 already belongs to driver a2")
+	_, err = driver.NewService(stubRepo{err: taken}).Assign(context.Background(), "a1", "v1")
+	if kind := domain.KindOf(err); kind != domain.KindConflict {
+		t.Errorf("Assign kind = %s, want conflict", kind)
+	}
+	if code, _, _ := domain.Public(err); code != "driver_vehicle_taken" {
+		t.Errorf("Assign code = %q, want driver_vehicle_taken", code)
 	}
 }
