@@ -54,7 +54,7 @@ func TestDijkstra_FreeFlowShortestPaths(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			path, err := Dijkstra(g, m, tt.from, tt.to)
+			path, err := NewDijkstraRouter(g).Route(m, tt.from, tt.to)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -94,7 +94,7 @@ func TestDijkstra_RespectsTheMetric(t *testing.T) {
 	}
 	m := NewMetric(costs, 2)
 
-	path, err := Dijkstra(g, m, "A", "D")
+	path, err := NewDijkstraRouter(g).Route(m, "A", "D")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -108,11 +108,12 @@ func TestDijkstra_RespectsTheMetric(t *testing.T) {
 func TestDijkstra_UnknownNode(t *testing.T) {
 	g := loadFixture(t)
 	m := freeFlowMetric(g, 1)
+	router := NewDijkstraRouter(g)
 
-	if _, err := Dijkstra(g, m, "Z", "A"); !errors.Is(err, ErrUnknownNode) {
+	if _, err := router.Route(m, "Z", "A"); !errors.Is(err, ErrUnknownNode) {
 		t.Errorf("expected ErrUnknownNode for a bad origin, got %v", err)
 	}
-	if _, err := Dijkstra(g, m, "A", "Z"); !errors.Is(err, ErrUnknownNode) {
+	if _, err := router.Route(m, "A", "Z"); !errors.Is(err, ErrUnknownNode) {
 		t.Errorf("expected ErrUnknownNode for a bad destination, got %v", err)
 	}
 }
@@ -125,7 +126,7 @@ func TestDijkstra_NoPath(t *testing.T) {
 		t.Fatalf("unexpected error adding edge: %v", err)
 	}
 
-	_, err := Dijkstra(g, freeFlowMetric(g, 1), "B", "A")
+	_, err := NewDijkstraRouter(g).Route(freeFlowMetric(g, 1), "B", "A")
 	if !errors.Is(err, ErrNoPath) {
 		t.Errorf("expected ErrNoPath, got %v", err)
 	}

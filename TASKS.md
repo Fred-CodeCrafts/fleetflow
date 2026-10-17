@@ -66,7 +66,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 - [x] 🔴 **T19** Add Dijkstra with binary heap over a given metric, with tests on the fixture graph
   `feat(engine): add dijkstra router`
   Done when: known shortest paths on the fixture graph match expected results.
-- [ ] 🔴 **T20** Add `Router` interface so another algorithm can replace Dijkstra
+- [x] 🔴 **T20** Add `Router` interface so another algorithm can replace Dijkstra
   `refactor(engine): put router behind an interface`
 - [ ] 🔴 **T21** Add customizer: read all edge costs into a fresh metric
   `feat(engine): build metric snapshot from edge state`

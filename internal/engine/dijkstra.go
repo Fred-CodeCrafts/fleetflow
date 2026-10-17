@@ -22,9 +22,10 @@ type Path struct {
 	CostS float64
 }
 
-// Dijkstra finds the least-cost path from fromID to toID using the edge costs in
-// m. Costs must be non-negative, which the cost function guarantees.
-func Dijkstra(g *graph.Graph, m *Metric, fromID, toID string) (*Path, error) {
+// dijkstraRoute finds the least-cost path from fromID to toID using the edge
+// costs in m. Costs must be non-negative, which the cost function guarantees.
+// It is reached through the Router interface.
+func dijkstraRoute(g *graph.Graph, m *Metric, fromID, toID string) (*Path, error) {
 	if _, ok := g.Nodes[fromID]; !ok {
 		return nil, fmt.Errorf("%w: %s", ErrUnknownNode, fromID)
 	}
