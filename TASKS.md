@@ -33,7 +33,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 - [x] 🔴 **T07** Add JSON loader with validation (missing nodes, bad lengths)
   `feat(graph): load graph from json with validation`
   Done when: loader test covers a valid file and two invalid ones.
-- [ ] 🔴 **T08** Compute derived values (`free_flow_s`, `capacity`) on load
+- [x] 🔴 **T08** Compute derived values (`free_flow_s`, `capacity`) on load
   `feat(graph): derive free-flow time and capacity per edge`
 - [ ] 🔴 **T09** Add a tiny hand-made test graph in `data/` for tests
   `test(graph): add small test graph fixture`

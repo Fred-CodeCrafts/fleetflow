@@ -65,3 +65,26 @@ func TestGraph_AddNodeAndEdge(t *testing.T) {
 		t.Fatalf("expected 0 outgoing edges for n2, got %d", len(outN2))
 	}
 }
+
+func TestDeriveEdgeValues(t *testing.T) {
+	e := Edge{
+		ID:            "test_edge",
+		From:          "A",
+		To:            "B",
+		LengthM:       300.0,
+		SpeedLimitMPS: 15.0,
+		Lanes:         2,
+	}
+
+	DeriveEdgeValues(&e)
+
+	expectedFreeFlow := 300.0 / 15.0 // 20.0s
+	if e.FreeFlowS != expectedFreeFlow {
+		t.Errorf("expected FreeFlowS = %f, got %f", expectedFreeFlow, e.FreeFlowS)
+	}
+
+	expectedCapacity := (2.0 * 300.0) / 7.5 // 80.0 vehicles
+	if e.Capacity != expectedCapacity {
+		t.Errorf("expected Capacity = %f, got %f", expectedCapacity, e.Capacity)
+	}
+}

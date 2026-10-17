@@ -53,6 +53,17 @@ func New() *Graph {
 	}
 }
 
+// DefaultVehicleSpacingMeters is the standard vehicle length plus gap (7.5 meters).
+const DefaultVehicleSpacingMeters = 7.5
+
+// DeriveEdgeValues computes free-flow travel time (s) and edge vehicle capacity.
+func DeriveEdgeValues(e *Edge) {
+	if e.SpeedLimitMPS > 0 {
+		e.FreeFlowS = e.LengthM / e.SpeedLimitMPS
+	}
+	e.Capacity = float64(e.Lanes) * e.LengthM / DefaultVehicleSpacingMeters
+}
+
 // AddNode adds a new node to the graph.
 func (g *Graph) AddNode(node Node) error {
 	if node.ID == "" {
@@ -80,6 +91,8 @@ func (g *Graph) AddEdge(edge Edge) error {
 	if _, exists := g.Nodes[edge.To]; !exists {
 		return fmt.Errorf("%w: to %s", ErrNodeNotFound, edge.To)
 	}
+
+	DeriveEdgeValues(&edge)
 
 	idx := len(g.Edges)
 	g.Edges = append(g.Edges, edge)
