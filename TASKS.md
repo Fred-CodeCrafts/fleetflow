@@ -95,7 +95,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   `feat(sim): advance vehicles each step`
 - [x] 🔴 **T31** Add background vehicles with static routes
   `feat(sim): add background vehicles with static routes`
-- [ ] 🔴 **T32** Add fleet vehicles that request routes and send reports
+- [x] 🔴 **T32** Add fleet vehicles that request routes and send reports
   `feat(sim): add fleet vehicles using the engine`
 - [ ] 🔴 **T33** Add rerouting policy (interval plus hysteresis threshold)
   `feat(sim): add rerouting with hysteresis`

@@ -2,10 +2,22 @@ package sim
 
 import (
 	"errors"
+	"time"
 
 	"fleetflow/internal/engine"
 	"fleetflow/internal/graph"
 )
+
+// FleetService is the routing service that fleet vehicles talk to: they ask it
+// for routes and report the speeds they observe. *engine.Engine satisfies it.
+type FleetService interface {
+	Route(fromID, toID string) (*engine.Path, error)
+	Report(edgeID string, speedMPS float64, now time.Time) error
+}
+
+// reportEpoch anchors simulated seconds to a real timestamp for reports, so runs
+// stay deterministic instead of depending on the wall clock.
+var reportEpoch = time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
 
 // Config configures a simulation run.
 type Config struct {
@@ -43,6 +55,10 @@ type Sim struct {
 	// free-flow metric of their own.
 	staticMetric *engine.Metric
 	staticRouter engine.Router
+
+	// fleet is the routing service fleet vehicles use. Without one they fall
+	// back to static routes.
+	fleet FleetService
 }
 
 // New builds a simulation whose vehicles start pending. They step onto the
@@ -96,12 +112,23 @@ func (s *Sim) CompletedTrips() []float64 { return s.completed }
 func (s *Sim) Occupancy() *Occupancy { return s.occ }
 
 // Step advances the simulation by one time step: vehicles whose departure time
-// has arrived enter the network, then everyone moves.
+// has arrived enter the network, everyone moves, and fleet vehicles report the
+// speeds they observed.
 func (s *Sim) Step() {
 	dt := s.cfg.StepS
 	s.nowS += dt
 	s.departDue()
 	s.advanceVehicles(dt)
+	s.reportSpeeds()
+}
+
+// SetFleetService attaches the routing service that fleet vehicles use. Without
+// one, fleet vehicles fall back to the same static routes as background traffic.
+func (s *Sim) SetFleetService(f FleetService) { s.fleet = f }
+
+// ReportTime returns the timestamp used for the reports of the current step.
+func (s *Sim) ReportTime() time.Time {
+	return reportEpoch.Add(time.Duration(s.nowS * float64(time.Second)))
 }
 
 // departDue starts every pending vehicle whose scheduled departure has arrived.
@@ -125,9 +152,37 @@ func (s *Sim) depart(v *Vehicle) {
 	s.placeOnRoute(v, path.Edges, s.nowS)
 }
 
-// routeFor returns the edge route a departing vehicle should follow.
+// routeFor returns the edge route a departing vehicle should follow. Fleet
+// vehicles ask the routing service; background vehicles use the fixed free-flow
+// route they would drive without any coordination.
 func (s *Sim) routeFor(v *Vehicle) (*engine.Path, error) {
+	if v.IsFleet() && s.fleet != nil {
+		return s.fleet.Route(v.Origin(), v.Destination())
+	}
 	return s.staticRouter.Route(s.staticMetric, v.Origin(), v.Destination())
+}
+
+// reportSpeeds lets every running fleet vehicle tell the service how fast it is
+// going on the edge it occupies. Report failures are ignored: a dropped report
+// only makes the weights slightly stale.
+func (s *Sim) reportSpeeds() {
+	if s.fleet == nil {
+		return
+	}
+
+	now := s.ReportTime()
+	for _, v := range s.vehicles {
+		if !v.IsFleet() || v.state != VehicleRunning {
+			continue
+		}
+		edgeIndex := v.currentEdge()
+		if edgeIndex < 0 {
+			continue
+		}
+		edge := s.g.Edges[edgeIndex]
+		speed := EdgeSpeed(edge.SpeedLimitMPS, edge.Capacity, s.occ.Count(edgeIndex))
+		_ = s.fleet.Report(edge.ID, speed, now)
+	}
 }
 
 // advanceVehicles moves every running vehicle along its route and finishes the
