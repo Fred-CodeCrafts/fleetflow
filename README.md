@@ -64,12 +64,45 @@ Once running, open `http://localhost:8080` in your browser to view the operator 
 ## API Endpoints
 
 - `GET /healthz` - Health check and liveness probe
-- `POST /api/reports` - Ingest vehicle speed reports
-- `POST /api/route` - Query route between origin and destination
+- `POST /api/reports` - Ingest vehicle speed reports (requires an API key)
+- `POST /api/route` - Query route between origin and destination (requires an API key)
 - `POST /api/sim/start` - Start simulation run with specified seed & parameters
 - `POST /api/sim/reset` - Stop and reset simulation
 - `GET /api/stream` - Server-Sent Events (SSE) telemetry stream for the dashboard
 - `GET /api/metrics` - Real-time metrics and comparative statistics
+
+### API keys
+
+The two ingest endpoints require a key, because they are the ones an outside system
+calls. Issue one with the service's own command; it stores the key, prints it once,
+and exits without serving:
+
+```sh
+go run ./cmd/fleetflow -issue-key "dispatch integration"
+# flf_9Qx...   <- the only time this is shown
+```
+
+Only the SHA-256 digest is stored, so the key cannot be read back afterwards, and it
+is never written to a log. Present it as a bearer token:
+
+```sh
+# submit a vehicle report
+curl -sS -X POST http://localhost:8080/api/reports \
+  -H "Authorization: Bearer $FLEETFLOW_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"vehicle_id":"v1","edge_id":"e_AB","speed_mps":13.9}'
+
+# ask for a route
+curl -sS -X POST http://localhost:8080/api/route \
+  -H "Authorization: Bearer $FLEETFLOW_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"from_node":"A","to_node":"D"}'
+```
+
+A missing or wrong key returns `401` with `{"code":"unauthenticated"}` and does
+nothing else: no report reaches the weights, and no route is computed. The fleet
+record endpoints (`/api/vehicles`, `/api/drivers`, `/api/trips`) stay open, because
+they belong to the dashboard.
 
 ## Deployment
 

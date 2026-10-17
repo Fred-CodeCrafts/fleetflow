@@ -174,7 +174,7 @@ v_edge = v_free / (1 + 0.15 * (N / capacity)^4)
 - **Determinism:** one seeded random source per run. Same seed gives the same demand.
 
 ### 3.5 HTTP API (`internal/api` + entity handlers)
-Plain `net/http`. JSON in and out. `POST /api/reports` and `POST /api/route` require a valid API key (missing or wrong key returns 401 and does nothing). Hot path stays in memory and out of the database: reports write to the weight store only, route queries read the engine snapshot only.
+Plain `net/http`. JSON in and out. `POST /api/reports` and `POST /api/route` require a valid API key, presented as `Authorization: Bearer <key>` (missing or wrong key returns 401 and does nothing). Hot path stays in memory and out of the database: reports write to the weight store only, route queries read the engine snapshot only.
 
 | Method and path | Purpose |
 |---|---|
