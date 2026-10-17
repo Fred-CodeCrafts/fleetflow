@@ -28,14 +28,24 @@ import (
 // service promises the transport.
 const uniqueViolation = "23505"
 
+// constraintHashUnique is the name of the unique constraint on hash. It is how a
+// repeated hash is told apart from a repeated id, since both arrive as the same
+// SQLSTATE.
+const constraintHashUnique = "api_keys_hash_unique"
+
 // Codes for the domain errors this store produces. They are part of the public
-// contract: the service passes a classified error through, so its code travels
-// in an API error body.
+// contract: the service passes a classified error through, so its code travels in
+// an API error body, and the memory store answers with the same ones.
 const (
-	// codeAPIKeyExists covers both a duplicate id and a duplicate hash: either
-	// way the caller is trying to store a key that is already there.
-	codeAPIKeyExists   = "api_key_exists"
-	codeAPIKeyNotFound = "api_key_not_found"
+	// codeAPIKeyExists is a reused id: the caller is storing a record that is
+	// already there under the same name.
+	codeAPIKeyExists = "api_key_exists"
+	// codeAPIKeyHashExists is a repeated hash, which means the same key material
+	// was generated twice. With 256 bits of randomness that should not happen at
+	// all, so it is reported apart from an id collision the caller would go
+	// looking for and never find.
+	codeAPIKeyHashExists = "api_key_hash_exists"
+	codeAPIKeyNotFound   = "api_key_not_found"
 )
 
 // Repository stores API keys in the api_keys table, reached through a shared
@@ -51,8 +61,11 @@ func New(pool *pgxpool.Pool) *Repository { return &Repository{pool: pool} }
 
 // Create stores k and returns the stored record. A record whose id or hash is
 // already present is a domain conflict, since each is backed by a unique
-// constraint in the schema; the memory store refuses them the same way. Any
-// other failure is returned raw so the service can classify it (DESIGN 3.8).
+// constraint in the schema; the memory store refuses them the same way, with the
+// same codes. The two are told apart because they are different mistakes: a
+// reused id is the caller's, while a repeated hash means the same key material was
+// generated twice. Any other failure is returned raw so the service can classify
+// it (DESIGN 3.8).
 //
 // created_at is left to the database default and read back through RETURNING,
 // so the returned record carries the instant the store actually wrote rather
@@ -66,6 +79,10 @@ func (r *Repository) Create(ctx context.Context, k auth.Key) (auth.Key, error) {
 	if err := r.pool.QueryRow(ctx, q, k.ID, k.Name, k.Prefix, k.Hash).Scan(&k.CreatedAt); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == uniqueViolation {
+			if pgErr.ConstraintName == constraintHashUnique {
+				return auth.Key{}, domain.Conflict(codeAPIKeyHashExists,
+					"an api key with this hash already exists").WithCause(err)
+			}
 			return auth.Key{}, domain.Conflict(codeAPIKeyExists,
 				"api key %s already exists", k.ID).WithCause(err)
 		}

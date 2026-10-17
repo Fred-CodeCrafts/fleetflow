@@ -3,6 +3,7 @@ package postgres_test
 import (
 	"bytes"
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -124,8 +125,13 @@ func TestCreateDuplicateHashIsAConflict(t *testing.T) {
 	if kind := domain.KindOf(err); kind != domain.KindConflict {
 		t.Errorf("Create kind = %s, want conflict", kind)
 	}
-	if code, _, ok := domain.Public(err); !ok || code != "api_key_exists" {
-		t.Errorf("Create error code = %q (ok = %v), want api_key_exists", code, ok)
+	if code, _, ok := domain.Public(err); !ok || code != "api_key_hash_exists" {
+		t.Errorf("Create error code = %q (ok = %v), want api_key_hash_exists", code, ok)
+	}
+	// The id is fresh, so it is not what collided, and the message must not send
+	// the caller looking for a k2 that is not there.
+	if _, message, _ := domain.Public(err); strings.Contains(message, "k2") {
+		t.Errorf("Create message = %q, want it not to blame the fresh id", message)
 	}
 }
 
