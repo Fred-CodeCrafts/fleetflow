@@ -15,6 +15,7 @@ import (
 	"fleetflow/internal/domain"
 	"fleetflow/internal/engine"
 	"fleetflow/internal/graph"
+	"fleetflow/internal/vehicle"
 )
 
 const (
@@ -45,6 +46,11 @@ type StopFunc func(context.Context) error
 // unavailable means.
 var errNoEngine = domain.Unavailable("engine_unavailable", "the routing engine is not configured")
 
+// errNoFleet is reported by a record endpoint that is reachable without its
+// service behind it, which is the case when the process runs without a database
+// (a memory-free run or a unit test). The endpoint exists but cannot serve.
+var errNoFleet = domain.Unavailable("fleet_unavailable", "fleet records are not configured")
+
 // Server holds the API handlers and everything they need. It is an
 // http.Handler, so it can be mounted anywhere.
 type Server struct {
@@ -53,7 +59,11 @@ type Server struct {
 	// its snapshot. It is nil when the server is built without WithEngine, which
 	// leaves the public endpoints answering 503.
 	eng *engine.Engine
-	mux *http.ServeMux
+	// vehicles backs the record endpoints for vehicles. It is nil when the server
+	// is built without WithVehicles, which leaves those endpoints answering 503
+	// rather than dereferencing a nil service.
+	vehicles *vehicle.Service
+	mux      *http.ServeMux
 	// handler is the mux wrapped in the shared middleware, built once so every
 	// request pays for the chain only in the handler, not in ServeHTTP.
 	handler  http.Handler
@@ -74,6 +84,12 @@ type Option func(*Server)
 // edge indices into that graph, and the server translates them with its own.
 func WithEngine(e *engine.Engine) Option {
 	return func(s *Server) { s.eng = e }
+}
+
+// WithVehicles gives the server the vehicle service the record endpoints read
+// and write through. Without it those endpoints answer 503.
+func WithVehicles(svc *vehicle.Service) Option {
+	return func(s *Server) { s.vehicles = svc }
 }
 
 // WithDatabaseCheck registers the readiness probe for the database. Without it,
@@ -125,6 +141,11 @@ func (s *Server) routes() {
 
 	s.mux.Handle("POST /api/reports", s.public(s.handleReport))
 	s.mux.Handle("POST /api/route", s.public(s.handleRoute))
+
+	// Fleet records (DESIGN 3.5). These are the endpoints that touch PostgreSQL;
+	// the two above never do.
+	s.mux.Handle("GET /api/vehicles", s.public(s.handleListVehicles))
+	s.mux.Handle("POST /api/vehicles", s.public(s.handleCreateVehicle))
 }
 
 // public wraps a handler with what every public endpoint shares: the per-client
