@@ -131,11 +131,24 @@ Stop and ask the human instead of guessing, especially about:
 ---
 
 ## Database
-This project uses Postgres. The database MCP (toolbox-postgres) is OFF by default and available through the "db" subagent.
+This project uses Postgres. The dev database is local, so the database MCP
+(`toolbox-postgres`) is **enabled** in the project `opencode.json` and reachable
+only through the "db" subagent.
+- Development and production are **separate databases with separate
+  credentials**. That separation, not a reduced privilege set, is what makes the
+  broad dev access safe.
+- The dev entry pins `POSTGRES_HOST` to `127.0.0.1` and authenticates as the
+  local dev role, so the agent may read **and write** (DDL and DML) there while
+  developing.
+- Production is a different database reached only through the deploy
+  environment's own `DATABASE_URL`. Production credentials never belong in this
+  workspace; never connect to a non-loopback host.
 - For live data needs (schema inspection, row counts, checking real values), delegate to the db subagent. If it's unavailable or disabled, tell me: "This needs the DB MCP. Please enable it."
 - Don't guess schema or data. Use migration files and ORM models in the repo for anything that doesn't need live data.
 - For code-only work, never use or ask for the MCP.
 - Before querying, say you're about to use the MCP and why.
-- When DB work is finished, say so and turn the MCP off (set `"disabled": true` on `toolbox-postgres` in the project `opencode.json`, then tell me to restart). Never claim it's off until a new session confirms it.
+- Schema changes go through the project's migration tooling so they stay
+  reproducible; the MCP is for inspection and dev iteration, not the source of
+  truth.
+- Keep it off outside development: in any other project set `"disabled": true` and restart. Never claim it's off until a new session confirms it.
   - OpenCode V2 uses `"disabled"`, not `"enabled"`. The global config keeps `"disabled": true`; only the project config is toggled for on/off.
-- Schema changes go through the project's migration tooling, never the MCP.

@@ -379,6 +379,7 @@ Deployment deadline is **24 October**. Commit after each step, as described in `
 | Architecture | Handler → service → repository per entity; the routing core (`graph`, `weights`, `engine`) imports no HTTP or database package | Predictable layout for contributors and agents, and the hot path cannot reach the database by accident (PRD US-5, US-12) |
 | Deployment | Cloud Run for submission, Fly for preview | Competition rule, with Fly kept as a convenience |
 | Database | PostgreSQL, hosted externally (Cloud SQL vs. free tier TBD) | Fleet records must survive restarts; congestion stays in memory |
+| Dev vs production database | Separate databases and credentials; the dev entry pins the host to `127.0.0.1` and is writable | Broad DDL/DML is safe in development when the dev target is a disposable local database that structurally cannot be production |
 | Simulated reports | Through the public API (`POST /api/reports`, `POST /api/route`) | Simulated and external traffic take the same validated path (PRD US-7), and one run clock keeps refresh and streaming in step |
 | End-user auth | None; an API key only on the reports and route endpoints | Keeps the demo open, while the programmatic surface is honest about access (PRD US-13) |
 | Post-sprint order | Pilot, driver app, map matching, orgs/roles + tenant separation, key rotation/revocation, persisted weights + multi-instance plan, CCH, Fleetbase adapter, backups + runbook | Per PRD section 9 |
