@@ -55,7 +55,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   `feat(weights): decay stale edges toward free-flow`
 - [x] 🔴 **T16** Add parameter struct with defaults and validation
   `feat(weights): add tunable parameters with defaults`
-- [ ] 🔴 **T17** Add concurrent report test run with `-race`
+- [x] 🔴 **T17** Add concurrent report test run with `-race`
   `test(weights): add race test for concurrent reports`
   Done when: `go test -race ./internal/weights` passes.
 
