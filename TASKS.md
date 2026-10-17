@@ -45,7 +45,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 
 - [x] 🔴 **T11** Add `EdgeState` struct with per-edge `RWMutex`
   `feat(weights): add per-edge state struct`
-- [ ] 🔴 **T12** Add congestion measure `rho = clamp(1 - v/v_free, 0, 1)` with tests
+- [x] 🔴 **T12** Add congestion measure `rho = clamp(1 - v/v_free, 0, 1)` with tests
   `feat(weights): add congestion measure from observed speed`
 - [ ] 🔴 **T13** Add moving-average update on report, with tests
   `feat(weights): smooth congestion with moving average`
