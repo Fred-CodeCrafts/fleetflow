@@ -67,3 +67,24 @@ func TestLoadFromJSON_InvalidLength(t *testing.T) {
 		t.Errorf("expected ErrInvalidEdgeLength, got: %v", err)
 	}
 }
+
+func TestLoadFromFile_Fixture(t *testing.T) {
+	g, err := LoadFromFile("../../data/test_graph.json")
+	if err != nil {
+		t.Fatalf("failed to load test graph fixture: %v", err)
+	}
+	if len(g.Nodes) != 4 {
+		t.Errorf("expected 4 nodes in fixture, got %d", len(g.Nodes))
+	}
+	if len(g.Edges) != 7 {
+		t.Errorf("expected 7 edges in fixture, got %d", len(g.Edges))
+	}
+
+	eAB, _, found := g.EdgeByID("e_AB")
+	if !found {
+		t.Fatal("expected e_AB to be found in fixture")
+	}
+	if eAB.FreeFlowS <= 0 || eAB.Capacity <= 0 {
+		t.Errorf("expected derived values on e_AB, got FreeFlowS=%f, Capacity=%f", eAB.FreeFlowS, eAB.Capacity)
+	}
+}

@@ -35,7 +35,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   Done when: loader test covers a valid file and two invalid ones.
 - [x] 🔴 **T08** Compute derived values (`free_flow_s`, `capacity`) on load
   `feat(graph): derive free-flow time and capacity per edge`
-- [ ] 🔴 **T09** Add a tiny hand-made test graph in `data/` for tests
+- [x] 🔴 **T09** Add a tiny hand-made test graph in `data/` for tests
   `test(graph): add small test graph fixture`
 - [ ] 🔴 **T10** Add generated grid-city graph script (fallback map)
   `feat(scripts): generate grid city graph`
