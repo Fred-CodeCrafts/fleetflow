@@ -99,7 +99,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   `feat(sim): add fleet vehicles using the engine`
 - [x] 🔴 **T33** Add rerouting policy (interval plus hysteresis threshold)
   `feat(sim): add rerouting with hysteresis`
-- [ ] 🔴 **T34** Add trip metrics (average, p95, route changes, saturated edges, utilization std dev)
+- [x] 🔴 **T34** Add trip metrics (average, p95, route changes, saturated edges, utilization std dev)
   `feat(sim): collect trip and congestion metrics`
 - [ ] 🔴 **T35** Run baseline and FleetFlow on the same seed in tests
   `test(sim): compare baseline and dynamic runs on same seed`
