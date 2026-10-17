@@ -4,6 +4,12 @@
 // TEST_DATABASE_URL names one. They are not a test framework: they open a pool
 // against the schema Flyway has already applied and empty the fleet tables
 // between tests, so an integration test can choose the state it starts from.
+//
+// Reset empties tables that the whole schema shares, so two packages must not use
+// it against the same database at the same time. `go test ./...` runs packages in
+// parallel: give each package its own database, or run them one at a time with
+// `-p 1`. Otherwise one package truncates another's rows mid-test and the failure
+// looks like a race in the code rather than in the harness.
 package storetest
 
 import (

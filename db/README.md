@@ -38,3 +38,18 @@ Rules that must hold under concurrent requests — one vehicle per driver, and o
 unfinished trip per vehicle — are unique constraints and partial indexes in the
 migration, not checks in Go. Two racing requests lose at the database, wherever
 the service happened to be.
+
+## Running the integration tests
+
+The repository tests in `internal/*/postgres` are skipped unless
+`TEST_DATABASE_URL` names a database, so the unit suite needs no server:
+
+```sh
+TEST_DATABASE_URL='postgres://fleetflow:...@127.0.0.1:55432/fleetflow' \
+  go test ./internal/vehicle/postgres/...
+```
+
+`storetest.Reset` empties the fleet tables, and `go test ./...` runs packages in
+parallel. Two packages sharing one database will therefore truncate each other's
+rows, and the failure looks like a race in the code. Give each package its own
+database, or run them one at a time with `-p 1`.
