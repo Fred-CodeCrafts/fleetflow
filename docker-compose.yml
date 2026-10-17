@@ -1,0 +1,35 @@
+# Local development database for FleetFlow.
+#
+# Fleet records (vehicles, drivers, trips, saved runs, hashed API keys) live in
+# PostgreSQL; live congestion state stays in memory on the single instance, so
+# this service is dev-only and is never part of the deployed binary.
+#
+# Values come from .env (gitignored). See .env.example for the key list.
+#   docker compose up -d
+#   docker compose down          # keep the volume
+#   docker compose down -v       # drop the data too
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: fleetflow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DATABASE}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # Consumed by scripts/db/init/01-readonly-role.sh, not by Postgres itself.
+      POSTGRES_RO_USER: ${POSTGRES_RO_USER}
+      POSTGRES_RO_PASSWORD: ${POSTGRES_RO_PASSWORD}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - fleetflow-pgdata:/var/lib/postgresql/data
+      - ./scripts/db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  fleetflow-pgdata:
