@@ -9,6 +9,21 @@ import (
 	"fleetflow/internal/engine"
 )
 
+// refusedError is a request the transport refused before any domain rule saw it:
+// a body over the size limit, a client over its rate limit. It carries the status
+// and the body to answer with, because no domain rule describes these failures —
+// how large a body may be, and how fast a client may call, are transport and
+// deployment concerns, not fleet rules.
+type refusedError struct {
+	status  int
+	code    string
+	message string
+}
+
+// Error implements the error interface. The text is for logs; clients get the
+// code and message through writeError.
+func (e *refusedError) Error() string { return e.code + ": " + e.message }
+
 // errorBody is the body of every error response the API writes. One shape means a
 // client always parses an error the same way, whatever went wrong.
 type errorBody struct {
@@ -23,12 +38,16 @@ type errorBody struct {
 // handler reports failures through writeError, so the same failure cannot be
 // reported two different ways by two endpoints (DESIGN 3.8).
 func statusFor(err error) int {
+	// A refusal already knows the status it wants.
+	var refused *refusedError
+	if errors.As(err, &refused) {
+		return refused.status
+	}
+
 	// The routing core defines its own sentinels and must stay free of transport
 	// concerns, so translate them here instead of teaching the hot path about
 	// status codes.
 	switch {
-	case errors.Is(err, errBodyTooLarge):
-		return http.StatusRequestEntityTooLarge
 	case errors.Is(err, engine.ErrEdgeNotFound):
 		return http.StatusNotFound
 	case errors.Is(err, engine.ErrNoMetric):
@@ -56,8 +75,21 @@ func statusFor(err error) int {
 // carry database or driver detail, so the client receives a generic message and
 // the detail goes to the log, tagged with the request ID.
 func writeError(w http.ResponseWriter, r *http.Request, err error) {
-	code, message, ok := domain.Public(err)
-	if !ok {
+	status := statusFor(err)
+
+	var refused *refusedError
+	var code, message string
+
+	if errors.As(err, &refused) {
+		// A refusal was written for the client, so its own wording is what should
+		// be returned.
+		code, message = refused.code, refused.message
+	} else if publicCode, publicMessage, ok := domain.Public(err); ok {
+		code, message = publicCode, publicMessage
+	} else {
+		// An unclassified error is an internal failure. Its text can carry
+		// database or driver detail, so the detail goes to the log and the client
+		// gets a generic message.
 		code, message = "internal", "internal server error"
 		slog.ErrorContext(r.Context(), "request failed",
 			slog.String("request_id", requestIDFrom(r.Context())),
@@ -67,7 +99,7 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		)
 	}
 
-	writeJSON(w, statusFor(err), errorBody{
+	writeJSON(w, status, errorBody{
 		Code:      code,
 		Message:   message,
 		RequestID: requestIDFrom(r.Context()),

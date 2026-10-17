@@ -106,11 +106,18 @@ func TestDecodeJSON_RejectsAnOversizedBody(t *testing.T) {
 
 	err := decodeJSON(rec, req, &testPayload{})
 
-	if !errors.Is(err, errBodyTooLarge) {
-		t.Fatalf("decodeJSON() error = %v, want errBodyTooLarge", err)
+	var refused *refusedError
+	if !errors.As(err, &refused) {
+		t.Fatalf("decodeJSON() error = %v, want a transport refusal", err)
 	}
-	if status := statusFor(err); status != http.StatusRequestEntityTooLarge {
-		t.Errorf("statusFor() = %d, want 413", status)
+	if refused.status != http.StatusRequestEntityTooLarge {
+		t.Errorf("refusal status = %d, want 413", refused.status)
+	}
+	if got := statusFor(err); got != http.StatusRequestEntityTooLarge {
+		t.Errorf("statusFor() = %d, want 413", got)
+	}
+	if code, _, ok := domain.Public(err); ok {
+		t.Errorf("a transport refusal reported itself as a domain error with code %q", code)
 	}
 }
 

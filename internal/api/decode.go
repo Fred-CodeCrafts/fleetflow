@@ -24,12 +24,15 @@ const (
 	codeUnknownField  = "unknown_field"
 	codeBadFieldType  = "bad_field_type"
 	codeTrailingData  = "trailing_data"
+	codeBodyTooLarge  = "body_too_large"
 )
 
-// errBodyTooLarge marks a request the transport refused on size. It lives here
-// rather than in domain because the size of a body is a transport concern: no
-// domain rule mentions bytes.
-var errBodyTooLarge = errors.New("request body too large")
+// refusedBodyTooLarge refuses a body that exceeds maxBodyBytes.
+var refusedBodyTooLarge = &refusedError{
+	status:  http.StatusRequestEntityTooLarge,
+	code:    codeBodyTooLarge,
+	message: "request body is too large",
+}
 
 // decodeJSON reads exactly one JSON object from the request body into v.
 //
@@ -63,7 +66,7 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, v any) error {
 func decodeError(err error) error {
 	var tooLarge *http.MaxBytesError
 	if errors.As(err, &tooLarge) {
-		return errBodyTooLarge
+		return refusedBodyTooLarge
 	}
 	if errors.Is(err, io.EOF) {
 		return domain.Invalid(codeEmptyBody, "request body is required")
