@@ -214,6 +214,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 
 - [ ] 🔴 **T64** Final README: what it is, screenshot or GIF, run locally, deploy, limitations, license, attribution, API key example requests
   `docs: finalize readme`
+  Done when: the README calls the project "production-shaped architecture, MVP feature set" and never claims it is production-ready (US-8).
 - [ ] 🔴 **T65** Verify a fresh clone builds and runs from the README steps only
   `docs: fix setup steps found during clean-clone check`
 - [ ] 🔴 **T66** Run `go vet`, `gofmt`, `go test -race ./...` and fix findings; CI runs build, vet, test and lint on every push
