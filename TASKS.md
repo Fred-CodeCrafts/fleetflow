@@ -127,7 +127,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 - [x] 🔴 **T37** Add `POST /api/reports`
   `feat(api): add report endpoint`
   Done when: reports write to the weight store only and never touch PostgreSQL.
-- [ ] 🔴 **T38** Add `POST /api/route`
+- [x] 🔴 **T38** Add `POST /api/route`
   `feat(api): add route endpoint`
   Done when: a query returns the ordered edges and cost from the current weights, and an unreachable destination returns a clear error (US-5). Hot path reads the engine snapshot only and never touches PostgreSQL.
 - [ ] 🔴 **T39** Add fleet records in PostgreSQL: vehicles, drivers, trips (handler → service → repository per entity + `internal/store` migrations + API)
