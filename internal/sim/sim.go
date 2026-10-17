@@ -17,6 +17,18 @@ type FleetService interface {
 	Report(edgeID string, speedMPS float64, now time.Time) error
 }
 
+// FleetCustomizer is implemented by a fleet service whose weights are refreshed
+// on the simulation clock rather than a wall clock. *engine.Engine satisfies it.
+type FleetCustomizer interface {
+	// CustomizeEvery reports how much simulated time should pass between
+	// refreshes.
+	CustomizeEvery() time.Duration
+	// DecayStale relaxes edges that have gone quiet, at the given time.
+	DecayStale(now time.Time)
+	// Customize rebuilds and publishes the weights.
+	Customize() *engine.Metric
+}
+
 // reportEpoch anchors simulated seconds to a real timestamp for reports, so runs
 // stay deterministic instead of depending on the wall clock.
 var reportEpoch = time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
@@ -70,6 +82,11 @@ type Sim struct {
 	// fleet is the routing service fleet vehicles use. Without one they fall
 	// back to static routes.
 	fleet FleetService
+
+	// customizer is set when the fleet service refreshes its weights on the
+	// simulation clock, so the simulation can drive that refresh.
+	customizer     FleetCustomizer
+	lastCustomizeS float64
 }
 
 // New builds a simulation whose vehicles start pending. They step onto the
@@ -123,12 +140,14 @@ func (s *Sim) CompletedTrips() []float64 { return s.completed }
 func (s *Sim) Occupancy() *Occupancy { return s.occ }
 
 // Step advances the simulation by one time step: vehicles whose departure time
-// has arrived enter the network, everyone moves, and fleet vehicles report the
-// speeds they observed.
+// has arrived enter the network, weights are refreshed if a customization
+// interval has passed, everyone moves, and fleet vehicles report the speeds they
+// observed.
 func (s *Sim) Step() {
 	dt := s.cfg.StepS
 	s.nowS += dt
 	s.departDue()
+	s.refreshWeights()
 	s.advanceVehicles(dt)
 	s.rerouteFleet()
 	s.reportSpeeds()
@@ -136,7 +155,34 @@ func (s *Sim) Step() {
 
 // SetFleetService attaches the routing service that fleet vehicles use. Without
 // one, fleet vehicles fall back to the same static routes as background traffic.
-func (s *Sim) SetFleetService(f FleetService) { s.fleet = f }
+// A service that also implements FleetCustomizer has its weights refreshed on
+// the simulation clock.
+func (s *Sim) SetFleetService(f FleetService) {
+	s.fleet = f
+	s.customizer = nil
+	if c, ok := f.(FleetCustomizer); ok {
+		s.customizer = c
+	}
+}
+
+// refreshWeights relaxes quiet edges and republishes the weights once a
+// customization interval of simulated time has passed. Running it here, rather
+// than on a wall clock, keeps a run deterministic and makes the weights age with
+// simulated time.
+func (s *Sim) refreshWeights() {
+	if s.customizer == nil {
+		return
+	}
+
+	everyS := s.customizer.CustomizeEvery().Seconds()
+	if everyS <= 0 || s.nowS-s.lastCustomizeS < everyS {
+		return
+	}
+
+	s.customizer.DecayStale(s.ReportTime())
+	s.customizer.Customize()
+	s.lastCustomizeS = s.nowS
+}
 
 // ReportTime returns the timestamp used for the reports of the current step.
 func (s *Sim) ReportTime() time.Time {

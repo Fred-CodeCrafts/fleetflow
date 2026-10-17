@@ -17,6 +17,10 @@ func (e *Engine) DecayStale(now time.Time) {
 	}
 }
 
+// CustomizeEvery reports the interval at which Run refreshes the weights. A
+// simulation that keeps its own clock uses it to decide when to refresh.
+func (e *Engine) CustomizeEvery() time.Duration { return e.params.Delta }
+
 // Run customizes the metric on every Delta interval until ctx is cancelled, then
 // returns cleanly. It blocks, so callers start it in its own goroutine and stop
 // it by cancelling the context.

@@ -55,6 +55,20 @@ func TestRun_CustomizesPeriodicallyAndStopsCleanly(t *testing.T) {
 	}
 }
 
+func TestCustomizeEvery_MatchesTheConfiguredInterval(t *testing.T) {
+	g := loadFixture(t)
+	p := weights.DefaultParams()
+	p.Delta = 2500 * time.Millisecond
+
+	e, err := New(g, NewDijkstraRouter(g), p)
+	if err != nil {
+		t.Fatalf("unexpected error creating engine: %v", err)
+	}
+	if got := e.CustomizeEvery(); got != 2500*time.Millisecond {
+		t.Errorf("CustomizeEvery() = %s, want 2.5s", got)
+	}
+}
+
 func TestDecayStale_RelaxesQuietEdges(t *testing.T) {
 	g := loadFixture(t)
 	p := weights.DefaultParams()
