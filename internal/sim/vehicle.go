@@ -36,8 +36,10 @@ type Vehicle struct {
 	route []int
 	// leg is the position in route the vehicle is currently driving.
 	leg int
-	// progress is the fraction of the current edge already covered, in [0, 1).
-	progress float64
+	// travelledM is how far the vehicle has driven along the current edge.
+	// Metres are tracked rather than a fraction so that repeated additions do
+	// not drift and a vehicle does not overshoot the end of an edge.
+	travelledM float64
 
 	state        VehicleState
 	departS      float64
@@ -70,8 +72,17 @@ func (v *Vehicle) DepartureS() float64 { return v.departS }
 // State reports whether the vehicle is pending, running or arrived.
 func (v *Vehicle) State() VehicleState { return v.state }
 
-// Progress reports the fraction of the current edge already covered.
-func (v *Vehicle) Progress() float64 { return v.progress }
+// TravelledM reports how far the vehicle has driven along its current edge.
+func (v *Vehicle) TravelledM() float64 { return v.travelledM }
+
+// Progress reports the fraction of the current edge already covered, in [0, 1).
+// edgeLengthM is the length of the edge the vehicle is on.
+func (v *Vehicle) Progress(edgeLengthM float64) float64 {
+	if edgeLengthM <= 0 {
+		return 0
+	}
+	return v.travelledM / edgeLengthM
+}
 
 // RouteChanges reports how many times the vehicle switched to a different route.
 func (v *Vehicle) RouteChanges() int { return v.routeChanges }

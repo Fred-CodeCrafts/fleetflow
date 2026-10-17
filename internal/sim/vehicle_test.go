@@ -18,8 +18,8 @@ func TestNewVehicle_StartsPending(t *testing.T) {
 	if v.DepartureS() != 12.5 {
 		t.Errorf("DepartureS() = %f, want 12.5", v.DepartureS())
 	}
-	if v.Progress() != 0 || v.RouteChanges() != 0 {
-		t.Errorf("expected zeroed progress and route changes, got %f and %d", v.Progress(), v.RouteChanges())
+	if v.Progress(100) != 0 || v.RouteChanges() != 0 {
+		t.Errorf("expected zeroed progress and route changes, got %f and %d", v.Progress(100), v.RouteChanges())
 	}
 	if got := v.currentEdge(); got != -1 {
 		t.Errorf("currentEdge() = %d, want -1 while pending", got)
