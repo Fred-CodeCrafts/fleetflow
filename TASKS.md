@@ -28,7 +28,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 - [x] 🔴 **T05** `go mod init`, add `cmd/fleetflow/main.go` that prints a startup line
   `chore: initialize go module and main entrypoint`
   Done when: `go build ./...` passes.
-- [ ] 🔴 **T06** Add `internal/graph` types (`Node`, `Edge`, `Graph`)
+- [x] 🔴 **T06** Add `internal/graph` types (`Node`, `Edge`, `Graph`)
   `feat(graph): add node, edge and graph types`
 - [ ] 🔴 **T07** Add JSON loader with validation (missing nodes, bad lengths)
   `feat(graph): load graph from json with validation`
