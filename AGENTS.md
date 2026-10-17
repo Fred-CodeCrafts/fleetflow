@@ -127,3 +127,15 @@ Stop and ask the human instead of guessing, especially about:
 - licensing or attribution
 - anything that touches `sumo-routing/` or `fleetbase/`
 - deleting files or rewriting history
+
+---
+
+## Database
+This project uses Postgres. The database MCP (toolbox-postgres) is OFF by default and available through the "db" subagent.
+- For live data needs (schema inspection, row counts, checking real values), delegate to the db subagent. If it's unavailable or disabled, tell me: "This needs the DB MCP. Please enable it."
+- Don't guess schema or data. Use migration files and ORM models in the repo for anything that doesn't need live data.
+- For code-only work, never use or ask for the MCP.
+- Before querying, say you're about to use the MCP and why.
+- When DB work is finished, say so and turn the MCP off (set `"disabled": true` on `toolbox-postgres` in the project `opencode.json`, then tell me to restart). Never claim it's off until a new session confirms it.
+  - OpenCode V2 uses `"disabled"`, not `"enabled"`. The global config keeps `"disabled": true`; only the project config is toggled for on/off.
+- Schema changes go through the project's migration tooling, never the MCP.
