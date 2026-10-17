@@ -61,7 +61,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 
 ## Day 3 (Mon 19 Oct): Engine and router
 
-- [ ] 🔴 **T18** Add immutable `Metric` type (costs slice plus version)
+- [x] 🔴 **T18** Add immutable `Metric` type (costs slice plus version)
   `feat(engine): add immutable metric snapshot`
 - [ ] 🔴 **T19** Add Dijkstra with binary heap over a given metric, with tests on the fixture graph
   `feat(engine): add dijkstra router`
