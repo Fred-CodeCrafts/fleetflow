@@ -107,7 +107,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 
 ## Day 5 (Wed 21 Oct): API and streaming
 
-- [ ] 🔴 **T36** Add HTTP server with `GET /healthz`
+- [x] 🔴 **T36** Add HTTP server with `GET /healthz`
   `feat(api): add server and health endpoint`
 - [ ] 🔴 **T37** Add `POST /api/reports`
   `feat(api): add report endpoint`
