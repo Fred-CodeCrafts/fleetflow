@@ -93,7 +93,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   `feat(sim): add occupancy-based edge speed model`
 - [x] 🔴 **T30** Add simulation step: move vehicles along routes, finish trips
   `feat(sim): advance vehicles each step`
-- [ ] 🔴 **T31** Add background vehicles with static routes
+- [x] 🔴 **T31** Add background vehicles with static routes
   `feat(sim): add background vehicles with static routes`
 - [ ] 🔴 **T32** Add fleet vehicles that request routes and send reports
   `feat(sim): add fleet vehicles using the engine`

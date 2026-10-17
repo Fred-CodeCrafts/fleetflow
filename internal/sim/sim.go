@@ -3,6 +3,7 @@ package sim
 import (
 	"errors"
 
+	"fleetflow/internal/engine"
 	"fleetflow/internal/graph"
 )
 
@@ -37,6 +38,11 @@ type Sim struct {
 
 	nowS      float64
 	completed []float64
+
+	// Background vehicles never contact an engine, so they route on a fixed
+	// free-flow metric of their own.
+	staticMetric *engine.Metric
+	staticRouter engine.Router
 }
 
 // New builds a simulation whose vehicles start pending. They step onto the
@@ -59,9 +65,11 @@ func New(g *graph.Graph, cfg Config) (*Sim, error) {
 	})
 
 	s := &Sim{
-		g:   g,
-		cfg: cfg,
-		occ: NewOccupancy(len(g.Edges)),
+		g:            g,
+		cfg:          cfg,
+		occ:          NewOccupancy(len(g.Edges)),
+		staticMetric: engine.NewStaticMetric(g),
+		staticRouter: engine.NewDijkstraRouter(g),
 	}
 	s.vehicles = make([]*Vehicle, len(demand))
 	for i, d := range demand {
@@ -87,11 +95,39 @@ func (s *Sim) CompletedTrips() []float64 { return s.completed }
 // should use Snapshot instead.
 func (s *Sim) Occupancy() *Occupancy { return s.occ }
 
-// Step advances the simulation by one time step.
+// Step advances the simulation by one time step: vehicles whose departure time
+// has arrived enter the network, then everyone moves.
 func (s *Sim) Step() {
 	dt := s.cfg.StepS
 	s.nowS += dt
+	s.departDue()
 	s.advanceVehicles(dt)
+}
+
+// departDue starts every pending vehicle whose scheduled departure has arrived.
+func (s *Sim) departDue() {
+	for _, v := range s.vehicles {
+		if v.state == VehiclePending && v.departS <= s.nowS {
+			s.depart(v)
+		}
+	}
+}
+
+// depart puts a pending vehicle on the network. The trip clock starts when the
+// vehicle actually enters, which is the scheduled time on an uncongested run.
+func (s *Sim) depart(v *Vehicle) {
+	path, err := s.routeFor(v)
+	if err != nil || path == nil {
+		v.state = VehicleUnroutable
+		return
+	}
+	v.departS = s.nowS
+	s.placeOnRoute(v, path.Edges, s.nowS)
+}
+
+// routeFor returns the edge route a departing vehicle should follow.
+func (s *Sim) routeFor(v *Vehicle) (*engine.Path, error) {
+	return s.staticRouter.Route(s.staticMetric, v.Origin(), v.Destination())
 }
 
 // advanceVehicles moves every running vehicle along its route and finishes the

@@ -10,6 +10,9 @@ const (
 	VehicleRunning
 	// VehicleArrived has finished its trip.
 	VehicleArrived
+	// VehicleUnroutable could not be given a route, so it never enters the
+	// network.
+	VehicleUnroutable
 )
 
 // String implements fmt.Stringer.
@@ -21,6 +24,8 @@ func (s VehicleState) String() string {
 		return "running"
 	case VehicleArrived:
 		return "arrived"
+	case VehicleUnroutable:
+		return "unroutable"
 	default:
 		return "unknown"
 	}
