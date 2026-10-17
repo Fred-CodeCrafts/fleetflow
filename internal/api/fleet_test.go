@@ -7,6 +7,8 @@ import (
 
 	"fleetflow/internal/driver"
 	drivermemory "fleetflow/internal/driver/memory"
+	"fleetflow/internal/trip"
+	tripmemory "fleetflow/internal/trip/memory"
 	"fleetflow/internal/vehicle"
 	vehiclememory "fleetflow/internal/vehicle/memory"
 )
@@ -21,6 +23,7 @@ func fleetServer(t *testing.T) *Server {
 	return testServer(t,
 		WithVehicles(vehicle.NewService(vehiclememory.New())),
 		WithDrivers(driver.NewService(drivermemory.New())),
+		WithTrips(trip.NewService(tripmemory.New())),
 	)
 }
 
