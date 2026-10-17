@@ -118,11 +118,28 @@ func (e *Engine) Report(edgeID string, speedMPS float64, now time.Time) error {
 // is loaded exactly once, so the whole query runs on one immutable metric even if
 // a new snapshot is published mid-query.
 func (e *Engine) Route(fromID, toID string) (*Path, error) {
+	path, _, err := e.RouteWithVersion(fromID, toID)
+	return path, err
+}
+
+// RouteWithVersion is Route, and also reports the version of the snapshot that
+// answered the query. The pointer is loaded exactly once, so the version always
+// belongs to the metric the path was computed from — not to whatever happens to
+// be active by the time a caller writes its response.
+//
+// A caller that quotes the version it used needs this: the API returns
+// metric_version so a client can tell whether a route predates a refresh.
+func (e *Engine) RouteWithVersion(fromID, toID string) (*Path, uint64, error) {
 	m := e.active.Load()
 	if m == nil {
-		return nil, ErrNoMetric
+		return nil, 0, ErrNoMetric
 	}
-	return e.router.Route(m, fromID, toID)
+
+	path, err := e.router.Route(m, fromID, toID)
+	if err != nil {
+		return nil, 0, err
+	}
+	return path, m.Version(), nil
 }
 
 // PathCost returns the cost of a sequence of edge indices on the active metric.
