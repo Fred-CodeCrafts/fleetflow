@@ -35,3 +35,23 @@ func (s *EdgeState) Rho() float64 {
 	defer s.mu.RUnlock()
 	return s.rhoBar
 }
+
+// Observe folds one vehicle report into the smoothed congestion:
+//
+//	rhoBar = (1 - gamma) * rhoBar + gamma * rho
+//
+// gamma is the smoothing rate in [0, 1]: 1 takes the raw report, smaller values
+// give the existing history more weight. It is clamped so an out-of-range
+// parameter cannot push rhoBar outside its bounds. now is stored as the report
+// time for the decay pass to use.
+func (s *EdgeState) Observe(speedMPS, freeFlowMPS, gamma float64, now time.Time) {
+	rho := Congestion(speedMPS, freeFlowMPS)
+	g := clamp01(gamma)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.rhoBar = clamp01((1-g)*s.rhoBar + g*rho)
+	s.lastReport = now
+	s.reported = true
+}

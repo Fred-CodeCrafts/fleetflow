@@ -47,7 +47,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   `feat(weights): add per-edge state struct`
 - [x] 🔴 **T12** Add congestion measure `rho = clamp(1 - v/v_free, 0, 1)` with tests
   `feat(weights): add congestion measure from observed speed`
-- [ ] 🔴 **T13** Add moving-average update on report, with tests
+- [x] 🔴 **T13** Add moving-average update on report, with tests
   `feat(weights): smooth congestion with moving average`
 - [ ] 🔴 **T14** Add cost function `free_flow * (1 + alpha * rho^beta)`, with tests
   `feat(weights): add edge cost function`
