@@ -22,16 +22,23 @@ func TestDecay_DecaysAfterHoldOnEveryQuietCycle(t *testing.T) {
 	s := NewEdgeState()
 	s.Observe(0, 15, 1, t0) // fully congested
 
-	s.Decay(t0.Add(15*time.Second), 0.1, 10*time.Second)
-	want := 1 * 0.9
-	if !approxEqual(s.Rho(), want) {
-		t.Fatalf("after first decay: Rho() = %f, want %f", s.Rho(), want)
+	// Customization cycles every 5 s, hold is 10 s. The cycle that received the
+	// report never decays; the next quiet cycle does.
+	s.Decay(t0.Add(5*time.Second), 0.1, 10*time.Second)
+	if !approxEqual(s.Rho(), 1) {
+		t.Fatalf("cycle with a fresh report must not decay, Rho() = %f", s.Rho())
 	}
 
-	s.Decay(t0.Add(25*time.Second), 0.1, 10*time.Second)
+	s.Decay(t0.Add(10*time.Second), 0.1, 10*time.Second)
+	want := 1 * 0.9
+	if !approxEqual(s.Rho(), want) {
+		t.Fatalf("after first quiet cycle past hold: Rho() = %f, want %f", s.Rho(), want)
+	}
+
+	s.Decay(t0.Add(15*time.Second), 0.1, 10*time.Second)
 	want *= 0.9
 	if !approxEqual(s.Rho(), want) {
-		t.Errorf("after second decay: Rho() = %f, want %f", s.Rho(), want)
+		t.Errorf("after second quiet cycle: Rho() = %f, want %f", s.Rho(), want)
 	}
 }
 
@@ -67,14 +74,16 @@ func TestDecay_ClampsLambda(t *testing.T) {
 
 	s := NewEdgeState()
 	s.Observe(0, 15, 1, t0)
-	s.Decay(t0.Add(20*time.Second), 2, 10*time.Second) // lambda above 1 clamps to 1
+	s.Decay(t0.Add(5*time.Second), 0.1, 10*time.Second) // clears the report flag
+	s.Decay(t0.Add(10*time.Second), 2, 10*time.Second)  // lambda above 1 clamps to 1
 	if got := s.Rho(); got != 0 {
 		t.Errorf("expected Rho() = 0 with lambda 1, got %f", got)
 	}
 
 	s2 := NewEdgeState()
 	s2.Observe(0, 15, 1, t0)
-	s2.Decay(t0.Add(20*time.Second), -1, 10*time.Second) // negative lambda clamps to 0
+	s2.Decay(t0.Add(5*time.Second), 0.1, 10*time.Second) // clears the report flag
+	s2.Decay(t0.Add(10*time.Second), -1, 10*time.Second) // negative lambda clamps to 0
 	if got := s2.Rho(); got != 1 {
 		t.Errorf("expected Rho() = 1 with lambda 0, got %f", got)
 	}
