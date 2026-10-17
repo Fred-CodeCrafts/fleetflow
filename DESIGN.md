@@ -151,8 +151,8 @@ v_edge = v_free / (1 + 0.15 * (N / capacity)^4)
 - **Rerouting policy:** a fleet vehicle requests a route at departure and then every `K` simulated seconds. It switches only if the new route is cheaper by more than a threshold (default 10%), which is the hysteresis that limits oscillation.
 - **Determinism:** one seeded random source per run. Same seed gives the same demand.
 
-### 3.5 HTTP API (`internal/api`)
-Plain `net/http`. JSON in and out. `POST /api/reports` and `POST /api/route` require a valid API key (missing or wrong key returns 401 and does nothing).
+### 3.5 HTTP API (`internal/api` + entity handlers)
+Plain `net/http`. JSON in and out. `POST /api/reports` and `POST /api/route` require a valid API key (missing or wrong key returns 401 and does nothing). Hot path stays in memory and out of the database: reports write to the weight store only, route queries read the engine snapshot only.
 
 | Method and path | Purpose |
 |---|---|
@@ -169,6 +169,9 @@ Plain `net/http`. JSON in and out. `POST /api/reports` and `POST /api/route` req
 | `POST /api/trips/{id}/status` | Advance a trip (planned, in progress, completed) and keep the vehicle status in step; the run loop does this for simulated trips, and the dispatcher can override |
 | `GET /api/runs`, `POST /api/runs` | List finished comparison runs and save the current one `{seed, config, metrics}` (US-9) |
 | `GET /healthz` | Liveness |
+| `GET /readyz` | Readiness: graph loaded, DB reachable when configured |
+
+Every entity follows handler → service → repository, including vehicles and drivers. Consistency matters more than saving a file: new contributors and AI agents can predict where anything goes. Repository interfaces are defined in the service package (or `domain/`), with `postgres/` and `memory/` implementations behind them. Services are unit-tested against `memory/`; integration tests run against a real Postgres (e.g. in Docker). The routing core (`graph`, `weights`, `engine`) imports nothing from the HTTP or database layers.
 
 Fleet records (vehicles, drivers, trips, completed-trip history, saved comparison runs) live in PostgreSQL and survive a server restart; schema changes go through versioned migrations. API keys are stored hashed, never in plain text, and never written to logs. Live congestion state stays in memory on the single instance. `GET /api/metrics` reports trip and congestion metrics plus the engineering numbers: route query latency (p50, p99), customization time and metric age.
 
@@ -183,10 +186,21 @@ Server-Sent Events are used instead of WebSockets because they are one-way, simp
 - Metrics strip: average trip time, 95th percentile trip time, saturated roads (%), route changes, route query latency, fleet vs. background trip times, with the capacity derivation stated so the saturation figure is not a black box.
 - Controls: start, reset, seed, number of vehicles, fleet share.
 
-### 3.7 Persistence (`internal/store`)
+### 3.7 Persistence (`internal/<entity>/` service + repository, `internal/store`)
 - PostgreSQL for vehicles, drivers, trips, saved runs, and hashed API keys. Live congestion state stays in memory (see `internal/weights`).
+- Layout per entity: `handler` (HTTP, validation, status mapping) → `service` (rules, transactions, owns the repository interface) → `repository` (`postgres/` real implementation, `memory/` fake for unit tests).
 - Versioned migrations only, never hand-edited schema. Assignment rules (one vehicle per driver, no double trip assignment) enforced in the database and under concurrency.
+- Connection pooling configured; indexes on the foreign keys and status columns that are filtered by.
+- Hot path stays out of the database: reports and route queries never touch PostgreSQL.
 - No real driver locations are collected during the competition; Indonesia's data protection law (UU PDP) is reviewed before any pilot.
+
+### 3.8 Cross-cutting: config, errors, observability, resilience
+- **Config:** all settings from environment variables, validated at startup; the app refuses to start on bad config.
+- **Errors and validation:** typed domain errors mapped to status codes in one place; request size limits and input validation at the handler.
+- **Observability:** structured logs with request IDs; `GET /healthz` (liveness) and `GET /readyz` (readiness); metrics already planned (route query latency, customization time, metric age).
+- **Resilience:** graceful shutdown (stop the customizer and simulation, drain requests); timeouts on every outbound call and query; rate limiting on public endpoints.
+- **Testing:** unit tests on services with memory repositories; integration tests against a real Postgres (e.g. in Docker); `-race` on the engine; tests run in CI on every push.
+- **State:** in-memory weights mean one instance per region (`max-instances=1`). Persisted state or a restart plan is roadmap; multi-instance needs a different approach.
 
 ---
 
@@ -272,16 +286,21 @@ The Fly path is easy for iteration, but the playbook says projects must be deplo
 
 ```
 fleetflow/
-├── cmd/fleetflow/main.go      # wiring, flags, server start
+├── cmd/fleetflow/main.go      # wiring, env-validated config, graceful shutdown
 ├── internal/
-│   ├── graph/                 # graph types and JSON loader
-│   ├── weights/               # edge state, smoothing, decay, cost
-│   ├── engine/                # customizer, metric snapshot, router
-│   ├── fleet/                 # vehicles, drivers, trips, history (PostgreSQL records)
-│   ├── store/                 # PostgreSQL connection, versioned migrations
+│   ├── graph/                 # routing core: graph types and JSON loader (no http/db imports)
+│   ├── weights/               # routing core: edge state, smoothing, decay, cost
+│   ├── engine/                # routing core: customizer, metric snapshot, router
+│   ├── domain/                # shared types + typed domain errors mapped to status codes
+│   ├── vehicle/               # handler → service → repository (interface in service; postgres/ + memory/)
+│   ├── driver/                # handler → service → repository (same shape as vehicle)
+│   ├── trip/                  # handler → service → repository (assignment in one transaction)
+│   ├── run/                   # saved comparison runs, same layered shape
 │   ├── auth/                  # API key issue/verify (hashed storage, no plaintext logs)
-│   ├── sim/                   # vehicles, demand, rerouting policy
-│   └── api/                   # HTTP handlers, SSE
+│   ├── store/                 # PostgreSQL connection pool, versioned migrations
+│   ├── config/                # env parsing + startup validation (refuse to start on bad config)
+│   ├── sim/                   # vehicles, demand, rerouting policy (client of the public API)
+│   └── api/                   # HTTP wiring: routes, middleware (request ID, limits, rate limit), SSE
 ├── web/                       # embedded dashboard (HTML, CSS, JS)
 ├── data/graph.json            # road graph extract
 ├── scripts/                   # one-time OSM extraction
@@ -306,13 +325,13 @@ Deployment deadline is **24 October**. Commit after each step, as described in `
 | 2 | Sun 18 Oct | Weight store (smoothing, decay, cost) with tests |
 | 3 | Mon 19 Oct | Engine: customizer, atomic metric, Dijkstra router, race tests |
 | 4 | Tue 20 Oct | Simulator: demand, edge speed model, fleet vs. background vehicles, rerouting, trip metrics, baseline comparison |
-| 5 | Wed 21 Oct | API and SSE stream, PostgreSQL fleet records and saved runs, API keys, simulated traffic on the public API, route query latency |
+| 5 | Wed 21 Oct | API and SSE stream, layered fleet records (handler → service → repository, postgres + memory), migrations, API keys, simulated traffic on the public API, route query latency, config validation, typed errors, readiness, graceful shutdown |
 | 6 | Thu 22 Oct | Dashboard: fleet views, canvas map, side-by-side panels, controls, metrics strip, simulated/live labels |
 | 7 | Fri 23 Oct | Dockerfile, Cloud Run deployment (and Fly preview), tuning runs, fleet-share sweep |
 | 8 | Sat 24 Oct | Buffer, README polish, shipped and verified |
 | | 25 to 27 Oct | Demo video, 500-word summary, deck, pitch practice |
 
-**Cut order if time runs short:** stretch work, then US-14 reports docs, then the multi-seed batch script and the fleet-share sweep, then the fairness metrics and saved runs, then the styling pass, then the Fly preview. Never cut PostgreSQL fleet records, API keys, simulated traffic on the public API, route query latency, the side-by-side dashboard comparison, the Cloud Run deployment, or the honest results record.
+**Cut order if time runs short:** stretch work, then dashboard polish (T56), then the Fly preview (T59), then the multi-seed batch script and the fleet-share sweep, then the fairness metrics and saved runs, then US-14 reports docs. Never cut PostgreSQL fleet records, API keys, simulated traffic on the public API, route query latency, the side-by-side dashboard comparison, the Cloud Run deployment, or the honest results record.
 
 ---
 
@@ -339,7 +358,7 @@ Deployment deadline is **24 October**. Commit after each step, as described in `
 | Database | PostgreSQL, hosted externally (Cloud SQL vs. free tier TBD) | Fleet records must survive restarts; congestion stays in memory |
 | Simulated reports | Through the public API (`POST /api/reports`, `POST /api/route`) | Simulated and external traffic take the same validated path (PRD US-7), and one run clock keeps refresh and streaming in step |
 | End-user auth | None; an API key only on the reports and route endpoints | Keeps the demo open, while the programmatic surface is honest about access (PRD US-13) |
-| Post-sprint order | Pilot, driver app, map matching, orgs/roles, persisted weights, CCH, Fleetbase adapter | Per PRD section 9 |
+| Post-sprint order | Pilot, driver app, map matching, orgs/roles + tenant separation, key rotation/revocation, persisted weights + multi-instance plan, CCH, Fleetbase adapter, backups + runbook | Per PRD section 9 |
 
 ---
 

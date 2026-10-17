@@ -112,14 +112,21 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 
 - [x] 🔴 **T36** Add HTTP server with `GET /healthz`
   `feat(api): add server and health endpoint`
+- [ ] 🔴 **T36a** Add `GET /readyz`, env-validated config, and graceful shutdown
+  `feat(api): add readiness, config validation and graceful shutdown`
+  Done when: bad env fails fast with a clear error; `/readyz` reports graph loaded and DB reachable when configured; SIGTERM stops the customizer and simulation and drains requests.
+- [ ] 🔴 **T36b** Add typed domain errors, request limits, request IDs, timeouts and rate limits
+  `feat(api): add typed errors, validation and limits`
+  Done when: domain errors map to status codes in one place; oversized/invalid input is rejected at the handler; logs carry a request ID; public endpoints have timeouts and rate limits.
 - [ ] 🔴 **T37** Add `POST /api/reports`
   `feat(api): add report endpoint`
+  Done when: reports write to the weight store only and never touch PostgreSQL.
 - [ ] 🔴 **T38** Add `POST /api/route`
   `feat(api): add route endpoint`
-  Done when: a query returns the ordered edges and cost from the current weights, and an unreachable destination returns a clear error (US-5).
-- [ ] 🔴 **T39** Add fleet records in PostgreSQL: vehicles, drivers, trips (`internal/fleet` + `internal/store` migrations + API)
+  Done when: a query returns the ordered edges and cost from the current weights, and an unreachable destination returns a clear error (US-5). Hot path reads the engine snapshot only and never touches PostgreSQL.
+- [ ] 🔴 **T39** Add fleet records in PostgreSQL: vehicles, drivers, trips (handler → service → repository per entity + `internal/store` migrations + API)
   `feat(fleet): add vehicles, drivers and trips with persistence`
-  Done when: vehicle create/list with validation, driver create and assign/unassign with one-vehicle enforcement, trip create/assign with availability rules, records survive a server restart, concurrent double-assign is rejected, and schema changes come from versioned migrations.
+  Done when: every entity follows handler → service → repository with the interface in the service package and `postgres/` + `memory/` behind it; vehicle create/list with validation, driver create and assign/unassign with one-vehicle enforcement, trip create/assign with availability rules in one transaction; records survive a server restart; concurrent double-assign is rejected; schema changes come from versioned migrations; pooling and indexes on filtered FK/status columns; unit tests use `memory/`, integration tests use real Postgres.
 - [ ] 🔴 **T39a** Drive trip and vehicle status from the run (planned to in progress to completed)
   `feat(fleet): update trip and vehicle status from the simulation`
   Done when: assigning a trip marks the vehicle on trip, finishing it frees the vehicle, and the trip list shows both transitions.
@@ -203,7 +210,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   `docs: finalize readme`
 - [ ] 🔴 **T65** Verify a fresh clone builds and runs from the README steps only
   `docs: fix setup steps found during clean-clone check`
-- [ ] 🔴 **T66** Run `go vet`, `gofmt`, `go test -race ./...` and fix findings
+- [ ] 🔴 **T66** Run `go vet`, `gofmt`, `go test -race ./...` and fix findings; CI runs build, vet, test and lint on every push
   `chore: fix lint and race findings`
 - [ ] 🔴 **T67** Tag release `v0.1.0`
   `chore: release v0.1.0`
@@ -221,7 +228,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 
 ## Stretch (only if everything above is done)
 
-- [ ] 🟢 **S1** Post-sprint roadmap items from PRD section 9 (in order): real-fleet pilot, driver GPS web app, map matching, organizations and roles, persisted congestion state, CCH router, Fleetbase adapter
+- [ ] 🟢 **S1** Post-sprint roadmap items from PRD section 9 (in order): real-fleet pilot, driver GPS web app, map matching, organizations and roles + tenant separation, key rotation/revocation, persisted congestion state + multi-instance plan, CCH router, Fleetbase adapter, backups + runbook, retention/consent
 - [ ] 🟢 **S2** OSM-based Jakarta extract replacing the generated grid
 - [ ] 🟢 **S3** ADK agent that suggests parameter settings
 - [ ] 🟢 **S4** Optional SUMO adapter
@@ -229,11 +236,11 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 ## Cut order if time runs short
 
 1. S1 to S4 (all stretch work)
-2. T46 (US-14 reports docs; demote to could if tight)
-3. T61 and T62 (batch script and fleet-share sweep)
-4. T34a and T39b (fairness metrics and saved runs; both should-have)
-5. T56 (styling pass)
-6. T59 (Fly preview)
+2. T56 (dashboard polish)
+3. T59 (Fly preview)
+4. T61 and T62 (batch script and fleet-share sweep)
+5. T34a and T39b (fairness metrics and saved runs; both should-have)
+6. T46 (US-14 reports docs; demote to could if tight)
 
 **Never cut:** fleet records in Postgres (T39, T39a, T48), API keys (T40), simulated traffic on the public API (T40a), route query latency (T42a), the side-by-side dashboard (T52, T53), the Cloud Run deployment (T58), and the honest results record (T60).
 

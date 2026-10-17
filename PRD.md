@@ -81,6 +81,8 @@ Acceptance criteria:
 - [ ] Congestion per road is smoothed with an exponential moving average over speed reports.
 - [ ] Roads with no recent report decay toward free-flow after a hold time.
 - [ ] A route query returns without waiting for weight updates (it uses the latest published immutable snapshot, atomically swapped).
+- [ ] Hot path stays in memory and out of the database: `POST /reports` writes to the weight store only, `POST /api/route` reads the engine snapshot only. Neither touches PostgreSQL.
+- [ ] Routing core (`graph`, `weights`, `engine`) imports nothing from the HTTP or database layers.
 - [ ] A static shortest-path baseline mode is available for comparison.
 - [ ] If no route exists, the system says so clearly.
 - [ ] Public API surface: `POST /reports`, `POST /route`, `GET /metrics` (versioned under `/api/` in this design).
@@ -112,16 +114,25 @@ Acceptance criteria:
 - [ ] The app runs locally with one command or one Docker command.
 - [ ] A public Cloud Run link is available and works from another network.
 - [ ] Single instance (`max-instances=1`); persistent records live in PostgreSQL while live congestion state stays in memory.
+- [ ] All settings come from environment variables, validated at startup; the app refuses to start on bad config.
+- [ ] `GET /healthz` (liveness) and `GET /readyz` (readiness: graph loaded, DB reachable if configured) exist.
+- [ ] Graceful shutdown: stop the customizer and simulation, drain in-flight requests.
+- [ ] CI builds, vets, tests and lints on every push; deploy is repeatable from the README.
 - [ ] The repo has an open-source license (Apache-2.0 or MIT, chosen at first commit) and attributions for third-party data (e.g. OpenStreetMap, ODbL).
+- [ ] Honest claim: "production-shaped architecture, MVP feature set" — never "production-ready" (no real traffic, backups, or security review yet).
 
 ### US-12 (M) Store data reliably
 *As a dispatcher, I want vehicles, drivers, trips and saved runs to be stored in a database with rules enforced, so that nothing is lost or contradictory.*
 
 Acceptance criteria:
 - [ ] Data is stored in PostgreSQL and survives a server restart.
+- [ ] Every entity (vehicles, drivers, trips, runs, API keys) follows handler → service → repository. Consistency matters more than saving a file.
+- [ ] Repository interfaces are defined in the service package; `postgres/` and `memory/` implementations sit behind them. Unit tests use `memory/`; production uses `postgres/`.
 - [ ] A driver cannot be assigned to two vehicles.
-- [ ] A vehicle that is offline or already on a trip cannot be assigned a new trip, even if two requests arrive at the same time.
+- [ ] A vehicle that is offline or already on a trip cannot be assigned a new trip, even if two requests arrive at the same time (one transaction per assignment plus database constraints).
 - [ ] Database changes are made through versioned migrations, not by hand.
+- [ ] Connection pooling is configured; indexes exist on the foreign keys and status columns that are filtered by.
+- [ ] Hot path stays out of the database: reports and route queries never touch PostgreSQL.
 
 ### US-13 (M) Let outside systems use the API
 *As a developer, I want to call the reports and route endpoints from my own system using an API key, so that I can use FleetFlow without its dashboard.*
@@ -130,6 +141,8 @@ Acceptance criteria:
 - [ ] `POST /api/reports` and `POST /api/route` require a valid API key.
 - [ ] A missing or wrong key returns 401 and does nothing.
 - [ ] API keys are stored hashed, never in plain text, and are never written to logs.
+- [ ] Typed domain errors are mapped to status codes in one place; handlers validate input and enforce request size limits.
+- [ ] Structured logs carry a request ID; public endpoints have rate limits and timeouts.
 - [ ] The README shows an example request for each endpoint.
 
 ### US-14 (S) Accept real vehicle reports
@@ -173,6 +186,7 @@ Post-sprint roadmap items (driver app, map matching, organizations, persisted we
 - Driver mobile or web app for sending GPS (roadmap)
 - Converting raw GPS points into road IDs, known as map matching (roadmap)
 - Multiple organizations, user roles and billing (roadmap)
+- API key rotation and revocation UI, multi-instance state (roadmap; single instance only)
 - Billing, invoicing, fuel, maintenance, inventory or warehouse features
 - Multi-stop and multi-vehicle optimization (vehicle routing problem)
 - Scaling to a whole city (roadmap, needs a faster routing algorithm)
@@ -180,7 +194,10 @@ Post-sprint roadmap items (driver app, map matching, organizations, persisted we
 - Proving the benefit with a real fleet (roadmap, planned as a pilot)
 - Competing with Fleetbase or similar platforms on breadth of features
 - Running more than one server instance (state is in memory)
+- Backups, runbook beyond a sketch, full security review (roadmap; see section 9)
 - Pre-existing code. No code is copied from the thesis prototype or from Fleetbase
+
+Production-shaped, not production-ready: the sprint ships layered code, migrations, hashed API keys, typed errors, health/readiness endpoints, graceful shutdown, env-validated config, and tests in CI. Backups, key rotation/revocation, tenant separation, persisted weights, multi-instance support, retention/consent handling, and security review stay on the roadmap.
 
 ## 6. Constraints and assumptions
 
@@ -236,7 +253,10 @@ Post-sprint roadmap items (driver app, map matching, organizations, persisted we
 1. Pilot with one small real fleet and measure the real effect.
 2. Driver web app that sends GPS from a phone.
 3. Map matching so raw GPS becomes road segments.
-4. Organizations and roles.
-5. Persist congestion state so restarts keep it.
-6. Faster routing (Customizable Contraction Hierarchies) for city-scale graphs.
-7. Adapter for existing platforms such as Fleetbase.
+4. Organizations and roles (tenant separation).
+5. API key rotation and revocation.
+6. Persist congestion state so restarts keep it; plan for multi-instance state.
+7. Faster routing (Customizable Contraction Hierarchies) for city-scale graphs.
+8. Adapter for existing platforms such as Fleetbase.
+9. Operations: Postgres backups, documented runbook, architecture note for contributors.
+10. Privacy: retention limits and consent for location data (UU PDP review before any pilot).
