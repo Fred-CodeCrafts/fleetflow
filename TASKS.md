@@ -118,7 +118,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 - [ ] 🔴 **T36b** Add typed domain errors, request limits, request IDs, timeouts and rate limits
   `feat(api): add typed errors, validation and limits`
   Done when: domain errors map to status codes in one place; oversized/invalid input is rejected at the handler; logs carry a request ID; public endpoints have timeouts and rate limits.
-- [ ] 🔴 **T36c** Add CI that builds, vets, lints, formats and tests (including `-race`) on every push
+- [x] 🔴 **T36c** Add CI that builds, vets, lints, formats and tests (including `-race`) on every push
   `ci: add build, vet and test workflow`
   Done when: a push runs build, vet, lint, a `gofmt` check and `go test -race ./...`, and fails on any finding (US-8). Done early so it guards every later commit.
 - [ ] 🔴 **T36d** Guard the routing core boundary with a test
