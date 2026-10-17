@@ -318,9 +318,7 @@ Deployment deadline is **24 October**. Commit after each step, as described in `
 
 ## 10. Optional: Fleetbase integration (post-sprint roadmap)
 
-- Implemented as a small separate adapter that talks to Fleetbase over its REST API or webhooks and to FleetFlow over `/api/route` and `/api/reports` (using the API key from US-13).
-
-- Implemented as a small separate adapter that talks to Fleetbase over its REST API or webhooks and to FleetFlow over `/api/route` and `/api/reports`.
+- Implemented as a small separate adapter that talks to Fleetbase over its REST API or webhooks and to FleetFlow over `/api/route` and `/api/reports`, using the API key from US-13.
 - Keeps FleetFlow a separate service, so AGPL-3.0 obligations of Fleetbase do not extend to this repo. This is not legal advice, so check Fleetbase's licensing page before bundling anything.
 - Verify the exact Fleetbase endpoints and events in their docs before building.
 - Demonstrated locally or in a recorded clip. Fleetbase itself is heavy and is not deployed to Cloud Run.
