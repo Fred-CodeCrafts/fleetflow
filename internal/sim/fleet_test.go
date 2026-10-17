@@ -14,15 +14,30 @@ type fakeReport struct {
 }
 
 // fakeFleet records what fleet vehicles ask for and report, so the tests can
-// check that fleet and background traffic behave differently.
+// check that fleet and background traffic behave differently. It prices edges
+// from its own cost slice, which keeps routing and comparison consistent.
 type fakeFleet struct {
+	costs      []float64
 	routes     map[string][]int
 	routeCalls []string
 	reports    []fakeReport
 }
 
-func newFakeFleet() *fakeFleet {
-	return &fakeFleet{routes: make(map[string][]int)}
+func newFakeFleet(edges int) *fakeFleet {
+	costs := make([]float64, edges)
+	for i := range costs {
+		costs[i] = 1
+	}
+	return &fakeFleet{costs: costs, routes: make(map[string][]int)}
+}
+
+// price sums the fake cost of a sequence of edges.
+func (f *fakeFleet) price(edges []int) float64 {
+	var total float64
+	for _, idx := range edges {
+		total += f.costs[idx]
+	}
+	return total
 }
 
 func (f *fakeFleet) Route(from, to string) (*engine.Path, error) {
@@ -33,7 +48,11 @@ func (f *fakeFleet) Route(from, to string) (*engine.Path, error) {
 	if !ok {
 		return nil, errors.New("fake has no route for " + key)
 	}
-	return &engine.Path{Edges: edges}, nil
+	return &engine.Path{Edges: edges, CostS: f.price(edges)}, nil
+}
+
+func (f *fakeFleet) PathCost(edges []int) (float64, bool) {
+	return f.price(edges), true
 }
 
 func (f *fakeFleet) Report(edgeID string, speedMPS float64, _ time.Time) error {
@@ -46,7 +65,7 @@ func TestFleetVehicleAsksTheServiceForARoute(t *testing.T) {
 	v := soloTrip(t, s, "A", "D", true)
 	v.departS = 0
 
-	fleet := newFakeFleet()
+	fleet := newFakeFleet(len(g.Edges))
 	want := []int{edgeIndexByID(t, g, "e_AB"), edgeIndexByID(t, g, "e_BD")}
 	fleet.routes["A->D"] = want
 	s.SetFleetService(fleet)
@@ -66,7 +85,7 @@ func TestFleetVehicleReportsTheSpeedItExperiences(t *testing.T) {
 	v := soloTrip(t, s, "A", "D", true)
 	v.departS = 0
 
-	fleet := newFakeFleet()
+	fleet := newFakeFleet(len(g.Edges))
 	fleet.routes["A->D"] = []int{edgeIndexByID(t, g, "e_AB"), edgeIndexByID(t, g, "e_BD")}
 	s.SetFleetService(fleet)
 
@@ -102,11 +121,11 @@ func TestFleetVehicleReportsTheSpeedItExperiences(t *testing.T) {
 }
 
 func TestBackgroundVehiclesDoNotContactTheService(t *testing.T) {
-	s, _ := newFixtureSim(t, 1, 0) // no fleet vehicles
+	s, g := newFixtureSim(t, 1, 0) // no fleet vehicles
 	v := soloTrip(t, s, "A", "D", false)
 	v.departS = 0
 
-	fleet := newFakeFleet()
+	fleet := newFakeFleet(len(g.Edges))
 	s.SetFleetService(fleet)
 
 	for i := 0; i < 100 && v.State() != VehicleArrived; i++ {

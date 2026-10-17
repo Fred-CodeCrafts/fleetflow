@@ -97,7 +97,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   `feat(sim): add background vehicles with static routes`
 - [x] 🔴 **T32** Add fleet vehicles that request routes and send reports
   `feat(sim): add fleet vehicles using the engine`
-- [ ] 🔴 **T33** Add rerouting policy (interval plus hysteresis threshold)
+- [x] 🔴 **T33** Add rerouting policy (interval plus hysteresis threshold)
   `feat(sim): add rerouting with hysteresis`
 - [ ] 🔴 **T34** Add trip metrics (average, p95, route changes, saturated edges, utilization std dev)
   `feat(sim): collect trip and congestion metrics`

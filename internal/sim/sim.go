@@ -9,9 +9,11 @@ import (
 )
 
 // FleetService is the routing service that fleet vehicles talk to: they ask it
-// for routes and report the speeds they observe. *engine.Engine satisfies it.
+// for routes, price the routes they already hold, and report the speeds they
+// observe. *engine.Engine satisfies it.
 type FleetService interface {
 	Route(fromID, toID string) (*engine.Path, error)
+	PathCost(edges []int) (float64, bool)
 	Report(edgeID string, speedMPS float64, now time.Time) error
 }
 
@@ -26,16 +28,25 @@ type Config struct {
 	FleetShare float64
 	WindowS    float64
 	StepS      float64
+	// RerouteEveryS is how often, in simulated seconds, a running fleet vehicle
+	// reconsiders its route. Zero disables rerouting.
+	RerouteEveryS float64
+	// RerouteThreshold is the fractional cost improvement a new route must beat
+	// the current one by before the vehicle switches. It is the hysteresis that
+	// stops vehicles flapping between two similar routes.
+	RerouteThreshold float64
 }
 
 // DefaultConfig returns a demo-sized starting point.
 func DefaultConfig() Config {
 	return Config{
-		Seed:       1,
-		Vehicles:   200,
-		FleetShare: 0.5,
-		WindowS:    600,
-		StepS:      1,
+		Seed:             1,
+		Vehicles:         200,
+		FleetShare:       0.5,
+		WindowS:          600,
+		StepS:            1,
+		RerouteEveryS:    30,
+		RerouteThreshold: 0.10,
 	}
 }
 
@@ -119,6 +130,7 @@ func (s *Sim) Step() {
 	s.nowS += dt
 	s.departDue()
 	s.advanceVehicles(dt)
+	s.rerouteFleet()
 	s.reportSpeeds()
 }
 
@@ -149,6 +161,7 @@ func (s *Sim) depart(v *Vehicle) {
 		return
 	}
 	v.departS = s.nowS
+	v.lastRouteS = s.nowS
 	s.placeOnRoute(v, path.Edges, s.nowS)
 }
 
@@ -160,6 +173,63 @@ func (s *Sim) routeFor(v *Vehicle) (*engine.Path, error) {
 		return s.fleet.Route(v.Origin(), v.Destination())
 	}
 	return s.staticRouter.Route(s.staticMetric, v.Origin(), v.Destination())
+}
+
+// rerouteFleet lets running fleet vehicles reconsider their route. A vehicle
+// only switches when the new route is cheaper than the rest of the current one
+// by more than the hysteresis threshold, which limits flapping.
+//
+// The current edge is never given up: the vehicle must finish it, so only the
+// edges after it are compared.
+func (s *Sim) rerouteFleet() {
+	if s.fleet == nil || s.cfg.RerouteEveryS <= 0 {
+		return
+	}
+
+	for _, v := range s.vehicles {
+		if !v.IsFleet() || v.state != VehicleRunning {
+			continue
+		}
+		if s.nowS-v.lastRouteS < s.cfg.RerouteEveryS {
+			continue
+		}
+		s.reroute(v)
+	}
+}
+
+// reroute reconsiders one vehicle's remaining route.
+func (s *Sim) reroute(v *Vehicle) {
+	edgeIndex := v.currentEdge()
+	if edgeIndex < 0 {
+		return
+	}
+
+	tail := v.route[v.leg+1:]
+	currentCost, ok := s.fleet.PathCost(tail)
+	if !ok {
+		return
+	}
+
+	// The candidate starts at the node the vehicle is heading towards.
+	candidate, err := s.fleet.Route(s.g.Edges[edgeIndex].To, v.Destination())
+	if err != nil || candidate == nil {
+		return
+	}
+
+	if candidate.CostS >= currentCost*(1-s.cfg.RerouteThreshold) {
+		return // not enough of an improvement to be worth switching
+	}
+
+	newRoute := make([]int, 0, len(candidate.Edges)+1)
+	newRoute = append(newRoute, edgeIndex)
+	newRoute = append(newRoute, candidate.Edges...)
+
+	// The vehicle stays on the same edge and at the same spot, so occupancy is
+	// unchanged; only the edges ahead are replaced.
+	v.route = newRoute
+	v.leg = 0
+	v.routeChanges++
+	v.lastRouteS = s.nowS
 }
 
 // reportSpeeds lets every running fleet vehicle tell the service how fast it is
