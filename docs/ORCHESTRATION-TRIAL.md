@@ -6,3 +6,4 @@ This file is deleted when the trial is over and is not part of the project.
 
 | branch | slice | files | tests |
 |---|---|---|---|
+| feat/trip | trip entity | internal/trip/* | go test ./internal/trip/... |
