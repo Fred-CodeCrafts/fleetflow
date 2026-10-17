@@ -139,7 +139,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 - [ ] 🟡 **T39b** Save and list finished comparison runs (US-9)
   `feat(fleet): save and list comparison runs`
   Done when: a finished run is stored with its seed and metrics and is still viewable after a server restart.
-- [ ] 🔴 **T40** Add API key auth on `POST /api/reports` and `POST /api/route` (`internal/auth`)
+- [x] 🔴 **T40** Add API key auth on `POST /api/reports` and `POST /api/route` (`internal/auth`)
   `feat(auth): require api key on reports and route`
   Done when: missing or wrong key returns 401 and does nothing, keys are stored hashed and never logged, and the README shows an example request for each endpoint.
 - [ ] 🔴 **T40a** Send simulated reports and route requests through the public API (US-7)
