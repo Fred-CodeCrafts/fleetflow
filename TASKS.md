@@ -30,7 +30,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   Done when: `go build ./...` passes.
 - [x] 🔴 **T06** Add `internal/graph` types (`Node`, `Edge`, `Graph`)
   `feat(graph): add node, edge and graph types`
-- [ ] 🔴 **T07** Add JSON loader with validation (missing nodes, bad lengths)
+- [x] 🔴 **T07** Add JSON loader with validation (missing nodes, bad lengths)
   `feat(graph): load graph from json with validation`
   Done when: loader test covers a valid file and two invalid ones.
 - [ ] 🔴 **T08** Compute derived values (`free_flow_s`, `capacity`) on load
