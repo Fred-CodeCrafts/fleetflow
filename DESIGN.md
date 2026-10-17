@@ -60,6 +60,25 @@ flowchart LR
     EXT["External client<br/>(e.g. Fleetbase adapter)"] -- "POST /api/reports, /api/route" --> API
 ```
 
+### Tech stack
+
+Honest status, not the target: this is what is in the repository today versus what the plan still owes.
+
+| Part | Choice | Status |
+|---|---|---|
+| Language | Go 1.25.5, module `fleetflow` | In place |
+| Dependencies | Standard library only; no `go.sum` yet | In place |
+| HTTP | `net/http` + `http.ServeMux` with method patterns; no framework | In place (only `GET /healthz`) |
+| Routing | Hand-written Dijkstra behind a `Router` interface | In place |
+| Simulation | Own deterministic mesoscopic model | In place |
+| Persistence | PostgreSQL with versioned SQL migrations; driver not chosen yet | Planned (dev Postgres 17 runs in Docker; no Go code yet) |
+| Dashboard | Plain HTML/CSS/JS on two canvases, no map tiles, embedded with `go:embed` | Planned (`web/` does not exist yet) |
+| Streaming | Server-Sent Events | Planned |
+| Deployment | Multi-stage Dockerfile to Cloud Run, `max-instances=1`; Fly as a preview | Planned (no Dockerfile yet) |
+| CI | Build, vet, lint, `gofmt` and `go test -race` on every push | Planned |
+| Testing | `go test` with table-driven unit tests; race detector run from WSL | In place |
+| Database MCP (dev only) | Google MCP Toolbox for Databases, read-only role, off by default | In place (local only) |
+
 ### Why this shape
 - **Single binary:** the easiest thing to build, test and deploy in a week.
 - **Engine behind an interface:** the simulator and the HTTP API both use the same `Engine` interface, so external clients get the same behavior as the simulator.
