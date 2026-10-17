@@ -87,7 +87,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 - [x] 🔴 **T27** Add seeded demand generator (origin-destination pairs and departure times)
   `feat(sim): add seeded demand generator`
   Done when: same seed gives identical demand in a test.
-- [ ] 🔴 **T28** Add vehicle type and edge occupancy tracking
+- [x] 🔴 **T28** Add vehicle type and edge occupancy tracking
   `feat(sim): add vehicles and edge occupancy`
 - [ ] 🔴 **T29** Add edge speed model from occupancy
   `feat(sim): add occupancy-based edge speed model`
