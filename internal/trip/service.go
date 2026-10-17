@@ -30,9 +30,18 @@ const (
 // Implementations must be safe for concurrent use and must return the stored
 // record, so the service never has to guess what a store normalised.
 type Repository interface {
-	// Create stores t and returns the stored record. A trip whose id is
-	// already present is a domain conflict, mirroring the unique constraint a
-	// Postgres schema will carry.
+	// Create stores t and returns the stored record.
+	//
+	// A trip whose id is already present is a domain conflict, mirroring the
+	// unique constraint the schema carries. A trip that names a vehicle is an
+	// assignment, so it must satisfy the availability rules: the vehicle must
+	// exist, it must be available rather than offline or already on a trip, and
+	// it may be on only one unfinished trip. Implementations apply those rules in
+	// a single step, because a check followed by a write is exactly the race a
+	// concurrent double assignment needs.
+	//
+	// A memory store holds no vehicles, so it can enforce only the rules it can
+	// see; the memory implementation says which it leaves to the database.
 	Create(ctx context.Context, t Trip) (Trip, error)
 
 	// List returns every stored trip, oldest first.

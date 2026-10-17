@@ -39,6 +39,12 @@ func New() *Repository {
 // conflict, mirroring the unique constraint the Postgres schema will carry. A
 // trip with no id is a programming error, because the service always issues
 // one.
+//
+// It also enforces the availability rule it can see: a vehicle may be on only one
+// unfinished trip. It cannot check whether a named vehicle exists or is
+// available, because a memory store holds no vehicles — those are a foreign key
+// and a status, and the Postgres implementation and its integration tests cover
+// them.
 func (r *Repository) Create(ctx context.Context, t trip.Trip) (trip.Trip, error) {
 	if err := ctx.Err(); err != nil {
 		return trip.Trip{}, err
@@ -52,6 +58,14 @@ func (r *Repository) Create(ctx context.Context, t trip.Trip) (trip.Trip, error)
 
 	if _, exists := r.index[t.ID]; exists {
 		return trip.Trip{}, domain.Conflict("trip_exists", "trip %s already exists", t.ID)
+	}
+	if t.VehicleID != "" && t.Status != trip.StatusCompleted {
+		for _, other := range r.trips {
+			if other.VehicleID == t.VehicleID && other.Status != trip.StatusCompleted {
+				return trip.Trip{}, domain.Conflict("trip_vehicle_busy",
+					"vehicle %s is already on trip %s", t.VehicleID, other.ID)
+			}
+		}
 	}
 	r.index[t.ID] = len(r.trips)
 	r.trips = append(r.trips, t)

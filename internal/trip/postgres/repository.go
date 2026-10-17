@@ -17,6 +17,7 @@ import (
 
 	"fleetflow/internal/domain"
 	"fleetflow/internal/trip"
+	"fleetflow/internal/vehicle"
 )
 
 // SQLSTATEs and constraint names this store reacts to. They are the database's
@@ -39,8 +40,11 @@ const (
 	codeTripCompleted      = "trip_completed"
 	codeTripVehicleBusy    = "trip_vehicle_busy"
 	codeTripVehicleUnknown = "trip_vehicle_unknown"
-	codeTripIDRequired     = "trip_id_required"
-	codeStatusCorrupt      = "trip_status_corrupt"
+	// codeTripVehicleUnavailable is the other half of availability: the vehicle
+	// exists but may not take a trip, because it is offline or already on one.
+	codeTripVehicleUnavailable = "trip_vehicle_unavailable"
+	codeTripIDRequired         = "trip_id_required"
+	codeStatusCorrupt          = "trip_status_corrupt"
 )
 
 // Repository stores trips in the trips table, reached through a shared pool. It
@@ -65,24 +69,75 @@ func New(pool *pgxpool.Pool) *Repository { return &Repository{pool: pool} }
 // "no vehicle"; the empty string is never written.
 //
 // A trip with no id is a programming error, because the service always issues
-// one; the memory store refuses it the same way.
+// one; the memory store refuses it the same way. A trip that names a vehicle is
+// an assignment, so the vehicle is checked in the same transaction as the insert:
+// it must exist and be available, and it may be on only one unfinished trip. A
+// check followed by a separate write would let two requests both find the same
+// vehicle available.
 func (r *Repository) Create(ctx context.Context, t trip.Trip) (trip.Trip, error) {
 	if t.ID == "" {
 		return trip.Trip{}, domain.Internal(codeTripIDRequired, "trip to store has no id")
 	}
 
+	// Nothing to check when no vehicle is named.
+	if t.VehicleID == "" {
+		if err := insertTrip(ctx, r.pool, t); err != nil {
+			return trip.Trip{}, classify(t.ID, err)
+		}
+		return t, nil
+	}
+
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return trip.Trip{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	// Locking the vehicle row is what serializes two creates that name it; the
+	// partial unique index below is the backstop that makes one of them fail even
+	// if this read raced ahead of the other.
+	var status string
+	err = tx.QueryRow(ctx, `select status from vehicles where id = $1 for update`, t.VehicleID).Scan(&status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return trip.Trip{}, domain.NotFound(codeTripVehicleUnknown, "vehicle %s does not exist", t.VehicleID)
+	}
+	if err != nil {
+		return trip.Trip{}, err
+	}
+	if status != vehicle.StatusAvailable.String() {
+		return trip.Trip{}, domain.Conflict(codeTripVehicleUnavailable,
+			"vehicle %s is not available", t.VehicleID)
+	}
+
+	if err := insertTrip(ctx, tx, t); err != nil {
+		return trip.Trip{}, classify(t.ID, err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return trip.Trip{}, err
+	}
+	return t, nil
+}
+
+// execer is the part of a pool and of a transaction that writing a row needs, so
+// one statement serves both a plain create and one inside a transaction.
+type execer interface {
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+}
+
+// insertTrip writes the trip row, mapping an empty vehicle id to NULL. Whether
+// that vehicle may take the trip is the caller's decision; this only stores what
+// it is given.
+func insertTrip(ctx context.Context, db execer, t trip.Trip) error {
 	const q = `insert into trips (id, origin, destination, vehicle_id, status)
 		values ($1, $2, $3, $4, $5)`
 
-	var vehicle any
+	var vehicleID any
 	if t.VehicleID != "" {
-		vehicle = t.VehicleID
+		vehicleID = t.VehicleID
 	}
 
-	if _, err := r.pool.Exec(ctx, q, t.ID, t.Origin, t.Destination, vehicle, t.Status.String()); err != nil {
-		return trip.Trip{}, classify(t.ID, err)
-	}
-	return t, nil
+	_, err := db.Exec(ctx, q, t.ID, t.Origin, t.Destination, vehicleID, t.Status.String())
+	return err
 }
 
 // List returns every stored trip, oldest first. The order is created_at then id:
