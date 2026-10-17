@@ -70,7 +70,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   `refactor(engine): put router behind an interface`
 - [x] 🔴 **T21** Add customizer: read all edge costs into a fresh metric
   `feat(engine): build metric snapshot from edge state`
-- [ ] 🔴 **T22** Publish metric with `atomic.Pointer` and load once per query
+- [x] 🔴 **T22** Publish metric with `atomic.Pointer` and load once per query
   `feat(engine): publish active metric with atomic pointer`
 - [ ] 🔴 **T23** Add periodic customization loop with clean shutdown
   `feat(engine): run customization on an interval`
