@@ -49,7 +49,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   `feat(weights): add congestion measure from observed speed`
 - [x] 🔴 **T13** Add moving-average update on report, with tests
   `feat(weights): smooth congestion with moving average`
-- [ ] 🔴 **T14** Add cost function `free_flow * (1 + alpha * rho^beta)`, with tests
+- [x] 🔴 **T14** Add cost function `free_flow * (1 + alpha * rho^beta)`, with tests
   `feat(weights): add edge cost function`
 - [ ] 🔴 **T15** Add decay with hold time, with tests (no report → decays; recent report → does not)
   `feat(weights): decay stale edges toward free-flow`
