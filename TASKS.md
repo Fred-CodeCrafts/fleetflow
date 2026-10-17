@@ -115,7 +115,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 - [x] 🔴 **T36a** Add `GET /readyz`, env-validated config, and graceful shutdown
   `feat(api): add readiness, config validation and graceful shutdown`
   Done when: bad env fails fast with a clear error; `/readyz` reports graph loaded and DB reachable when configured; SIGTERM stops the customizer and simulation and drains requests.
-- [ ] 🔴 **T36b** Add typed domain errors, request limits, request IDs, timeouts and rate limits
+- [x] 🔴 **T36b** Add typed domain errors, request limits, request IDs, timeouts and rate limits
   `feat(api): add typed errors, validation and limits`
   Done when: domain errors map to status codes in one place; oversized/invalid input is rejected at the handler; logs carry a request ID; public endpoints have timeouts and rate limits.
 - [x] 🔴 **T36c** Add CI that builds, vets, lints, formats and tests (including `-race`) on every push
@@ -124,7 +124,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 - [x] 🔴 **T36d** Guard the routing core boundary with a test
   `test: guard the routing core boundary`
   Done when: a test fails if `graph`, `weights` or `engine` import an HTTP or database package, so the hot path cannot reach the database by accident (US-5, US-12).
-- [ ] 🔴 **T37** Add `POST /api/reports`
+- [x] 🔴 **T37** Add `POST /api/reports`
   `feat(api): add report endpoint`
   Done when: reports write to the weight store only and never touch PostgreSQL.
 - [ ] 🔴 **T38** Add `POST /api/route`
