@@ -37,6 +37,10 @@ type Engine struct {
 
 	active  atomic.Pointer[Metric]
 	version atomic.Uint64
+
+	// Engineering counters, readable without locks by the metrics endpoint.
+	lastCustomizeNanos atomic.Int64 // unix nanos of the last publish
+	customizeNanos     atomic.Int64 // duration of the last customization pass
 }
 
 // New creates an engine with dynamic weights over g. The router is required and
@@ -76,7 +80,7 @@ func newEngine(g *graph.Graph, router Router, params weights.Params, static bool
 	}
 
 	if static {
-		e.publish(buildStaticCosts(g))
+		e.publish(buildStaticCosts(g), 0)
 		return e, nil
 	}
 
@@ -84,7 +88,7 @@ func newEngine(g *graph.Graph, router Router, params weights.Params, static bool
 	for i := range e.states {
 		e.states[i] = weights.NewEdgeState()
 	}
-	e.publish(buildDynamicCosts(g, e.states, params))
+	e.publish(buildDynamicCosts(g, e.states, params), 0)
 
 	return e, nil
 }
@@ -129,13 +133,37 @@ func (e *Engine) Customize() *Metric {
 	if e.static {
 		return e.active.Load()
 	}
-	return e.publish(buildDynamicCosts(e.graph, e.states, e.params))
+	start := time.Now()
+	costs := buildDynamicCosts(e.graph, e.states, e.params)
+	return e.publish(costs, time.Since(start))
 }
 
-// publish stores a freshly built cost slice as the active snapshot and bumps the
-// version.
-func (e *Engine) publish(costs []float64) *Metric {
+// publish stores a freshly built cost slice as the active snapshot, bumps the
+// version and records when the pass happened and how long it took.
+func (e *Engine) publish(costs []float64, took time.Duration) *Metric {
 	m := NewMetric(costs, e.version.Add(1))
 	e.active.Store(m)
+	e.lastCustomizeNanos.Store(time.Now().UnixNano())
+	e.customizeNanos.Store(int64(took))
 	return m
+}
+
+// LastCustomize reports when the active metric was last published.
+func (e *Engine) LastCustomize() time.Time {
+	return time.Unix(0, e.lastCustomizeNanos.Load())
+}
+
+// CustomizeDuration reports how long the most recent customization pass took.
+func (e *Engine) CustomizeDuration() time.Duration {
+	return time.Duration(e.customizeNanos.Load())
+}
+
+// MetricAge reports how old the active metric is at time now. Route queries use
+// the last published snapshot, so this is the staleness of their weights.
+func (e *Engine) MetricAge(now time.Time) time.Duration {
+	last := e.LastCustomize()
+	if last.IsZero() || now.Before(last) {
+		return 0
+	}
+	return now.Sub(last)
 }

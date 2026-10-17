@@ -79,7 +79,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 - [x] 🔴 **T25** Add race test: queries during customization and reports
   `test(engine): add race test for queries during customization`
   Done when: `go test -race ./...` passes.
-- [ ] 🟡 **T26** Record customization time and metric age
+- [x] 🟡 **T26** Record customization time and metric age
   `feat(engine): track customization time and metric age`
 
 ## Day 4 (Tue 20 Oct): Simulator
