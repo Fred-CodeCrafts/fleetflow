@@ -76,7 +76,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   `feat(engine): run customization on an interval`
 - [x] 🔴 **T24** Add baseline engine (weights disabled, fixed free-flow metric)
   `feat(engine): add static baseline mode`
-- [ ] 🔴 **T25** Add race test: queries during customization and reports
+- [x] 🔴 **T25** Add race test: queries during customization and reports
   `test(engine): add race test for queries during customization`
   Done when: `go test -race ./...` passes.
 - [ ] 🟡 **T26** Record customization time and metric age
