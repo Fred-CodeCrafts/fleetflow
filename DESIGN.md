@@ -305,14 +305,14 @@ Deployment deadline is **24 October**. Commit after each step, as described in `
 | 1 | Sat 17 Oct | Repo, LICENSE, README skeleton, Go module, graph types and loader, small test graph |
 | 2 | Sun 18 Oct | Weight store (smoothing, decay, cost) with tests |
 | 3 | Mon 19 Oct | Engine: customizer, atomic metric, Dijkstra router, race tests |
-| 4 | Tue 20 Oct | Simulator: demand, edge speed model, fleet vs. background vehicles, baseline mode |
-| 5 | Wed 21 Oct | API and SSE stream, metrics endpoint, PostgreSQL records, API keys |
-| 6 | Thu 22 Oct | Dashboard: canvas map, side-by-side panels, controls, metrics strip, simulated/live labels |
-| 7 | Fri 23 Oct | Dockerfile, Cloud Run deployment (and Fly preview), tuning runs |
+| 4 | Tue 20 Oct | Simulator: demand, edge speed model, fleet vs. background vehicles, rerouting, trip metrics, baseline comparison |
+| 5 | Wed 21 Oct | API and SSE stream, PostgreSQL fleet records and saved runs, API keys, simulated traffic on the public API, route query latency |
+| 6 | Thu 22 Oct | Dashboard: fleet views, canvas map, side-by-side panels, controls, metrics strip, simulated/live labels |
+| 7 | Fri 23 Oct | Dockerfile, Cloud Run deployment (and Fly preview), tuning runs, fleet-share sweep |
 | 8 | Sat 24 Oct | Buffer, README polish, shipped and verified |
 | | 25 to 27 Oct | Demo video, 500-word summary, deck, pitch practice |
 
-**Cut order if time runs short:** US-14 reports docs, then multi-seed batch script and fleet-share sweep, then styling pass, then Fly preview. Never cut PostgreSQL fleet records, API keys, the side-by-side dashboard comparison, the Cloud Run deployment, or the honest results record.
+**Cut order if time runs short:** stretch work, then US-14 reports docs, then the multi-seed batch script and the fleet-share sweep, then the fairness metrics and saved runs, then the styling pass, then the Fly preview. Never cut PostgreSQL fleet records, API keys, simulated traffic on the public API, route query latency, the side-by-side dashboard comparison, the Cloud Run deployment, or the honest results record.
 
 ---
 
