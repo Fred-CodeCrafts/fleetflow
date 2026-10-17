@@ -19,6 +19,7 @@ Status: draft v0.1 (17 October 2026). Parameter values are starting points, to b
 ### Non-goals (for this competition)
 - Driver mobile or web app for sending GPS, raw-GPS map matching, multi-org roles and billing, city-scale routing, persisted congestion weights, real-fleet validation (all roadmap, see PRD section 9).
 - Multi-stop optimization and dispatch/order management (fleet-tool territory, not this sprint).
+- End-user accounts and login: the dashboard is open for the demo, and only the programmatic reports and route API is key-protected (the PRD allows one operator login or none).
 - Real-world validation. All results come from simulation and must be described that way.
 - Matching a full traffic simulator such as SUMO.
 
@@ -165,9 +166,11 @@ Plain `net/http`. JSON in and out. `POST /api/reports` and `POST /api/route` req
 | `GET /api/drivers`, `POST /api/drivers` | List and create drivers `{name, contact}` |
 | `POST /api/vehicles/{id}/driver` | Assign or unassign a driver (one vehicle per driver enforced) |
 | `GET /api/trips`, `POST /api/trips` | List and create trips `{origin, destination, vehicle_id}` with assignment rules (vehicle must be available, not offline or on a trip; enforced atomically so concurrent requests cannot double-assign) |
+| `POST /api/trips/{id}/status` | Advance a trip (planned, in progress, completed) and keep the vehicle status in step; the run loop does this for simulated trips, and the dispatcher can override |
+| `GET /api/runs`, `POST /api/runs` | List finished comparison runs and save the current one `{seed, config, metrics}` (US-9) |
 | `GET /healthz` | Liveness |
 
-Fleet records (vehicles, drivers, trips, completed-trip history, saved comparison runs) live in PostgreSQL and survive a server restart; schema changes go through versioned migrations. API keys are stored hashed, never in plain text, and never written to logs. Live congestion state stays in memory on the single instance.
+Fleet records (vehicles, drivers, trips, completed-trip history, saved comparison runs) live in PostgreSQL and survive a server restart; schema changes go through versioned migrations. API keys are stored hashed, never in plain text, and never written to logs. Live congestion state stays in memory on the single instance. `GET /api/metrics` reports trip and congestion metrics plus the engineering numbers: route query latency (p50, p99), customization time and metric age.
 
 Server-Sent Events are used instead of WebSockets because they are one-way, simpler, and work through both Cloud Run and Fly.
 
@@ -195,12 +198,16 @@ Server-Sent Events are used instead of WebSockets because they are one-way, simp
 | Customizer (1 goroutine) | all `EdgeState`s (read) | each edge's `RLock()`, one at a time |
 | Customizer, publish | active metric pointer | `atomic.Pointer.Store` |
 | Route queries | active metric pointer | `atomic.Pointer.Load` once, no locks |
+| Run clock (1 goroutine) | simulator, weight refresh, stream fan-out | owns simulated time; readers get snapshots |
+| Fleet record writes | PostgreSQL rows | one transaction per assignment plus database constraints, so two concurrent requests cannot both assign the same vehicle |
+| Trip status changes | PostgreSQL rows | updated in the same transaction as the trip and the vehicle status |
 
 Properties:
 - Queries are never blocked by reports or customization.
 - A query never sees a half-built metric.
 - The snapshot is read edge by edge, so it is not one atomic view of the whole network. Each edge value is internally consistent, and the difference between edges is bounded by the read time.
 - Old metrics are freed by the garbage collector once no query references them.
+- Fleet records are the only shared mutable state outside the engine; the database, not in-process locks, is what makes concurrent assignments safe.
 - Verified with `go test -race ./...`.
 
 ---
@@ -332,6 +339,8 @@ Deployment deadline is **24 October**. Commit after each step, as described in `
 | State | In memory (single instance) for congestion; PostgreSQL for fleet records | Persistent records survive restarts, congestion rebuilds from fresh reports |
 | Deployment | Cloud Run for submission, Fly for preview | Competition rule, with Fly kept as a convenience |
 | Database | PostgreSQL, hosted externally (Cloud SQL vs. free tier TBD) | Fleet records must survive restarts; congestion stays in memory |
+| Simulated reports | Through the public API (`POST /api/reports`, `POST /api/route`) | Simulated and external traffic take the same validated path (PRD US-7), and one run clock keeps refresh and streaming in step |
+| End-user auth | None; an API key only on the reports and route endpoints | Keeps the demo open, while the programmatic surface is honest about access (PRD US-13) |
 | Post-sprint order | Pilot, driver app, map matching, orgs/roles, persisted weights, CCH, Fleetbase adapter | Per PRD section 9 |
 
 ---
