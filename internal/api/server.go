@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"time"
 
+	"fleetflow/internal/domain"
+	"fleetflow/internal/engine"
 	"fleetflow/internal/graph"
 )
 
@@ -38,21 +40,38 @@ const (
 // simulation. It runs during shutdown, before the listener drains.
 type StopFunc func(context.Context) error
 
+// errNoEngine is reported by a public endpoint that is reachable without an
+// engine behind it. The endpoint exists but cannot serve, which is exactly what
+// unavailable means.
+var errNoEngine = domain.Unavailable("engine_unavailable", "the routing engine is not configured")
+
 // Server holds the API handlers and everything they need. It is an
 // http.Handler, so it can be mounted anywhere.
 type Server struct {
 	graph *graph.Graph
-	mux   *http.ServeMux
+	// eng is the live routing state: reports fold into it, route queries read
+	// its snapshot. It is nil when the server is built without WithEngine, which
+	// leaves the public endpoints answering 503.
+	eng *engine.Engine
+	mux *http.ServeMux
 	// handler is the mux wrapped in the shared middleware, built once so every
 	// request pays for the chain only in the handler, not in ServeHTTP.
 	handler  http.Handler
 	logger   *slog.Logger
+	limiter  *rateLimiter
 	dbCheck  func(context.Context) error
 	stoppers []StopFunc
 }
 
 // Option customises a Server at construction time.
 type Option func(*Server)
+
+// WithEngine gives the server the routing engine that reports write to and route
+// queries read from. Without it the public endpoints answer 503; the rest of the
+// API works either way.
+func WithEngine(e *engine.Engine) Option {
+	return func(s *Server) { s.eng = e }
+}
 
 // WithDatabaseCheck registers the readiness probe for the database. Without it,
 // /readyz reports the database as not configured.
@@ -78,7 +97,12 @@ func WithLogger(logger *slog.Logger) Option {
 
 // NewServer builds the API handler for a road graph.
 func NewServer(g *graph.Graph, opts ...Option) *Server {
-	s := &Server{graph: g, mux: http.NewServeMux(), logger: slog.Default()}
+	s := &Server{
+		graph:   g,
+		mux:     http.NewServeMux(),
+		logger:  slog.Default(),
+		limiter: newRateLimiter(ratePerSecond, rateBurst),
+	}
 	for _, opt := range opts {
 		opt(s)
 	}
@@ -95,6 +119,17 @@ func (s *Server) routes() {
 	// Readiness may touch the database, so it gets a deadline of its own: a probe
 	// that hangs is worse than one that reports unready.
 	s.mux.Handle("GET /readyz", withTimeout(requestTimeout, http.HandlerFunc(s.handleReadyz)))
+
+	s.mux.Handle("POST /api/reports", s.public(s.handleReport))
+}
+
+// public wraps a handler with what every public endpoint shares: the per-client
+// rate limit, then a request deadline. Both are applied in this one place, so an
+// endpoint cannot be published without them (T36b).
+func (s *Server) public(h http.HandlerFunc) http.Handler {
+	// The limiter is outermost, so a client over its allowance is refused before
+	// a deadline it does not need is created for the request.
+	return s.limiter.middleware(withTimeout(requestTimeout, h))
 }
 
 // newHTTPServer builds the listener's settings.
