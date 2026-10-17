@@ -56,6 +56,11 @@ type Repository interface {
 	// requests racing for the same vehicle cannot both see it free. A trip that
 	// does not exist, a trip that is finished, and a vehicle already on another
 	// unfinished trip are reported as domain errors.
+	//
+	// Assigning marks the vehicle on_trip, and taking the trip off a vehicle
+	// makes it available again, so a vehicle's status says whether it is carrying
+	// something. Implementations that cannot see vehicles leave that half to the
+	// database; the memory implementation says so.
 	Assign(ctx context.Context, tripID, vehicleID string) (Trip, error)
 
 	// SetStatus moves the trip to status and returns the stored record, keeping

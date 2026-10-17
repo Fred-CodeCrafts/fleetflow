@@ -77,6 +77,9 @@ func New(pool *pgxpool.Pool) *Repository { return &Repository{pool: pool} }
 // it must exist and be available, and it may be on only one unfinished trip. A
 // check followed by a separate write would let two requests both find the same
 // vehicle available.
+//
+// A vehicle the trip takes is marked on_trip in the same transaction: a vehicle
+// carrying a trip is not available for another one.
 func (r *Repository) Create(ctx context.Context, t trip.Trip) (trip.Trip, error) {
 	if t.ID == "" {
 		return trip.Trip{}, domain.Internal(codeTripIDRequired, "trip to store has no id")
@@ -115,6 +118,13 @@ func (r *Repository) Create(ctx context.Context, t trip.Trip) (trip.Trip, error)
 	if err := insertTrip(ctx, tx, t); err != nil {
 		return trip.Trip{}, classify(t.ID, err)
 	}
+	// The trip holds the vehicle now, so the vehicle says so. A trip created
+	// already completed never held it, so it frees nothing.
+	if t.Status != trip.StatusCompleted {
+		if err := setVehicleStatus(ctx, tx, t.VehicleID, vehicle.StatusOnTrip); err != nil {
+			return trip.Trip{}, err
+		}
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return trip.Trip{}, err
 	}
@@ -140,6 +150,18 @@ func insertTrip(ctx context.Context, db execer, t trip.Trip) error {
 	}
 
 	_, err := db.Exec(ctx, q, t.ID, t.Origin, t.Destination, vehicleID, t.Status.String())
+	return err
+}
+
+// setVehicleStatus writes a vehicle's status, which is how a trip's progress
+// reaches the vehicle carrying it. It runs inside the caller's transaction, so
+// the trip row and the vehicle row are written together and a process that stops
+// between them cannot leave the two disagreeing.
+//
+// The status is written through the domain's own String, never a literal, so a
+// status the API accepts is exactly the status the check constraint accepts.
+func setVehicleStatus(ctx context.Context, db execer, vehicleID string, status vehicle.Status) error {
+	_, err := db.Exec(ctx, `update vehicles set status = $2 where id = $1`, vehicleID, status.String())
 	return err
 }
 
@@ -198,6 +220,10 @@ func (r *Repository) List(ctx context.Context) ([]trip.Trip, error) {
 // already on another unfinished trip fails the update with a unique violation
 // rather than being missed by a read-then-write. A completed trip is excluded
 // from that index, so it does not keep its vehicle busy.
+//
+// The vehicle the trip leaves is freed and the one it takes is marked on_trip, in
+// the same transaction, so a vehicle's status cannot outlive the truth about what
+// it is carrying.
 func (r *Repository) Assign(ctx context.Context, tripID, vehicleID string) (trip.Trip, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -205,8 +231,12 @@ func (r *Repository) Assign(ctx context.Context, tripID, vehicleID string) (trip
 	}
 	defer tx.Rollback(ctx)
 
-	var statusName string
-	err = tx.QueryRow(ctx, `select status from trips where id = $1 for update`, tripID).Scan(&statusName)
+	var (
+		statusName      string
+		previousVehicle *string
+	)
+	err = tx.QueryRow(ctx, `select vehicle_id, status from trips where id = $1 for update`, tripID).
+		Scan(&previousVehicle, &statusName)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return trip.Trip{}, domain.NotFound(codeTripNotFound, "trip %s does not exist", tripID)
 	}
@@ -218,9 +248,9 @@ func (r *Repository) Assign(ctx context.Context, tripID, vehicleID string) (trip
 			"trip %s is completed and is no longer reassigned", tripID)
 	}
 
-	var vehicle any
+	var assigned any
 	if vehicleID != "" {
-		vehicle = vehicleID
+		assigned = vehicleID
 	}
 
 	const q = `update trips set vehicle_id = $2 where id = $1
@@ -230,13 +260,27 @@ func (r *Repository) Assign(ctx context.Context, tripID, vehicleID string) (trip
 		origin, destination, storedStatus string
 		storedVehicle                     *string
 	)
-	if err := tx.QueryRow(ctx, q, tripID, vehicle).Scan(&origin, &destination, &storedVehicle, &storedStatus); err != nil {
+	if err := tx.QueryRow(ctx, q, tripID, assigned).Scan(&origin, &destination, &storedVehicle, &storedStatus); err != nil {
 		return trip.Trip{}, classify(tripID, err)
 	}
 
 	st, err := trip.ParseStatus(storedStatus)
 	if err != nil {
 		return trip.Trip{}, err
+	}
+
+	// The vehicle the trip left is free again, and the one it took is now carrying
+	// it. Both writes belong to this transaction, so the trip and the vehicle
+	// cannot be left disagreeing.
+	if previousVehicle != nil && *previousVehicle != vehicleID {
+		if err := setVehicleStatus(ctx, tx, *previousVehicle, vehicle.StatusAvailable); err != nil {
+			return trip.Trip{}, err
+		}
+	}
+	if vehicleID != "" {
+		if err := setVehicleStatus(ctx, tx, vehicleID, vehicle.StatusOnTrip); err != nil {
+			return trip.Trip{}, err
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -290,6 +334,15 @@ func (r *Repository) SetStatus(ctx context.Context, tripID string, status trip.S
 
 	if _, err := tx.Exec(ctx, `update trips set status = $2 where id = $1`, tripID, status.String()); err != nil {
 		return trip.Trip{}, classify(tripID, err)
+	}
+	// Finishing is what frees the vehicle: from the moment the trip is completed
+	// it no longer holds it, which is what makes the vehicle available for the
+	// next one. Only a real move into completed frees anything, so re-setting a
+	// completed trip cannot release a vehicle that a later trip has since taken.
+	if from != trip.StatusCompleted && status == trip.StatusCompleted && vehicleID != nil {
+		if err := setVehicleStatus(ctx, tx, *vehicleID, vehicle.StatusAvailable); err != nil {
+			return trip.Trip{}, err
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return trip.Trip{}, err

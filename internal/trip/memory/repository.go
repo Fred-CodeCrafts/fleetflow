@@ -122,6 +122,9 @@ func (r *Repository) SetStatus(ctx context.Context, tripID string, status trip.S
 // vehicle may be on only one unfinished trip at a time. A completed trip does not
 // hold its vehicle — it is history — so it neither blocks a new assignment nor
 // accepts one.
+//
+// It cannot move the vehicle's own status to match, because a memory store holds
+// no vehicles; that half is the database's. See the Repository interface.
 func (r *Repository) Assign(ctx context.Context, tripID, vehicleID string) (trip.Trip, error) {
 	if err := ctx.Err(); err != nil {
 		return trip.Trip{}, err
