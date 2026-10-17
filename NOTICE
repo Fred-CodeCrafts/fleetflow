@@ -1,0 +1,30 @@
+FleetFlow
+=========
+
+This project is licensed under the Apache License, Version 2.0. See LICENSE for
+the full text.
+
+Third-party software
+--------------------
+
+FleetFlow keeps its dependency list short on purpose. Every entry here is
+recorded because the licence requires attribution and because a reader should be
+able to see what is depended on, and why. The full licence text of each is in its
+module or upstream repository.
+
+github.com/jackc/pgx/v5
+  MIT License. Copyright (c) 2013-2021 Jack Christensen.
+  PostgreSQL driver and connection pool (pgxpool), used by internal/store for the
+  fleet records. This is the first non-standard-library dependency in the project.
+
+github.com/jackc/pgpassfile
+  MIT License. Copyright (c) 2013-2021 Jack Christensen.
+  Required indirectly by pgx for ~/.pgpass support.
+
+github.com/jackc/pgservicefile
+  MIT License. Copyright (c) 2013-2021 Jack Christensen.
+  Required indirectly by pgx for pg_service.conf support.
+
+golang.org/x/text
+  BSD 3-Clause License. Copyright (c) 2009 The Go Authors.
+  Required indirectly by pgx.

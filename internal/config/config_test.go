@@ -1,12 +1,9 @@
 package config
 
 import (
-	"context"
-	"net"
 	"net/url"
 	"strings"
 	"testing"
-	"time"
 )
 
 // env builds a getenv function from a map, so tests never touch the real process
@@ -156,32 +153,6 @@ func TestLoad(t *testing.T) {
 func TestLoadRequiresGetenv(t *testing.T) {
 	if _, err := Load(nil); err == nil {
 		t.Fatal("Load(nil) error = nil, want an error")
-	}
-}
-
-func TestTCPReachable(t *testing.T) {
-	// A live listener on an ephemeral port is reachable.
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("failed to start listener: %v", err)
-	}
-	defer lis.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	if err := TCPReachable(lis.Addr().String())(ctx); err != nil {
-		t.Errorf("TCPReachable(%s) = %v, want nil", lis.Addr(), err)
-	}
-
-	// Closing the listener frees the port, so the same address stops accepting
-	// connections.
-	addr := lis.Addr().String()
-	if err := lis.Close(); err != nil {
-		t.Fatalf("failed to close listener: %v", err)
-	}
-	if err := TCPReachable(addr)(ctx); err == nil {
-		t.Errorf("TCPReachable(%s) = nil, want an error for a closed port", addr)
 	}
 }
 

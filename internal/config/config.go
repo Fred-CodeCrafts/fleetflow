@@ -7,7 +7,6 @@
 package config
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -150,20 +149,6 @@ func discreteDSN(getenv func(string) string, host, port string) (string, error) 
 		u.User = url.User(user)
 	}
 	return u.String(), nil
-}
-
-// TCPReachable returns a readiness probe that reports whether addr accepts a TCP
-// connection. It checks the network path to the database, not credentials or
-// schema; a SQL-level check replaces it once the database layer exists.
-func TCPReachable(addr string) func(context.Context) error {
-	return func(ctx context.Context) error {
-		var dialer net.Dialer
-		conn, err := dialer.DialContext(ctx, "tcp", addr)
-		if err != nil {
-			return err
-		}
-		return conn.Close()
-	}
 }
 
 // valueOr returns the trimmed value of key, or fallback when it is unset or

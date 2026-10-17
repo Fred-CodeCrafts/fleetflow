@@ -15,6 +15,7 @@ import (
 	"fleetflow/internal/config"
 	"fleetflow/internal/engine"
 	"fleetflow/internal/graph"
+	"fleetflow/internal/store"
 	"fleetflow/internal/weights"
 )
 
@@ -55,8 +56,19 @@ func main() {
 			return nil
 		}),
 	}
-	if cfg.DatabaseAddr != "" {
-		opts = append(opts, api.WithDatabaseCheck(config.TCPReachable(cfg.DatabaseAddr)))
+
+	if cfg.DatabaseDSN != "" {
+		// A database that is configured but unreachable stops the process: a
+		// wrong host or credential is a deployment mistake, and starting anyway
+		// would only turn it into failed requests later. Readiness covers the
+		// database going away after a healthy start.
+		pool, err := store.Open(ctx, cfg.DatabaseDSN)
+		if err != nil {
+			log.Fatalf("database configured but unusable: %v", err)
+		}
+		defer pool.Close()
+
+		opts = append(opts, api.WithDatabaseCheck(pool.Ping))
 		log.Printf("database configured at %s", cfg.DatabaseAddr)
 	}
 
