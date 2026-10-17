@@ -43,8 +43,11 @@ const (
 	// codeTripVehicleUnavailable is the other half of availability: the vehicle
 	// exists but may not take a trip, because it is offline or already on one.
 	codeTripVehicleUnavailable = "trip_vehicle_unavailable"
-	codeTripIDRequired         = "trip_id_required"
-	codeStatusCorrupt          = "trip_status_corrupt"
+	// codeTripStatusRegressed is a trip being moved backwards in its life, which
+	// a finished trip must not be.
+	codeTripStatusRegressed = "trip_status_regressed"
+	codeTripIDRequired      = "trip_id_required"
+	codeStatusCorrupt       = "trip_status_corrupt"
 )
 
 // Repository stores trips in the trips table, reached through a shared pool. It
@@ -243,6 +246,58 @@ func (r *Repository) Assign(ctx context.Context, tripID, vehicleID string) (trip
 	t := trip.Trip{ID: tripID, Origin: origin, Destination: destination, Status: st}
 	if storedVehicle != nil {
 		t.VehicleID = *storedVehicle
+	}
+	return t, nil
+}
+
+// SetStatus moves tripID forwards in its life and returns the stored trip. The
+// move runs in one transaction with the trip row locked, so two requests
+// advancing the same trip are ordered instead of both reading the old status.
+//
+// "Forwards" comes from the domain through Status.Advances: a completed trip is
+// history, so a move back to planned or in progress is a conflict. Setting the
+// status a trip already has is allowed and changes nothing, which keeps a retried
+// request harmless. An unknown trip is not found.
+func (r *Repository) SetStatus(ctx context.Context, tripID string, status trip.Status) (trip.Trip, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return trip.Trip{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	var (
+		origin, destination, current string
+		vehicleID                    *string
+	)
+	err = tx.QueryRow(ctx,
+		`select origin, destination, vehicle_id, status from trips where id = $1 for update`,
+		tripID).Scan(&origin, &destination, &vehicleID, &current)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return trip.Trip{}, domain.NotFound(codeTripNotFound, "trip %s does not exist", tripID)
+	}
+	if err != nil {
+		return trip.Trip{}, err
+	}
+
+	from, err := trip.ParseStatus(current)
+	if err != nil {
+		return trip.Trip{}, err
+	}
+	if !from.Advances(status) {
+		return trip.Trip{}, domain.Conflict(codeTripStatusRegressed,
+			"trip %s is %s and cannot go back to %s", tripID, from, status)
+	}
+
+	if _, err := tx.Exec(ctx, `update trips set status = $2 where id = $1`, tripID, status.String()); err != nil {
+		return trip.Trip{}, classify(tripID, err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return trip.Trip{}, err
+	}
+
+	t := trip.Trip{ID: tripID, Origin: origin, Destination: destination, Status: status}
+	if vehicleID != nil {
+		t.VehicleID = *vehicleID
 	}
 	return t, nil
 }

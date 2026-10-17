@@ -14,12 +14,13 @@ import (
 // transport substitutes its own message for these, so the code is what a
 // developer debugging a report has to go on.
 const (
-	codeCreateFailed = "trip_create_failed"
-	codeListFailed   = "trip_list_failed"
-	codeAssignFailed = "trip_assign_failed"
-	codeCanceled     = "request_cancelled"
-	codeIDFailed     = "trip_id_failed"
-	codeTripRequired = "trip_id_required"
+	codeCreateFailed    = "trip_create_failed"
+	codeListFailed      = "trip_list_failed"
+	codeAssignFailed    = "trip_assign_failed"
+	codeSetStatusFailed = "trip_set_status_failed"
+	codeCanceled        = "request_cancelled"
+	codeIDFailed        = "trip_id_failed"
+	codeTripRequired    = "trip_id_required"
 )
 
 // Repository stores and retrieves trips. It is declared here, in the service
@@ -56,6 +57,16 @@ type Repository interface {
 	// does not exist, a trip that is finished, and a vehicle already on another
 	// unfinished trip are reported as domain errors.
 	Assign(ctx context.Context, tripID, vehicleID string) (Trip, error)
+
+	// SetStatus moves the trip to status and returns the stored record, keeping
+	// the vehicle carrying it in step: a trip that finishes frees its vehicle,
+	// and one that is still going holds on to it.
+	//
+	// A trip moves forwards only — planned, then in progress, then completed —
+	// so a move backwards is a domain conflict. Implementations apply the new
+	// status to the trip and to the vehicle in one step, so the two cannot be
+	// left disagreeing by a process that stops between them.
+	SetStatus(ctx context.Context, tripID string, status Status) (Trip, error)
 }
 
 // CreateInput is one create request as the transport receives it. The status
@@ -119,6 +130,30 @@ func (s *Service) Assign(ctx context.Context, tripID, vehicleID string) (Trip, e
 	updated, err := s.repo.Assign(ctx, tripID, strings.TrimSpace(vehicleID))
 	if err != nil {
 		return Trip{}, storageError(codeAssignFailed, err)
+	}
+	return updated, nil
+}
+
+// SetStatus moves a trip along its life — planned, then in progress, then
+// completed — and returns the stored trip.
+//
+// "Forwards" is the whole rule, and it is the domain's: the store is asked to
+// apply a status, not to decide whether the move makes sense. A blank id and an
+// unknown status are the client's to fix, so they are refused before the store is
+// reached.
+func (s *Service) SetStatus(ctx context.Context, tripID, status string) (Trip, error) {
+	tripID = strings.TrimSpace(tripID)
+	if tripID == "" {
+		return Trip{}, domain.Invalid(codeTripRequired, "trip id is required")
+	}
+	parsed, err := ParseStatus(status)
+	if err != nil {
+		return Trip{}, err
+	}
+
+	updated, err := s.repo.SetStatus(ctx, tripID, parsed)
+	if err != nil {
+		return Trip{}, storageError(codeSetStatusFailed, err)
 	}
 	return updated, nil
 }

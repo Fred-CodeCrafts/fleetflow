@@ -121,6 +121,9 @@ func TestMethodsHonourACancelledContext(t *testing.T) {
 	if _, err := repo.Assign(ctx, "a1", "v1"); !errors.Is(err, context.Canceled) {
 		t.Errorf("Assign error = %v, want context.Canceled", err)
 	}
+	if _, err := repo.SetStatus(ctx, "a1", trip.StatusInProgress); !errors.Is(err, context.Canceled) {
+		t.Errorf("SetStatus error = %v, want context.Canceled", err)
+	}
 }
 
 func TestAssignPutsATripOnAVehicle(t *testing.T) {

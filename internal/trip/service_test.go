@@ -159,6 +159,10 @@ func (s stubRepo) Assign(context.Context, string, string) (trip.Trip, error) {
 	return trip.Trip{}, s.err
 }
 
+func (s stubRepo) SetStatus(context.Context, string, trip.Status) (trip.Trip, error) {
+	return trip.Trip{}, s.err
+}
+
 func TestServiceHidesRawStorageError(t *testing.T) {
 	raw := errors.New("pq: dial tcp 10.0.0.7:5432: connection refused")
 	svc := trip.NewService(stubRepo{err: raw})

@@ -56,6 +56,13 @@ func (s Status) String() string {
 // Valid reports whether s is one of the three known statuses.
 func (s Status) Valid() bool { return uint8(s) < uint8(len(statusNames)) }
 
+// Advances reports whether moving from s to next is a move forwards in the trip's
+// life, which is the only direction allowed: planned, then in progress, then
+// completed. A finished trip is a record of what happened, so it must not be
+// un-finished. Setting the status a trip already has is allowed and changes
+// nothing, so a retried request is not an error.
+func (s Status) Advances(next Status) bool { return next >= s }
+
 // ParseStatus turns the wire name of a status ("planned", "in_progress",
 // "completed") into a Status. The name is matched exactly: the empty string and
 // anything else are rejected, because a status is a machine token and a blank

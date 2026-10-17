@@ -87,6 +87,34 @@ func (r *Repository) List(ctx context.Context) ([]trip.Trip, error) {
 	return found, nil
 }
 
+// SetStatus moves a trip forwards in its life and returns the stored record. An
+// unknown trip is not found, and a move backwards — a finished trip going back to
+// planned or in progress — is a conflict. Setting the status a trip already has is
+// allowed and changes nothing, so a retried request succeeds.
+//
+// Keeping the vehicle in step is left to the Postgres implementation: a memory
+// store holds no vehicles, so it has nowhere to write a vehicle's status. See the
+// Repository interface.
+func (r *Repository) SetStatus(ctx context.Context, tripID string, status trip.Status) (trip.Trip, error) {
+	if err := ctx.Err(); err != nil {
+		return trip.Trip{}, err
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	pos, exists := r.index[tripID]
+	if !exists {
+		return trip.Trip{}, domain.NotFound("trip_not_found", "trip %s does not exist", tripID)
+	}
+	if !r.trips[pos].Status.Advances(status) {
+		return trip.Trip{}, domain.Conflict("trip_status_regressed",
+			"trip %s is %s and cannot go back to %s", tripID, r.trips[pos].Status, status)
+	}
+	r.trips[pos].Status = status
+	return r.trips[pos], nil
+}
+
 // Assign puts tripID on vehicleID, or takes it off its vehicle when vehicleID is
 // empty, and returns the stored trip.
 //
