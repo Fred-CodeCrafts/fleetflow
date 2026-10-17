@@ -20,7 +20,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   Done when: `git log` shows this as the first commit, dated on or after 11 Oct, no other code in it.
 - [x] 🔴 **T02** Add `AGENTS.md`, `DESIGN.md`, `TASKS.md`
   `docs: add agent rules, design and task list`
-- [ ] 🔴 **T03** Add README skeleton (what it is, status, planned run steps, background note about thesis prototype)
+- [x] 🔴 **T03** Add README skeleton (what it is, status, planned run steps, background note about thesis prototype)
   `docs: add README skeleton`
   Done when: README says the earlier prototype is background only and no code was copied.
 - [ ] 🔴 **T04** Add `.gitignore` and `.env.example`
