@@ -80,6 +80,18 @@ func TestBuildDynamicCosts_ReturnsAFreshSlice(t *testing.T) {
 	}
 }
 
+func TestBuildStaticCosts_AreFreeFlow(t *testing.T) {
+	g := loadFixture(t)
+
+	costs := buildStaticCosts(g)
+
+	for i, e := range g.Edges {
+		if costs[i] != e.FreeFlowS {
+			t.Errorf("edge %s: cost = %f, want free-flow %f", e.ID, costs[i], e.FreeFlowS)
+		}
+	}
+}
+
 // edgeIndex returns the index of the edge with the given ID.
 func edgeIndex(t *testing.T, g *graph.Graph, id string) int {
 	t.Helper()

@@ -20,3 +20,14 @@ func buildDynamicCosts(g *graph.Graph, states []*weights.EdgeState, p weights.Pa
 	}
 	return costs
 }
+
+// buildStaticCosts returns the free-flow time of every edge and ignores all
+// congestion state. This is the baseline mode: the weights are fixed, so no
+// report can change a route.
+func buildStaticCosts(g *graph.Graph) []float64 {
+	costs := make([]float64, len(g.Edges))
+	for i, e := range g.Edges {
+		costs[i] = e.FreeFlowS
+	}
+	return costs
+}
