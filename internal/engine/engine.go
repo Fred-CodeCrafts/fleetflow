@@ -125,6 +125,26 @@ func (e *Engine) Route(fromID, toID string) (*Path, error) {
 	return e.router.Route(m, fromID, toID)
 }
 
+// PathCost returns the cost of a sequence of edge indices on the active metric.
+// The snapshot is loaded once, so the whole sum is internally consistent. The
+// second result is false when no metric is published or an index is out of
+// range.
+func (e *Engine) PathCost(edges []int) (float64, bool) {
+	m := e.active.Load()
+	if m == nil {
+		return 0, false
+	}
+
+	var total float64
+	for _, i := range edges {
+		if i < 0 || i >= m.Len() {
+			return 0, false
+		}
+		total += m.Cost(i)
+	}
+	return total, true
+}
+
 // Customize rebuilds the metric from the current edge states and publishes it
 // atomically. Older snapshots stay valid until no query references them. In
 // baseline mode the metric never changes, so the active snapshot is returned

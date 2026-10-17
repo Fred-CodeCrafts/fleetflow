@@ -126,3 +126,55 @@ func TestCustomize_LeavesOldSnapshotsIntact(t *testing.T) {
 		t.Errorf("new snapshot cost %f should exceed the old %f", got, old.Cost(ac))
 	}
 }
+
+func TestPathCost_SumsTheActiveMetric(t *testing.T) {
+	g := loadFixture(t)
+	e := newTestEngine(t, g)
+
+	ac := edgeIndex(t, g, "e_AC")
+	cd := edgeIndex(t, g, "e_CD")
+
+	got, ok := e.PathCost([]int{ac, cd})
+	if !ok {
+		t.Fatal("expected PathCost to succeed")
+	}
+	want := g.Edges[ac].FreeFlowS + g.Edges[cd].FreeFlowS
+	if !almostEqual(got, want) {
+		t.Errorf("PathCost = %f, want %f", got, want)
+	}
+
+	if got, ok := e.PathCost(nil); !ok || got != 0 {
+		t.Errorf("PathCost(nil) = %f (ok=%v), want 0", got, ok)
+	}
+}
+
+func TestPathCost_FollowsThePublishedSnapshot(t *testing.T) {
+	g := loadFixture(t)
+	e := newTestEngine(t, g)
+	ac := edgeIndex(t, g, "e_AC")
+
+	before, _ := e.PathCost([]int{ac})
+
+	for i := 0; i < 5; i++ {
+		if err := e.Report("e_AC", 0, time.Now()); err != nil {
+			t.Fatalf("unexpected report error: %v", err)
+		}
+	}
+	e.Customize()
+
+	after, _ := e.PathCost([]int{ac})
+	if after <= before {
+		t.Errorf("PathCost = %f after congestion, want more than %f", after, before)
+	}
+}
+
+func TestPathCost_RejectsBadIndexes(t *testing.T) {
+	g := loadFixture(t)
+	e := newTestEngine(t, g)
+
+	for _, idx := range []int{-1, len(g.Edges), 1 << 20} {
+		if _, ok := e.PathCost([]int{idx}); ok {
+			t.Errorf("PathCost with index %d reported success", idx)
+		}
+	}
+}
