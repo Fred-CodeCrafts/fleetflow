@@ -152,3 +152,39 @@ only through the "db" subagent.
   truth.
 - Keep it off outside development: in any other project set `"disabled": true` and restart. Never claim it's off until a new session confirms it.
   - OpenCode V2 uses `"disabled"`, not `"enabled"`. The global config keeps `"disabled": true`; only the project config is toggled for on/off.
+
+---
+
+## 8. Agent orchestration
+
+The policy itself lives in the global `~/.config/opencode/AGENTS.md`
+("Agent Orchestration and Efficiency") and applies here unchanged. These are the local
+consequences of it.
+
+- **Parallel workers get their own worktree and branch.** A branch can be checked out in
+  only one worktree, and merges into a shared branch must be serialized: merge workers
+  one at a time. `dev` is an integration branch from the branch-merge trial; it is not
+  part of the release path — `main` is.
+- **The history is evidence (section 1), so keep scaffolding out of it.** A scratch
+  ledger or experiment artifact is deleted in its own commit, never left behind.
+- **Verification debt, honestly recorded.** `internal/driver` and `internal/trip` were
+  accepted on their own tests plus `internal/arch`, without a line-by-line review. That
+  debt is settled when `internal/store` and the API layer make them reachable; until
+  then, do not describe them as reviewed.
+
+### Trial evidence (2026-10-17)
+
+The first branch-merge trial produced T39's driver and trip service slices: two workers,
+two worktrees, and one deliberate merge conflict that the worker resolved itself.
+
+| measure | tokens |
+|---|---|
+| workers, total | 708,044 |
+| of which: merge + conflict resolution | 55,939 |
+| saving over the lead reading the diff | ~2,600 |
+| lead session, cumulative | 59,714,220 |
+
+The conflict cost the worker 55,939 tokens in a context that was then discarded; the lead
+read 45 words. The merge-versus-review choice was ~0.004% of the lead's session, so the
+real levers are delegating at all and keeping the lead session short — not merge versus
+review.
