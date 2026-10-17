@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -25,7 +27,12 @@ func testGraph(t *testing.T) *graph.Graph {
 
 func testServer(t *testing.T, opts ...Option) *Server {
 	t.Helper()
-	return NewServer(testGraph(t), opts...)
+
+	// Tests are noisy enough without a line per request; the logging middleware
+	// has its own test that captures into a buffer. A test may override this by
+	// passing its own WithLogger, which is applied later.
+	all := append([]Option{WithLogger(slog.New(slog.NewTextHandler(io.Discard, nil)))}, opts...)
+	return NewServer(testGraph(t), all...)
 }
 
 func TestHealthz(t *testing.T) {

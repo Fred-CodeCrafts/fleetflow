@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -30,8 +31,12 @@ type StopFunc func(context.Context) error
 // Server holds the API handlers and everything they need. It is an
 // http.Handler, so it can be mounted anywhere.
 type Server struct {
-	graph    *graph.Graph
-	mux      *http.ServeMux
+	graph *graph.Graph
+	mux   *http.ServeMux
+	// handler is the mux wrapped in the shared middleware, built once so every
+	// request pays for the chain only in the handler, not in ServeHTTP.
+	handler  http.Handler
+	logger   *slog.Logger
 	dbCheck  func(context.Context) error
 	stoppers []StopFunc
 }
@@ -51,13 +56,26 @@ func WithStopFunc(fn StopFunc) Option {
 	return func(s *Server) { s.stoppers = append(s.stoppers, fn) }
 }
 
+// WithLogger sets the logger used for the per-request lines. The default is
+// slog.Default(); a nil logger is ignored so the default stays in place.
+func WithLogger(logger *slog.Logger) Option {
+	return func(s *Server) {
+		if logger != nil {
+			s.logger = logger
+		}
+	}
+}
+
 // NewServer builds the API handler for a road graph.
 func NewServer(g *graph.Graph, opts ...Option) *Server {
-	s := &Server{graph: g, mux: http.NewServeMux()}
+	s := &Server{graph: g, mux: http.NewServeMux(), logger: slog.Default()}
 	for _, opt := range opts {
 		opt(s)
 	}
 	s.routes()
+
+	// Request ID first, so the logging line and every error body can quote it.
+	s.handler = withRequestID(withLogging(s.logger, s.mux))
 	return s
 }
 
@@ -69,7 +87,7 @@ func (s *Server) routes() {
 
 // ServeHTTP implements http.Handler.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	s.mux.ServeHTTP(w, r)
+	s.handler.ServeHTTP(w, r)
 }
 
 // Run serves HTTP on addr until ctx is cancelled. On cancellation it stops the

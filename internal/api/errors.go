@@ -14,6 +14,9 @@ import (
 type errorBody struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
+	// RequestID lets a client quote one exact request in a bug report, and lets
+	// the server find that request in the logs.
+	RequestID string `json:"request_id,omitempty"`
 }
 
 // statusFor is the one place that turns a failure into an HTTP status code. Every
@@ -55,11 +58,16 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	if !ok {
 		code, message = "internal", "internal server error"
 		slog.ErrorContext(r.Context(), "request failed",
+			slog.String("request_id", requestIDFrom(r.Context())),
 			slog.String("method", r.Method),
 			slog.String("path", r.URL.Path),
 			slog.String("error", err.Error()),
 		)
 	}
 
-	writeJSON(w, statusFor(err), errorBody{Code: code, Message: message})
+	writeJSON(w, statusFor(err), errorBody{
+		Code:      code,
+		Message:   message,
+		RequestID: requestIDFrom(r.Context()),
+	})
 }
