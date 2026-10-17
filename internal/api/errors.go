@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"fleetflow/internal/auth"
 	"fleetflow/internal/domain"
 	"fleetflow/internal/engine"
 )
@@ -81,6 +82,14 @@ func statusFor(err error) int {
 	// The routing core's sentinels get their status from the shared table.
 	if f, ok := engineFailureFor(err); ok {
 		return f.status
+	}
+
+	// A rejected API key is a 401 rather than the 404 its domain Kind would
+	// otherwise produce. The client did not ask for something that is missing: it
+	// failed to authenticate, and a 404 would suggest the key exists somewhere to
+	// be found (DESIGN 3.5, PRD US-13).
+	if errors.Is(err, auth.ErrUnauthenticated) {
+		return http.StatusUnauthorized
 	}
 
 	switch domain.KindOf(err) {

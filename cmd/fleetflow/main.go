@@ -12,6 +12,9 @@ import (
 	"syscall"
 
 	"fleetflow/internal/api"
+	"fleetflow/internal/auth"
+	authmemory "fleetflow/internal/auth/memory"
+	authpostgres "fleetflow/internal/auth/postgres"
 	"fleetflow/internal/config"
 	"fleetflow/internal/driver"
 	drivermemory "fleetflow/internal/driver/memory"
@@ -84,8 +87,9 @@ func main() {
 			api.WithVehicles(vehicle.NewService(vehiclepostgres.New(pool))),
 			api.WithDrivers(driver.NewService(driverpostgres.New(pool))),
 			api.WithTrips(trip.NewService(trippostgres.New(pool))),
+			api.WithAPIKeys(auth.NewService(authpostgres.New(pool))),
 		)
-		log.Printf("fleet records in postgres at %s", cfg.DatabaseAddr)
+		log.Printf("fleet records and api keys in postgres at %s", cfg.DatabaseAddr)
 	} else {
 		// Without a database the record endpoints still serve, from memory. That
 		// is what lets the service run locally without Postgres, and it is said
@@ -95,8 +99,9 @@ func main() {
 			api.WithVehicles(vehicle.NewService(vehiclememory.New())),
 			api.WithDrivers(driver.NewService(drivermemory.New())),
 			api.WithTrips(trip.NewService(tripmemory.New())),
+			api.WithAPIKeys(auth.NewService(authmemory.New())),
 		)
-		log.Print("no database configured: fleet records are in memory and will be lost on restart")
+		log.Print("no database configured: fleet records and api keys are in memory and will be lost on restart")
 	}
 
 	log.Printf("listening on %s (%s)", cfg.Addr, cfg.Env)

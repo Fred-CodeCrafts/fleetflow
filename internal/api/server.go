@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"time"
 
+	"fleetflow/internal/auth"
 	"fleetflow/internal/domain"
 	"fleetflow/internal/driver"
 	"fleetflow/internal/engine"
@@ -53,6 +54,12 @@ var errNoEngine = domain.Unavailable("engine_unavailable", "the routing engine i
 // (a memory-free run or a unit test). The endpoint exists but cannot serve.
 var errNoFleet = domain.Unavailable("fleet_unavailable", "fleet records are not configured")
 
+// errNoAuth is reported by an ingest endpoint whose key store is not configured.
+// It serves rather than refusing every key, because "I cannot check keys" and
+// "your key is wrong" are different answers and only one of them is the client's
+// to act on.
+var errNoAuth = domain.Unavailable("auth_unavailable", "API keys are not configured")
+
 // Server holds the API handlers and everything they need. It is an
 // http.Handler, so it can be mounted anywhere.
 type Server struct {
@@ -70,7 +77,12 @@ type Server struct {
 	drivers *driver.Service
 	// trips backs the trip endpoints. Nil when built without WithTrips.
 	trips *trip.Service
-	mux   *http.ServeMux
+	// keys authenticates the API key the ingest endpoints require. Nil when the
+	// server is built without WithAPIKeys; those endpoints then refuse every
+	// request, because an ingest endpoint that cannot check its key must not
+	// serve.
+	keys *auth.Service
+	mux  *http.ServeMux
 	// handler is the mux wrapped in the shared middleware, built once so every
 	// request pays for the chain only in the handler, not in ServeHTTP.
 	handler  http.Handler
@@ -109,6 +121,13 @@ func WithDrivers(svc *driver.Service) Option {
 // answer 503.
 func WithTrips(svc *trip.Service) Option {
 	return func(s *Server) { s.trips = svc }
+}
+
+// WithAPIKeys gives the server the key service the ingest endpoints authenticate
+// against. Without it those endpoints answer 503 rather than serving, because an
+// endpoint that cannot check the key it is supposed to require must not publish.
+func WithAPIKeys(svc *auth.Service) Option {
+	return func(s *Server) { s.keys = svc }
 }
 
 // WithDatabaseCheck registers the readiness probe for the database. Without it,
@@ -158,8 +177,12 @@ func (s *Server) routes() {
 	// that hangs is worse than one that reports unready.
 	s.mux.Handle("GET /readyz", withTimeout(requestTimeout, http.HandlerFunc(s.handleReadyz)))
 
-	s.mux.Handle("POST /api/reports", s.public(s.handleReport))
-	s.mux.Handle("POST /api/route", s.public(s.handleRoute))
+	// The two ingest endpoints are the ones an outside system calls, so they are
+	// the ones that require an API key (DESIGN 3.5, PRD US-13). The fleet record
+	// endpoints stay open: they belong to the dashboard, and the demo is meant to
+	// be browsable.
+	s.mux.Handle("POST /api/reports", s.authed(s.handleReport))
+	s.mux.Handle("POST /api/route", s.authed(s.handleRoute))
 
 	// Fleet records (DESIGN 3.5). These are the endpoints that touch PostgreSQL;
 	// the two above never do.
@@ -182,6 +205,14 @@ func (s *Server) public(h http.HandlerFunc) http.Handler {
 	// The limiter is outermost, so a client over its allowance is refused before
 	// a deadline it does not need is created for the request.
 	return s.limiter.middleware(withTimeout(requestTimeout, h))
+}
+
+// authed wraps an endpoint that requires a valid API key. The layers are public's
+// with the key check added innermost: an unauthenticated caller is still a caller
+// that can be too fast or too slow, so the rate limit and the deadline come first,
+// and the key lookup itself is bounded by that deadline.
+func (s *Server) authed(h http.HandlerFunc) http.Handler {
+	return s.limiter.middleware(withTimeout(requestTimeout, s.requireAPIKey(h)))
 }
 
 // newHTTPServer builds the listener's settings.

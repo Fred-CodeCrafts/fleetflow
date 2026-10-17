@@ -22,12 +22,16 @@ func newEngine(t *testing.T, g *graph.Graph) *engine.Engine {
 	return e
 }
 
-// postJSON sends body to path and returns the recorder the server wrote to.
+// postJSON sends body to path, authenticated as the suite's key, and returns the
+// recorder the server wrote to. The ingest endpoints require a key, so a helper
+// that could not present one would only ever exercise the 401 path; postJSONAs is
+// for the tests that mean to present a particular one.
 func postJSON(t *testing.T, s *Server, path, body string) *httptest.ResponseRecorder {
 	t.Helper()
 
 	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+testAPIKey)
 
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, req)

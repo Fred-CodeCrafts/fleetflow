@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"fleetflow/internal/auth"
+	authmemory "fleetflow/internal/auth/memory"
 	"fleetflow/internal/graph"
 )
 
@@ -23,6 +25,31 @@ func testGraph(t *testing.T) *graph.Graph {
 		t.Fatalf("failed to load fixture graph: %v", err)
 	}
 	return g
+}
+
+// testAPIKey is the key every test server accepts. It is a fixed string rather
+// than one issued per test, so that a test calling an ingest endpoint does not
+// first have to arrange authentication; nothing outside the tests ever holds a
+// plaintext key.
+const testAPIKey = "flf_test_key_for_the_suite_0123456789"
+
+// testKeyService returns a key service holding exactly testAPIKey. It seeds the
+// store directly because Service.Issue generates its own plaintext, and a test
+// needs to know the key it is going to present.
+func testKeyService(t *testing.T) *auth.Service {
+	t.Helper()
+
+	repo := authmemory.New()
+	if _, err := repo.Create(context.Background(), auth.Key{
+		ID:        "test-key",
+		Name:      "test suite",
+		Prefix:    auth.DisplayPrefix(testAPIKey),
+		Hash:      auth.Hash(testAPIKey),
+		CreatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("seeding the test key: %v", err)
+	}
+	return auth.NewService(repo)
 }
 
 func testServer(t *testing.T, opts ...Option) *Server {
@@ -38,7 +65,13 @@ func testServerFor(t *testing.T, g *graph.Graph, opts ...Option) *Server {
 	// Tests are noisy enough without a line per request; the logging middleware
 	// has its own test that captures into a buffer. A test may override this by
 	// passing its own WithLogger, which is applied later.
-	all := append([]Option{WithLogger(slog.New(slog.NewTextHandler(io.Discard, nil)))}, opts...)
+	all := append([]Option{
+		WithLogger(slog.New(slog.NewTextHandler(io.Discard, nil))),
+		// Every test server accepts the same key, so a test that calls an ingest
+		// endpoint does not first have to arrange authentication. The one test
+		// about a server with no key service builds its own server.
+		WithAPIKeys(testKeyService(t)),
+	}, opts...)
 	return NewServer(g, all...)
 }
 
