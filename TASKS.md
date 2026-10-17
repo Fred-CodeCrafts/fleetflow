@@ -118,9 +118,9 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 - [ ] 🔴 **T36b** Add typed domain errors, request limits, request IDs, timeouts and rate limits
   `feat(api): add typed errors, validation and limits`
   Done when: domain errors map to status codes in one place; oversized/invalid input is rejected at the handler; logs carry a request ID; public endpoints have timeouts and rate limits.
-- [ ] 🔴 **T36c** Add CI that builds, vets, formats and tests (including `-race`) on every push
+- [ ] 🔴 **T36c** Add CI that builds, vets, lints, formats and tests (including `-race`) on every push
   `ci: add build, vet and test workflow`
-  Done when: a push runs build, vet, a `gofmt` check and `go test -race ./...`, and fails on any finding (US-8). Done early so it guards every later commit.
+  Done when: a push runs build, vet, lint, a `gofmt` check and `go test -race ./...`, and fails on any finding (US-8). Done early so it guards every later commit.
 - [ ] 🔴 **T36d** Guard the routing core boundary with a test
   `test: guard the routing core boundary`
   Done when: a test fails if `graph`, `weights` or `engine` import an HTTP or database package, so the hot path cannot reach the database by accident (US-5, US-12).
@@ -217,7 +217,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   Done when: the README calls the project "production-shaped architecture, MVP feature set" and never claims it is production-ready (US-8).
 - [ ] 🔴 **T65** Verify a fresh clone builds and runs from the README steps only
   `docs: fix setup steps found during clean-clone check`
-- [ ] 🔴 **T66** Run `go vet`, `gofmt`, `go test -race ./...` and fix findings; CI runs build, vet, test and lint on every push
+- [ ] 🔴 **T66** Run `go vet`, `gofmt`, `go test -race ./...` and fix findings
   `chore: fix lint and race findings`
 - [ ] 🔴 **T67** Tag release `v0.1.0`
   `chore: release v0.1.0`
