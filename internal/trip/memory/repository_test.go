@@ -118,4 +118,118 @@ func TestMethodsHonourACancelledContext(t *testing.T) {
 	if _, err := repo.List(ctx); !errors.Is(err, context.Canceled) {
 		t.Errorf("List error = %v, want context.Canceled", err)
 	}
+	if _, err := repo.Assign(ctx, "a1", "v1"); !errors.Is(err, context.Canceled) {
+		t.Errorf("Assign error = %v, want context.Canceled", err)
+	}
+}
+
+func TestAssignPutsATripOnAVehicle(t *testing.T) {
+	repo := memory.New()
+	ctx := context.Background()
+	tr := trip.Trip{ID: "t1", Origin: "A", Destination: "B", Status: trip.StatusPlanned}
+	if _, err := repo.Create(ctx, tr); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	got, err := repo.Assign(ctx, "t1", "v1")
+	if err != nil {
+		t.Fatalf("Assign: %v", err)
+	}
+	if got.VehicleID != "v1" {
+		t.Errorf("Assign returned VehicleID %q, want v1", got.VehicleID)
+	}
+
+	list, err := repo.List(ctx)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(list) != 1 || list[0].VehicleID != "v1" {
+		t.Errorf("List returned %+v, want the assignment to be stored", list)
+	}
+
+	// An empty vehicle takes the trip off it again.
+	if got, err = repo.Assign(ctx, "t1", ""); err != nil {
+		t.Fatalf("Assign unassign: %v", err)
+	}
+	if got.VehicleID != "" {
+		t.Errorf("Assign returned VehicleID %q after unassigning, want empty", got.VehicleID)
+	}
+}
+
+func TestAssignRejectsAnUnknownTrip(t *testing.T) {
+	repo := memory.New()
+
+	_, err := repo.Assign(context.Background(), "nobody", "v1")
+	if err == nil {
+		t.Fatal("Assign accepted an unknown trip")
+	}
+	if kind := domain.KindOf(err); kind != domain.KindNotFound {
+		t.Errorf("Assign kind = %s, want not found", kind)
+	}
+}
+
+func TestAssignRefusesAVehicleAlreadyOnAnotherTrip(t *testing.T) {
+	repo := memory.New()
+	ctx := context.Background()
+	for _, id := range []string{"t1", "t2"} {
+		tr := trip.Trip{ID: id, Origin: "A", Destination: "B", Status: trip.StatusPlanned}
+		if _, err := repo.Create(ctx, tr); err != nil {
+			t.Fatalf("Create(%s): %v", id, err)
+		}
+	}
+	if _, err := repo.Assign(ctx, "t1", "v1"); err != nil {
+		t.Fatalf("Assign: %v", err)
+	}
+
+	_, err := repo.Assign(ctx, "t2", "v1")
+	if err == nil {
+		t.Fatal("Assign put one vehicle on two unfinished trips")
+	}
+	if kind := domain.KindOf(err); kind != domain.KindConflict {
+		t.Errorf("Assign kind = %s, want conflict", kind)
+	}
+
+	// Nothing may have moved.
+	list, err := repo.List(ctx)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if list[0].VehicleID != "v1" || list[1].VehicleID != "" {
+		t.Errorf("List = %+v, want the rejected assignment to change nothing", list)
+	}
+}
+
+// TestAssignLetsACompletedTripReleaseItsVehicle covers the other half of
+// availability: a finished trip does not keep a vehicle busy.
+func TestAssignLetsACompletedTripReleaseItsVehicle(t *testing.T) {
+	repo := memory.New()
+	ctx := context.Background()
+	done := trip.Trip{ID: "t1", Origin: "A", Destination: "B", VehicleID: "v1", Status: trip.StatusCompleted}
+	next := trip.Trip{ID: "t2", Origin: "C", Destination: "D", Status: trip.StatusPlanned}
+	for _, tr := range []trip.Trip{done, next} {
+		if _, err := repo.Create(ctx, tr); err != nil {
+			t.Fatalf("Create(%s): %v", tr.ID, err)
+		}
+	}
+
+	if _, err := repo.Assign(ctx, "t2", "v1"); err != nil {
+		t.Errorf("Assign refused a vehicle a finished trip had released: %v", err)
+	}
+}
+
+func TestAssignRefusesToReassignACompletedTrip(t *testing.T) {
+	repo := memory.New()
+	ctx := context.Background()
+	done := trip.Trip{ID: "t1", Origin: "A", Destination: "B", Status: trip.StatusCompleted}
+	if _, err := repo.Create(ctx, done); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	_, err := repo.Assign(ctx, "t1", "v1")
+	if err == nil {
+		t.Fatal("Assign put a vehicle on a completed trip")
+	}
+	if kind := domain.KindOf(err); kind != domain.KindConflict {
+		t.Errorf("Assign kind = %s, want conflict", kind)
+	}
 }

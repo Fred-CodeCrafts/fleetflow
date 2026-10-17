@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"strings"
 
 	"fleetflow/internal/domain"
 )
@@ -15,8 +16,10 @@ import (
 const (
 	codeCreateFailed = "trip_create_failed"
 	codeListFailed   = "trip_list_failed"
+	codeAssignFailed = "trip_assign_failed"
 	codeCanceled     = "request_cancelled"
 	codeIDFailed     = "trip_id_failed"
+	codeTripRequired = "trip_id_required"
 )
 
 // Repository stores and retrieves trips. It is declared here, in the service
@@ -34,6 +37,16 @@ type Repository interface {
 
 	// List returns every stored trip, oldest first.
 	List(ctx context.Context) ([]Trip, error)
+
+	// Assign puts the trip on vehicleID, or takes it off its vehicle when
+	// vehicleID is empty, and returns the stored record.
+	//
+	// Availability is the rule here: a vehicle can be on only one unfinished
+	// trip. Implementations must apply the assignment as a single step, so two
+	// requests racing for the same vehicle cannot both see it free. A trip that
+	// does not exist, a trip that is finished, and a vehicle already on another
+	// unfinished trip are reported as domain errors.
+	Assign(ctx context.Context, tripID, vehicleID string) (Trip, error)
 }
 
 // CreateInput is one create request as the transport receives it. The status
@@ -80,6 +93,25 @@ func (s *Service) List(ctx context.Context) ([]Trip, error) {
 		return nil, storageError(codeListFailed, err)
 	}
 	return found, nil
+}
+
+// Assign puts the trip on a vehicle, or takes it off its vehicle when vehicleID
+// is empty, and returns the stored trip.
+//
+// The id is checked here because a blank one is a caller mistake. Availability —
+// whether the vehicle is free — belongs to the store, which is the only layer
+// that can see the other trips and apply the change in one step.
+func (s *Service) Assign(ctx context.Context, tripID, vehicleID string) (Trip, error) {
+	tripID = strings.TrimSpace(tripID)
+	if tripID == "" {
+		return Trip{}, domain.Invalid(codeTripRequired, "trip id is required")
+	}
+
+	updated, err := s.repo.Assign(ctx, tripID, strings.TrimSpace(vehicleID))
+	if err != nil {
+		return Trip{}, storageError(codeAssignFailed, err)
+	}
+	return updated, nil
 }
 
 // idBytes is the size of a generated trip id: 128 random bits, written as hex.

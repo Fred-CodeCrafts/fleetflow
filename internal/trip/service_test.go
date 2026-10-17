@@ -155,6 +155,10 @@ func (s stubRepo) List(context.Context) ([]trip.Trip, error) {
 	return nil, s.err
 }
 
+func (s stubRepo) Assign(context.Context, string, string) (trip.Trip, error) {
+	return trip.Trip{}, s.err
+}
+
 func TestServiceHidesRawStorageError(t *testing.T) {
 	raw := errors.New("pq: dial tcp 10.0.0.7:5432: connection refused")
 	svc := trip.NewService(stubRepo{err: raw})
@@ -260,5 +264,71 @@ func TestParseStatusRejectsUnknownNames(t *testing.T) {
 		if !ok || code != "trip_status_unknown" {
 			t.Errorf("ParseStatus(%q) code = %q (ok=%v), want trip_status_unknown", name, code, ok)
 		}
+	}
+}
+
+func TestServiceAssignPutsTheTripOnAVehicle(t *testing.T) {
+	svc := newService()
+	ctx := context.Background()
+
+	tr, err := svc.Create(ctx, trip.CreateInput{Origin: "A", Destination: "B", Status: "planned"})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	got, err := svc.Assign(ctx, tr.ID, "v1")
+	if err != nil {
+		t.Fatalf("Assign: %v", err)
+	}
+	if got.VehicleID != "v1" {
+		t.Errorf("Assign returned VehicleID %q, want v1", got.VehicleID)
+	}
+
+	// The assignment has to be visible through List, not only in the result.
+	list, err := svc.List(ctx)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(list) != 1 || list[0].VehicleID != "v1" {
+		t.Errorf("List returned %+v, want the trip on v1", list)
+	}
+}
+
+func TestServiceAssignRejectsABlankTripID(t *testing.T) {
+	svc := newService()
+
+	_, err := svc.Assign(context.Background(), "  ", "v1")
+	if err == nil {
+		t.Fatal("Assign accepted a blank trip id")
+	}
+	if kind := domain.KindOf(err); kind != domain.KindInvalid {
+		t.Errorf("Assign kind = %s, want invalid", kind)
+	}
+	if code, _, ok := domain.Public(err); !ok || code != "trip_id_required" {
+		t.Errorf("Assign code = %q (ok=%v), want trip_id_required", code, ok)
+	}
+}
+
+// TestServiceAssignKeepsTheRepositoryOutcome checks that a refusal from the store
+// reaches the client as the store's own conflict, and that a storage failure
+// names the operation that failed.
+func TestServiceAssignKeepsTheRepositoryOutcome(t *testing.T) {
+	svc := trip.NewService(stubRepo{err: errors.New("pq: connection refused")})
+
+	_, err := svc.Assign(context.Background(), "t1", "v1")
+	if err == nil {
+		t.Fatal("Assign succeeded although the repository failed")
+	}
+	if code, _, ok := domain.Public(err); !ok || code != "trip_assign_failed" {
+		t.Errorf("Assign code = %q (ok=%v), want trip_assign_failed", code, ok)
+	}
+
+	busy := domain.Conflict("trip_vehicle_busy", "vehicle v1 is already on trip t2")
+	_, err = trip.NewService(stubRepo{err: busy}).Assign(context.Background(), "t1", "v1")
+	if kind := domain.KindOf(err); kind != domain.KindConflict {
+		t.Errorf("Assign kind = %s, want conflict", kind)
+	}
+	if code, _, _ := domain.Public(err); code != "trip_vehicle_busy" {
+		t.Errorf("Assign code = %q, want trip_vehicle_busy", code)
 	}
 }
