@@ -13,9 +13,18 @@ import (
 
 	"fleetflow/internal/api"
 	"fleetflow/internal/config"
+	"fleetflow/internal/driver"
+	drivermemory "fleetflow/internal/driver/memory"
+	driverpostgres "fleetflow/internal/driver/postgres"
 	"fleetflow/internal/engine"
 	"fleetflow/internal/graph"
 	"fleetflow/internal/store"
+	"fleetflow/internal/trip"
+	tripmemory "fleetflow/internal/trip/memory"
+	trippostgres "fleetflow/internal/trip/postgres"
+	"fleetflow/internal/vehicle"
+	vehiclememory "fleetflow/internal/vehicle/memory"
+	vehiclepostgres "fleetflow/internal/vehicle/postgres"
 	"fleetflow/internal/weights"
 )
 
@@ -68,8 +77,26 @@ func main() {
 		}
 		defer pool.Close()
 
-		opts = append(opts, api.WithDatabaseCheck(pool.Ping))
-		log.Printf("database configured at %s", cfg.DatabaseAddr)
+		// The record endpoints read and write through these. The pool is shared,
+		// so the process still owns exactly one.
+		opts = append(opts,
+			api.WithDatabaseCheck(pool.Ping),
+			api.WithVehicles(vehicle.NewService(vehiclepostgres.New(pool))),
+			api.WithDrivers(driver.NewService(driverpostgres.New(pool))),
+			api.WithTrips(trip.NewService(trippostgres.New(pool))),
+		)
+		log.Printf("fleet records in postgres at %s", cfg.DatabaseAddr)
+	} else {
+		// Without a database the record endpoints still serve, from memory. That
+		// is what lets the service run locally without Postgres, and it is said
+		// out loud: nothing here survives a restart, and the deployed
+		// configuration always has a database.
+		opts = append(opts,
+			api.WithVehicles(vehicle.NewService(vehiclememory.New())),
+			api.WithDrivers(driver.NewService(drivermemory.New())),
+			api.WithTrips(trip.NewService(tripmemory.New())),
+		)
+		log.Print("no database configured: fleet records are in memory and will be lost on restart")
 	}
 
 	log.Printf("listening on %s (%s)", cfg.Addr, cfg.Env)
