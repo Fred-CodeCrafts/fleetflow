@@ -41,7 +41,7 @@ Use [Conventional Commits](https://www.conventionalcommits.org/):
 
 **Types:** `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `perf`, `build`, `ci`.
 
-**Scopes:** `graph`, `weights`, `engine`, `sim`, `fleet`, `store`, `auth`, `api`, `web`, `scripts`, `deploy`.
+**Scopes:** `graph`, `weights`, `engine`, `sim`, `fleet`, `store`, `auth`, `api`, `web`, `config`, `domain`, `arch`, `scripts`, `deploy`.
 
 **Rules:**
 - Summary line: 72 characters or fewer, lowercase after the colon, no trailing period.
