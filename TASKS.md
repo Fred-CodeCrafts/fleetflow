@@ -63,7 +63,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 
 - [x] 🔴 **T18** Add immutable `Metric` type (costs slice plus version)
   `feat(engine): add immutable metric snapshot`
-- [ ] 🔴 **T19** Add Dijkstra with binary heap over a given metric, with tests on the fixture graph
+- [x] 🔴 **T19** Add Dijkstra with binary heap over a given metric, with tests on the fixture graph
   `feat(engine): add dijkstra router`
   Done when: known shortest paths on the fixture graph match expected results.
 - [ ] 🔴 **T20** Add `Router` interface so another algorithm can replace Dijkstra
