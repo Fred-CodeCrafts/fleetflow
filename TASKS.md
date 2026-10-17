@@ -84,7 +84,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 
 ## Day 4 (Tue 20 Oct): Simulator
 
-- [ ] 🔴 **T27** Add seeded demand generator (origin-destination pairs and departure times)
+- [x] 🔴 **T27** Add seeded demand generator (origin-destination pairs and departure times)
   `feat(sim): add seeded demand generator`
   Done when: same seed gives identical demand in a test.
 - [ ] 🔴 **T28** Add vehicle type and edge occupancy tracking
