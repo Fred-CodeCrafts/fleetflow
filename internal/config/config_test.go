@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"net"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -181,5 +182,102 @@ func TestTCPReachable(t *testing.T) {
 	}
 	if err := TCPReachable(addr)(ctx); err == nil {
 		t.Errorf("TCPReachable(%s) = nil, want an error for a closed port", addr)
+	}
+}
+
+// TestDiscreteDSN covers the path the local docker compose database takes: the
+// POSTGRES_* variables give a host and port, and the credentials have to be
+// folded in for the service to connect rather than merely probe.
+func TestDiscreteDSN(t *testing.T) {
+	env := env(map[string]string{
+		"POSTGRES_HOST":     "127.0.0.1",
+		"POSTGRES_PORT":     "55432",
+		"POSTGRES_DATABASE": "fleetflow",
+		"POSTGRES_USER":     "fleetflow",
+		"POSTGRES_PASSWORD": "change-me",
+	})
+
+	cfg, err := Load(env)
+	if err != nil {
+		t.Fatalf("Load() unexpected error: %v", err)
+	}
+
+	u, err := url.Parse(cfg.DatabaseDSN)
+	if err != nil {
+		t.Fatalf("DatabaseDSN = %q, which does not parse: %v", cfg.DatabaseDSN, err)
+	}
+	if u.Scheme != "postgres" {
+		t.Errorf("scheme = %q, want postgres", u.Scheme)
+	}
+	if got := u.Host; got != "127.0.0.1:55432" {
+		t.Errorf("host = %q, want 127.0.0.1:55432", got)
+	}
+	if got := u.Path; got != "/fleetflow" {
+		t.Errorf("path = %q, want /fleetflow", got)
+	}
+	if got := u.User.Username(); got != "fleetflow" {
+		t.Errorf("user = %q, want fleetflow", got)
+	}
+	if pw, _ := u.User.Password(); pw != "change-me" {
+		t.Errorf("password did not survive the round trip")
+	}
+	if cfg.DatabaseAddr != "127.0.0.1:55432" {
+		t.Errorf("DatabaseAddr = %q", cfg.DatabaseAddr)
+	}
+}
+
+// TestDiscreteDSN_EscapesThePassword checks the DSN is built as a URL rather than
+// by joining strings, so a password containing separators still works.
+func TestDiscreteDSN_EscapesThePassword(t *testing.T) {
+	const password = "p@ss:w/rd#1"
+
+	cfg, err := Load(env(map[string]string{
+		"POSTGRES_HOST":     "127.0.0.1",
+		"POSTGRES_USER":     "fleetflow",
+		"POSTGRES_PASSWORD": password,
+	}))
+	if err != nil {
+		t.Fatalf("Load() unexpected error: %v", err)
+	}
+
+	u, err := url.Parse(cfg.DatabaseDSN)
+	if err != nil {
+		t.Fatalf("DatabaseDSN = %q, which does not parse: %v", cfg.DatabaseDSN, err)
+	}
+	if got, _ := u.User.Password(); got != password {
+		t.Errorf("password round-tripped as %q, want %q", got, password)
+	}
+	if strings.Contains(cfg.DatabaseDSN, password) {
+		t.Errorf("the raw password appears unescaped in the DSN")
+	}
+}
+
+func TestLoad_RejectsAPasswordWithoutAUser(t *testing.T) {
+	_, err := Load(env(map[string]string{
+		"POSTGRES_HOST":     "127.0.0.1",
+		"POSTGRES_PASSWORD": "change-me",
+	}))
+	if err == nil {
+		t.Fatal("Load() error = nil, want an error")
+	}
+	if !strings.Contains(err.Error(), "POSTGRES_USER") {
+		t.Errorf("error = %q, want it to name POSTGRES_USER", err)
+	}
+}
+
+// TestLoad_DoesNotEchoTheDatabaseURL guards the startup log: a rejected
+// connection string may carry a password, and it must not reach a message.
+func TestLoad_DoesNotEchoTheDatabaseURL(t *testing.T) {
+	_, err := Load(env(map[string]string{
+		"DATABASE_URL": "mysql://user:secret@127.0.0.1/fleetflow",
+	}))
+	if err == nil {
+		t.Fatal("Load() error = nil, want an error")
+	}
+	if strings.Contains(err.Error(), "secret") {
+		t.Errorf("error = %q, which leaks the password", err)
+	}
+	if !strings.Contains(err.Error(), "DATABASE_URL") {
+		t.Errorf("error = %q, want it to name DATABASE_URL", err)
 	}
 }

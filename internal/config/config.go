@@ -87,7 +87,9 @@ func database(getenv func(string) string) (dsn, addr string, err error) {
 	if raw := strings.TrimSpace(getenv("DATABASE_URL")); raw != "" {
 		u, err := url.Parse(raw)
 		if err != nil {
-			return "", "", fmt.Errorf("DATABASE_URL: not a valid URL: %v", err)
+			// The value is deliberately not echoed: a connection string carries a
+			// password, and a startup log is not the place for it.
+			return "", "", errors.New("DATABASE_URL: not a valid URL")
 		}
 		switch u.Scheme {
 		case "postgres", "postgresql":
@@ -108,7 +110,46 @@ func database(getenv func(string) string) (dsn, addr string, err error) {
 	if _, err := strconv.Atoi(port); err != nil {
 		return "", "", fmt.Errorf("POSTGRES_PORT %q: must be an integer", port)
 	}
-	return "", net.JoinHostPort(host, port), nil
+
+	dsn, err = discreteDSN(getenv, host, port)
+	if err != nil {
+		return "", "", err
+	}
+	return dsn, net.JoinHostPort(host, port), nil
+}
+
+// discreteDSN assembles a connection string from the POSTGRES_* variables — the
+// same ones the local docker compose database reads. Those variables alone give a
+// host and port, which is enough to open a TCP connection but not to
+// authenticate, so the credentials are folded in here.
+//
+// url.URL escapes every part, so a password containing "@" or ":" survives. An
+// empty result means the user did not configure credentials, which is not an
+// error: DATABASE_URL or the driver's own environment may supply them.
+func discreteDSN(getenv func(string) string, host, port string) (string, error) {
+	user := strings.TrimSpace(getenv("POSTGRES_USER"))
+	database := strings.TrimSpace(getenv("POSTGRES_DATABASE"))
+	password := getenv("POSTGRES_PASSWORD")
+
+	if password != "" && user == "" {
+		// Refusing beats silently dropping the password and then failing to
+		// authenticate with a message that does not mention the real problem.
+		return "", errors.New("POSTGRES_PASSWORD: set without POSTGRES_USER")
+	}
+	if user == "" {
+		return "", nil
+	}
+
+	u := url.URL{Scheme: "postgres", Host: net.JoinHostPort(host, port)}
+	if database != "" {
+		u.Path = "/" + database
+	}
+	if password != "" {
+		u.User = url.UserPassword(user, password)
+	} else {
+		u.User = url.User(user)
+	}
+	return u.String(), nil
 }
 
 // TCPReachable returns a readiness probe that reports whether addr accepts a TCP
