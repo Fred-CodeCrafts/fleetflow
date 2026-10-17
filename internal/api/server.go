@@ -69,6 +69,9 @@ type Option func(*Server)
 // WithEngine gives the server the routing engine that reports write to and route
 // queries read from. Without it the public endpoints answer 503; the rest of the
 // API works either way.
+//
+// The engine must have been built over this server's graph: a route path carries
+// edge indices into that graph, and the server translates them with its own.
 func WithEngine(e *engine.Engine) Option {
 	return func(s *Server) { s.eng = e }
 }
@@ -121,6 +124,7 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /readyz", withTimeout(requestTimeout, http.HandlerFunc(s.handleReadyz)))
 
 	s.mux.Handle("POST /api/reports", s.public(s.handleReport))
+	s.mux.Handle("POST /api/route", s.public(s.handleRoute))
 }
 
 // public wraps a handler with what every public endpoint shares: the per-client

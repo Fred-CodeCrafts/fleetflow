@@ -27,12 +27,19 @@ func testGraph(t *testing.T) *graph.Graph {
 
 func testServer(t *testing.T, opts ...Option) *Server {
 	t.Helper()
+	return testServerFor(t, testGraph(t), opts...)
+}
+
+// testServerFor builds a server over a specific graph, for the tests that need
+// one small enough to contain an unreachable pair.
+func testServerFor(t *testing.T, g *graph.Graph, opts ...Option) *Server {
+	t.Helper()
 
 	// Tests are noisy enough without a line per request; the logging middleware
 	// has its own test that captures into a buffer. A test may override this by
 	// passing its own WithLogger, which is applied later.
 	all := append([]Option{WithLogger(slog.New(slog.NewTextHandler(io.Discard, nil)))}, opts...)
-	return NewServer(testGraph(t), all...)
+	return NewServer(g, all...)
 }
 
 func TestHealthz(t *testing.T) {
