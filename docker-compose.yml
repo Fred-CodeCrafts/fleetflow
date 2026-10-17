@@ -31,5 +31,32 @@ services:
       timeout: 5s
       retries: 12
 
+  # Applies db/migration to the database above.
+  #
+  # Flyway owns the schema: the service never creates or alters tables, so a
+  # deployment changes the database the same way every time. Kept behind a
+  # profile so `docker compose up -d` starts the database without changing it —
+  # schema changes are deliberate:
+  #
+  #   docker compose --profile tools run --rm migrate
+  #
+  # Credentials come in as environment variables rather than command-line flags,
+  # so they do not appear in `ps` output.
+  migrate:
+    image: flyway/flyway:11-alpine
+    profiles: ["tools"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      FLYWAY_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DATABASE}
+      FLYWAY_USER: ${POSTGRES_USER}
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+      FLYWAY_CONNECT_RETRIES: "10"
+    volumes:
+      - ./db/migration:/flyway/sql:ro
+    command: migrate
+
 volumes:
   fleetflow-pgdata:

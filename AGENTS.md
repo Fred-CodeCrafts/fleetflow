@@ -150,6 +150,11 @@ only through the "db" subagent.
 - Schema changes go through the project's migration tooling so they stay
   reproducible; the MCP is for inspection and dev iteration, not the source of
   truth.
+- The migration tooling is **Flyway** and the schema lives in `db/migration/` as
+  `V<version>__<description>.sql`. Applied migrations are immutable: fix a
+  mistake with the next migration, never by editing an old one or by altering a
+  running database. To apply them:
+  `docker compose --profile tools run --rm migrate`. See `db/README.md`.
 - Keep it off outside development: in any other project set `"disabled": true` and restart. Never claim it's off until a new session confirms it.
   - OpenCode V2 uses `"disabled"`, not `"enabled"`. The global config keeps `"disabled": true`; only the project config is toggled for on/off.
 
