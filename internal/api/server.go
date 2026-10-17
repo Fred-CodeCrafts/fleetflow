@@ -22,6 +22,16 @@ const (
 	shutdownTimeout = 10 * time.Second
 	// readHeaderTimeout bounds how long a client may take to send its headers.
 	readHeaderTimeout = 10 * time.Second
+	// readTimeout bounds reading a whole request, body included. It applies to the
+	// request only, so it is safe for the event stream, which is a long response.
+	readTimeout = 15 * time.Second
+	// idleTimeout bounds how long a keep-alive connection may sit unused before it
+	// is closed, so idle clients cannot hold connections open.
+	idleTimeout = 60 * time.Second
+	// requestTimeout is the deadline given to a request that any client may send.
+	// It is what turns a stuck dependency into the 503 that domain.Unavailable
+	// already maps to, instead of a connection held open indefinitely.
+	requestTimeout = 10 * time.Second
 )
 
 // StopFunc stops one background component, such as the customizer or a running
@@ -82,7 +92,25 @@ func NewServer(g *graph.Graph, opts ...Option) *Server {
 // routes registers every endpoint.
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /healthz", s.handleHealthz)
-	s.mux.HandleFunc("GET /readyz", s.handleReadyz)
+	// Readiness may touch the database, so it gets a deadline of its own: a probe
+	// that hangs is worse than one that reports unready.
+	s.mux.Handle("GET /readyz", withTimeout(requestTimeout, http.HandlerFunc(s.handleReadyz)))
+}
+
+// newHTTPServer builds the listener's settings.
+//
+// WriteTimeout is deliberately left unset: the event stream is a long-lived
+// response, and a write deadline would sever it mid-stream. ReadHeaderTimeout,
+// ReadTimeout and IdleTimeout bound what a client may send and how long it may
+// sit idle, which is where a slow client could otherwise hold resources.
+func newHTTPServer(addr string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		IdleTimeout:       idleTimeout,
+	}
 }
 
 // ServeHTTP implements http.Handler.
@@ -94,11 +122,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // registered components and drains in-flight requests, then returns. It returns
 // an error only when the server stops for a reason other than ctx ending.
 func (s *Server) Run(ctx context.Context, addr string) error {
-	srv := &http.Server{
-		Addr:              addr,
-		Handler:           s,
-		ReadHeaderTimeout: readHeaderTimeout,
-	}
+	srv := newHTTPServer(addr, s)
 
 	errCh := make(chan error, 1)
 	go func() {

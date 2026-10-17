@@ -47,6 +47,21 @@ func withLogging(logger *slog.Logger, next http.Handler) http.Handler {
 	})
 }
 
+// withTimeout gives a request a deadline, cancelling its context when the
+// deadline passes. Repositories observe the context, so the deadline is what
+// stops a slow dependency from holding the connection open: the service maps the
+// resulting error to domain.Unavailable, which the API answers as 503.
+//
+// It is not applied to the event stream, which is meant to stay open.
+func withTimeout(timeout time.Duration, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), timeout)
+		defer cancel()
+
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
 // statusRecorder remembers the status code so the logging middleware can report
 // it. A handler that writes a body without calling WriteHeader has answered 200,
 // so an unset status reads as 200.

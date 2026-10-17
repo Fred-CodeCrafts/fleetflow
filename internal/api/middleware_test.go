@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"fleetflow/internal/domain"
 )
@@ -200,5 +202,93 @@ func TestValidRequestID(t *testing.T) {
 		if got := validRequestID(tt.id); got != tt.want {
 			t.Errorf("validRequestID(%q) = %v, want %v", tt.id, got, tt.want)
 		}
+	}
+}
+
+func TestWithTimeout_GivesTheHandlerADeadline(t *testing.T) {
+	var hadDeadline bool
+
+	h := withTimeout(time.Second, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, hadDeadline = r.Context().Deadline()
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/x", nil))
+
+	if !hadDeadline {
+		t.Error("handler context has no deadline, so a slow dependency could not be cancelled")
+	}
+}
+
+func TestWithTimeout_CancelsAHandlerThatOverruns(t *testing.T) {
+	// The handler waits out its own deadline, which is exactly how a repository
+	// query observes it.
+	errCh := make(chan error, 1)
+
+	h := withTimeout(20*time.Millisecond, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+		errCh <- r.Context().Err()
+	}))
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/x", nil))
+
+	select {
+	case err := <-errCh:
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Errorf("context error = %v, want context.DeadlineExceeded", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the handler's context was never cancelled")
+	}
+}
+
+func TestWithTimeout_LeavesAFastHandlerAlone(t *testing.T) {
+	h := withTimeout(time.Second, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTeapot)
+	}))
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/x", nil))
+
+	if rec.Code != http.StatusTeapot {
+		t.Errorf("status = %d, want the handler's own 418", rec.Code)
+	}
+}
+
+func TestNewHTTPServer_BoundsRequestsButNotResponses(t *testing.T) {
+	srv := newHTTPServer(":0", http.NewServeMux())
+
+	if srv.ReadHeaderTimeout != readHeaderTimeout {
+		t.Errorf("ReadHeaderTimeout = %v, want %v", srv.ReadHeaderTimeout, readHeaderTimeout)
+	}
+	if srv.ReadTimeout != readTimeout {
+		t.Errorf("ReadTimeout = %v, want %v", srv.ReadTimeout, readTimeout)
+	}
+	if srv.IdleTimeout != idleTimeout {
+		t.Errorf("IdleTimeout = %v, want %v", srv.IdleTimeout, idleTimeout)
+	}
+	// A write deadline would cut the event stream off mid-stream.
+	if srv.WriteTimeout != 0 {
+		t.Errorf("WriteTimeout = %v, want 0 so a long-lived response is not severed", srv.WriteTimeout)
+	}
+}
+
+func TestReadyzHasARequestDeadline(t *testing.T) {
+	// A readiness probe that can hang is worse than one that reports unready, so
+	// the endpoint must run under the request deadline.
+	var hadDeadline bool
+
+	s := testServer(t, WithDatabaseCheck(func(ctx context.Context) error {
+		_, hadDeadline = ctx.Deadline()
+		return nil
+	}))
+
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+
+	if !hadDeadline {
+		t.Error("the readiness probe ran without a deadline")
 	}
 }
