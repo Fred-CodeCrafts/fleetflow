@@ -15,6 +15,7 @@ Status: draft v0.1 (17 October 2026). Parameter values are starting points, to b
 - Make that visible in a live dashboard comparing both modes side by side on the same demand and seed.
 - Ship as one small Go service that is easy to run, deploy and read.
 - Let outside systems use the reports and route API with an API key, and accept real vehicle reports alongside simulated ones.
+- Be honest about maturity: describe the result as a "production-shaped architecture, MVP feature set" (layered code, migrations, hashed keys, typed errors, health and readiness, graceful shutdown, validated config, tests in CI), and never as "production-ready".
 
 ### Non-goals (for this competition)
 - Driver mobile or web app for sending GPS, raw-GPS map matching, multi-org roles and billing, city-scale routing, persisted congestion weights, real-fleet validation (all roadmap, see PRD section 9).
@@ -22,6 +23,8 @@ Status: draft v0.1 (17 October 2026). Parameter values are starting points, to b
 - End-user accounts and login: the dashboard is open for the demo, and only the programmatic reports and route API is key-protected (the PRD allows one operator login or none).
 - Real-world validation. All results come from simulation and must be described that way.
 - Matching a full traffic simulator such as SUMO.
+- Backups, an ops runbook beyond a sketch, and a full security review (all roadmap, see PRD section 9).
+- API key rotation and revocation, and running more than one instance at a time (state is in memory, so this sprint is single-instance only; see PRD section 5).
 
 ### Positioning
 FleetFlow is a congestion-aware routing layer that fleet management tools could call. It complements them and does not replace them.
