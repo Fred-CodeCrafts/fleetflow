@@ -1,0 +1,11 @@
+# Line endings.
+#
+# This repository is developed on Windows, where `core.autocrlf` would otherwise
+# check the working tree out as CRLF. That makes `gofmt -l` flag files that CI
+# accepts, because the pipeline on Linux checks out LF. A local formatting check
+# would then not mean what the pipeline means, so pin LF for everything and let
+# the two agree.
+#
+# No file here needs CRLF: the shell script must keep LF to run under `sh`, and
+# there are no Windows batch or PowerShell scripts.
+* text=auto eol=lf
