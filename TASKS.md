@@ -25,7 +25,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   Done when: README says the earlier prototype is background only and no code was copied.
 - [x] 🔴 **T04** Add `.gitignore` and `.env.example`
   `chore: add gitignore and env example`
-- [ ] 🔴 **T05** `go mod init`, add `cmd/fleetflow/main.go` that prints a startup line
+- [x] 🔴 **T05** `go mod init`, add `cmd/fleetflow/main.go` that prints a startup line
   `chore: initialize go module and main entrypoint`
   Done when: `go build ./...` passes.
 - [ ] 🔴 **T06** Add `internal/graph` types (`Node`, `Edge`, `Graph`)
