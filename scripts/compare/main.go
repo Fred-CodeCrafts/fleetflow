@@ -40,6 +40,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -315,6 +316,24 @@ func formatFloat(v float64) string {
 	return strconv.FormatFloat(v, 'f', places, 64)
 }
 
+// tieTolerance is how close two values must be to be called the same: one part
+// per million. Identical traffic does not produce bit-identical sums, because the
+// arms add the same quantities up through different code paths, and an
+// interpolated percentile can shift further than that on its own. A relative
+// rule covers all of them; the absolute floor keeps a value near zero comparable,
+// since the metrics here are seconds. Real effects in these metrics are seconds,
+// so nothing is hidden by it.
+const tieTolerance = 1e-6
+
+// ties reports whether two values are too close to tell apart.
+func ties(base, fleet float64) bool {
+	scale := math.Max(math.Abs(base), math.Abs(fleet))
+	if scale < 1 {
+		scale = 1
+	}
+	return math.Abs(fleet-base) <= tieTolerance*scale
+}
+
 // MetricSummary is the difference between the arms for one metric, averaged
 // over the seeds: the mean of (FleetFlow - baseline), and how often each arm
 // came out lower. Lower is better for every metric reported here, so "better"
@@ -374,19 +393,27 @@ func summarize(rows []Row) Summaries {
 			}
 			s.Seeds++
 
-			diff := metric.value(fleet) - metric.value(base)
+			baseValue := metric.value(base)
+			fleetValue := metric.value(fleet)
+			diff := fleetValue - baseValue
 			s.MeanDiff += diff
 			switch {
+			case ties(baseValue, fleetValue):
+				s.Tied++
 			case diff < 0:
 				s.Better++
-			case diff > 0:
-				s.Worse++
 			default:
-				s.Tied++
+				s.Worse++
 			}
 		}
 		if s.Seeds > 0 {
 			s.MeanDiff /= float64(s.Seeds)
+			if s.Better == 0 && s.Worse == 0 {
+				// Every seed was a tie, so there is no difference to report -- not
+				// even the accumulated noise, which would print as a sign and read
+				// as one arm being ahead.
+				s.MeanDiff = 0
+			}
 		}
 		out = append(out, s)
 	}

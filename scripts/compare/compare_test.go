@@ -164,6 +164,31 @@ func TestSummarize_ArithmeticAndLosses(t *testing.T) {
 	}
 }
 
+// The arms add the same quantities up through different code paths, so identical
+// traffic does not produce bit-identical sums, and an interpolated percentile can
+// move further than that on its own. A difference that small is not a result:
+// reporting one would be the worst kind of wrong, a win that is nothing but the
+// order two numbers were added in.
+func TestSummarize_CountsFloatNoiseAsATie(t *testing.T) {
+	base := sim.Metrics{AverageTripS: 118.45752, P95TripS: 199.76782}
+	fleet := sim.Metrics{AverageTripS: 118.45752000000001, P95TripS: 199.76782 + 2e-5}
+
+	got := summarize([]Row{
+		{Seed: 1, Arm: armBaseline, M: base},
+		{Seed: 1, Arm: armFleetFlow, M: fleet},
+	})
+
+	for _, s := range got {
+		if s.Better != 0 || s.Worse != 0 || s.Tied != 1 {
+			t.Errorf("%s: better=%d worse=%d tied=%d, want every seed tied",
+				s.Name, s.Better, s.Worse, s.Tied)
+		}
+		if s.MeanDiff != 0 {
+			t.Errorf("%s: MeanDiff = %v, want no difference when every seed ties", s.Name, s.MeanDiff)
+		}
+	}
+}
+
 func TestWriteSummary_StatesLossesAndTies(t *testing.T) {
 	rows := []Row{
 		{Seed: 1, Arm: armBaseline, M: sim.Metrics{AverageTripS: 10}},
