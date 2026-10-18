@@ -244,6 +244,30 @@ A run advances only while somebody is watching the stream, so `start` followed b
 than spending CPU on a demo nobody can see. That is what lets the deployed service
 keep Cloud Run's default CPU allocation, which is throttled outside a request.
 
+### Reading the logs
+
+The process writes one structured log line per event, through `log/slog` from the
+standard library. `ENV=production` writes JSON for a log collector; anywhere else
+writes readable text. `LOG_LEVEL` sets the floor (`debug`, `info`, `warn`, `error`).
+
+A comparison run accounts for itself in three lines, and the third is the one worth
+knowing:
+
+```
+msg="comparison run started" seed=5 vehicles=2000 fleet_share=0.5 fleet_traffic_over_the_api=true demo=true
+msg="comparison run finished" reason=settled steps=75 baseline_average_s=34.43 fleetflow_average_s=34.43 \
+    api_route_calls=122 api_report_calls=1010 api_route_failures=0 api_report_failures=0
+msg="comparison run reset" seed=5 steps=12
+```
+
+The `api_*` counts are what the trip metrics cannot tell you. Both arms finish their
+vehicles and report trip times even when every HTTP call to the API failed, because
+they are measured on whatever weights exist — so a broken wire looks like an ordinary
+run with ordinary numbers. A run whose calls did not land says so at `WARN`, in words,
+instead: `comparison run finished without sending any traffic through the api`. Only
+the first failure of each kind is logged with its detail, since a broken API fails on
+every vehicle of every tick; the totals are in the finish line.
+
 ## Deployment
 
 FleetFlow is containerized with a multi-stage Dockerfile and deployed to **Google Cloud Run** with `max-instances=1` and `min-instances=1`.
