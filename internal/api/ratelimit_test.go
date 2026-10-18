@@ -7,6 +7,9 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"fleetflow/internal/vehicle"
+	vehiclememory "fleetflow/internal/vehicle/memory"
 )
 
 // fixedClock returns a limiter whose clock the test controls.
@@ -168,5 +171,24 @@ func TestRateLimitMiddleware_AttributesByForwardedClient(t *testing.T) {
 	}
 	if code := send("198.51.100.1"); code != http.StatusTooManyRequests {
 		t.Errorf("returning client status = %d, want 429", code)
+	}
+}
+
+// TestWithRateLimit_ReplacesTheAllowance covers the option the in-process
+// simulator needs: it calls the public endpoints and must be able to do so
+// without throttling itself.
+func TestWithRateLimit_ReplacesTheAllowance(t *testing.T) {
+	s := testServer(t,
+		WithVehicles(vehicle.NewService(vehiclememory.New())),
+		WithRateLimit(1, 1),
+	)
+
+	if code := getJSON(t, s, "/api/vehicles").Code; code != http.StatusOK {
+		t.Fatalf("first request status = %d, want 200", code)
+	}
+	// The default allowance is 200; with the override it is 1, so the second
+	// request must already be refused.
+	if code := getJSON(t, s, "/api/vehicles").Code; code != http.StatusTooManyRequests {
+		t.Errorf("second request status = %d, want 429 with a burst of 1", code)
 	}
 }

@@ -152,6 +152,24 @@ func WithLogger(logger *slog.Logger) Option {
 	}
 }
 
+// WithRateLimit replaces the public endpoints' per-client allowance. It is for a
+// caller whose traffic is not a person at a dashboard: the simulator sends its
+// reports and route queries through these same endpoints (DESIGN 3.4), and a demo
+// run makes far more requests per wall second than any operator ever does, so on
+// the default limit it would throttle itself.
+//
+// Non-positive values are ignored, because a zero rate would divide by zero in
+// the limiter rather than mean "no limit". A caller that wants the limit out of
+// the way passes a rate far above what it can produce.
+func WithRateLimit(perSecond, burst float64) Option {
+	return func(s *Server) {
+		if perSecond <= 0 || burst <= 0 {
+			return
+		}
+		s.limiter = newRateLimiter(perSecond, burst)
+	}
+}
+
 // NewServer builds the API handler for a road graph.
 func NewServer(g *graph.Graph, opts ...Option) *Server {
 	s := &Server{
