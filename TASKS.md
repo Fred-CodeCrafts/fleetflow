@@ -145,7 +145,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 - [x] 🔴 **T40a** Send simulated reports and route requests through the public API (US-7)
   `feat(sim): report through the public api`
   Done when: the simulator's fleet service is an HTTP client against `/api/reports` and `/api/route`, so simulated traffic takes the same validated path as an external client, and a seeded run stays deterministic (reports are sent synchronously). Needs T37 and T40.
-- [ ] 🔴 **T41** Add `POST /api/sim/start` and `POST /api/sim/reset`
+- [x] 🔴 **T41** Add `POST /api/sim/start` and `POST /api/sim/reset`
   `feat(api): add simulation control endpoints`
 - [ ] 🔴 **T42** Add `GET /api/metrics`
   `feat(api): add metrics endpoint`

@@ -112,8 +112,42 @@ curl -sS -X POST http://localhost:8080/api/route \
 
 A missing or wrong key returns `401` with `{"code":"unauthenticated"}` and does
 nothing else: no report reaches the weights, and no route is computed. The fleet
-record endpoints (`/api/vehicles`, `/api/drivers`, `/api/trips`) stay open, because
-they belong to the dashboard.
+record endpoints (`/api/vehicles`, `/api/drivers`, `/api/trips`) and the
+simulation controls stay open, because they belong to the dashboard.
+
+### Simulation runs
+
+`POST /api/sim/start` drives one seeded demand through both engines at once — the
+static baseline and the dynamic one — and answers `202` with the run that is now
+going; `POST /api/sim/reset` stops it and clears it.
+
+```sh
+# 20 vehicles, half of them FleetFlow, one simulated second per step
+curl -sS -X POST http://localhost:8080/api/sim/start \
+  -H "Content-Type: application/json" \
+  -d '{"seed":7,"vehicles":20,"fleet_share":0.5}'
+# {"seed":7,"vehicles":20,"fleet_share":0.5,"step_s":1,"window_s":600,"running":true}
+
+curl -sS -X POST http://localhost:8080/api/sim/reset
+```
+
+Every field is optional and defaults to the demo configuration
+(`seed`, `vehicles`, `fleet_share`, `step_s`, `window_s`, `reroute_every_s`,
+`reroute_threshold`); a value out of range comes back as `400` with a named code
+and changes nothing. Starting a run replaces the one that was going.
+
+A run's fleet vehicles reach the routing engine over the public API, so simulated
+traffic is validated, authenticated and measured like an external client. That
+needs a key the process can present as its own: issue one, name it in
+`SIM_API_KEY`, and the server sends the run over loopback to itself.
+
+```sh
+go run ./cmd/fleetflow -issue-key simulator   # prints the key once
+SIM_API_KEY=flf_... go run ./cmd/fleetflow
+```
+
+Without `SIM_API_KEY` a run still works; its fleet vehicles just call the engine
+in-process, so nothing crosses the wire.
 
 ## Deployment
 
