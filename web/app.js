@@ -213,14 +213,17 @@ const VEHICLE_FLEET = '#00f3ff';
 const VEHICLE_BACKGROUND = '#849495';
 const VEHICLE_LIVE = '#a855f7';
 
-// VEHICLE_LABEL_MAX is the count up to which every marker is labelled. A run can
-// carry thousands of vehicles, and a label on each would be unreadable overlap;
-// past this many only live markers — which are few — keep their word, and the
-// legend names the rest.
-const VEHICLE_LABEL_MAX = 80;
+// VEHICLE_LABEL_MAX is the count up to which every marker carries its word. A run
+// can carry thousands of vehicles, and a label on each would be an unreadable
+// smear; past this many only live markers — which are few — keep theirs, and the
+// legend names the rest. The default run's 200 vehicles are split across the two
+// panels, so a panel stays under this.
+const VEHICLE_LABEL_MAX = 200;
 
 // drawVehicles draws this panel's vehicles: the ones of its own arm, plus every
-// live vehicle, which belongs to neither arm and so is drawn on both (T50).
+// live vehicle, which belongs to neither arm and so is drawn on both (T50). Each
+// marker is labelled simulated or live (T55); the canvas carries the short form
+// of each word, because a ten-character label per dot is not drawable.
 function drawVehicles(ctx, state) {
   const { toX, toY } = state.projection;
   const vehicles = state.vehicles || [];
@@ -494,10 +497,6 @@ function applyMetrics(body) {
   if (runState) {
     runState.textContent = running ? `run \u00b7 ${body.run.vehicles} vehicles` : 'no run';
   }
-
-  // The stream is the authority on whether a run is going, so a run started or
-  // reset in another tab is reflected here too.
-  setRunChip(running ? 'Running' : 'No run', running ? 'running' : 'idle');
 }
 
 /* ---------- event stream (T55) ---------- */
@@ -586,6 +585,8 @@ function applyVehicles(frame) {
     redrawPanel(panel);
   }
 
+  // The frame is the authority on whether a run is going, so a run started or
+  // reset in another tab is reflected here too.
   setRunChip(frame && frame.running ? 'Running' : 'No run', frame && frame.running ? 'running' : 'idle');
 }
 
