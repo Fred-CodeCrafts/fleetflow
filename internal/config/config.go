@@ -21,12 +21,23 @@ const (
 	DefaultEnv       = "development"
 	DefaultGraphPath = "data/graph.json"
 	DefaultDBPort    = "5432"
+	DefaultLogLevel  = "info"
 )
 
 // Env values accepted by Load.
 const (
 	EnvDevelopment = "development"
 	EnvProduction  = "production"
+)
+
+// Log levels accepted by LOG_LEVEL, lowest first. The names are the ones slog
+// prints, so an operator reading a log line can set the level by copying the word
+// they see.
+const (
+	LogDebug = "debug"
+	LogInfo  = "info"
+	LogWarn  = "warn"
+	LogError = "error"
 )
 
 // Config is the validated runtime configuration.
@@ -43,6 +54,11 @@ type Config struct {
 	// DatabaseAddr is the host:port used for readiness checks, or "" when no
 	// database is configured.
 	DatabaseAddr string
+	// LogLevel is the lowest level the process writes: LogDebug, LogInfo, LogWarn
+	// or LogError. Request lines are Info and per-tick detail is Debug, so a
+	// production deployment can keep the first and drop the second without a
+	// rebuild.
+	LogLevel string
 }
 
 // Load reads configuration from getenv (normally os.Getenv) and validates it.
@@ -56,6 +72,14 @@ func Load(getenv func(string) string) (Config, error) {
 		Env:       valueOr(getenv, "ENV", EnvDevelopment),
 		GraphPath: valueOr(getenv, "GRAPH_PATH", DefaultGraphPath),
 	}
+
+	level := strings.ToLower(valueOr(getenv, "LOG_LEVEL", DefaultLogLevel))
+	switch level {
+	case LogDebug, LogInfo, LogWarn, LogError:
+	default:
+		return Config{}, fmt.Errorf("LOG_LEVEL %q: must be one of debug, info, warn, error", level)
+	}
+	cfg.LogLevel = level
 
 	port := valueOr(getenv, "PORT", strconv.Itoa(DefaultPort))
 	n, err := strconv.Atoi(port)

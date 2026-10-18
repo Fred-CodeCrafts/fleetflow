@@ -42,6 +42,31 @@ func TestLoad(t *testing.T) {
 			},
 		},
 		{
+			name: "log level is set",
+			env:  map[string]string{"LOG_LEVEL": "debug"},
+			want: Config{
+				Addr:      ":8080",
+				Env:       EnvDevelopment,
+				GraphPath: DefaultGraphPath,
+				LogLevel:  LogDebug,
+			},
+		},
+		{
+			name: "log level is case-insensitive",
+			env:  map[string]string{"LOG_LEVEL": "WARN"},
+			want: Config{
+				Addr:      ":8080",
+				Env:       EnvDevelopment,
+				GraphPath: DefaultGraphPath,
+				LogLevel:  LogWarn,
+			},
+		},
+		{
+			name:    "log level is unknown",
+			env:     map[string]string{"LOG_LEVEL": "verbose"},
+			wantErr: "LOG_LEVEL",
+		},
+		{
 			name:    "port is not a number",
 			env:     map[string]string{"PORT": "http"},
 			wantErr: "PORT",
@@ -143,8 +168,16 @@ func TestLoad(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Load() unexpected error: %v", err)
 			}
-			if got != tt.want {
-				t.Errorf("Load() = %+v, want %+v", got, tt.want)
+
+			// LogLevel is the one field every other case leaves alone, so it is
+			// filled in rather than repeated in each expectation: a case that does
+			// not name a level is asserting the default.
+			want := tt.want
+			if want.LogLevel == "" {
+				want.LogLevel = DefaultLogLevel
+			}
+			if got != want {
+				t.Errorf("Load() = %+v, want %+v", got, want)
 			}
 		})
 	}
