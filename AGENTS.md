@@ -81,7 +81,6 @@ Tests go in the same commit as the code they cover, or in the commit immediately
 - **Originality:** all code in this repo must be written new for this project.
   - Do **not** copy files or code from `../sumo-routing/` (thesis prototype) or `../fleetbase/`.
   - Do **not** paste thesis text into the repo.
-  - Reading them for ideas is fine. Write the implementation fresh.
   - **Studying a reference implementation is allowed and encouraged.** Read
     `../fleetbase/` and `../sumo-routing/` to learn their information architecture,
     page layout, interaction patterns, naming and feature set, then write this
