@@ -120,6 +120,38 @@ func TestMetrics_ForgetsTheRunAfterAReset(t *testing.T) {
 	}
 }
 
+func TestMetrics_ReportsRouteQueryLatency(t *testing.T) {
+	s := simServer(t)
+
+	// No query yet: the endpoint must say so with zero samples rather than
+	// quoting a percentile it does not have.
+	before := object(t, decodeBody(t, getJSON(t, s, "/api/metrics")), "engine")
+	if samples := number(t, object(t, before, "query_latency_ms"), "samples"); samples != 0 {
+		t.Errorf("samples = %v before any query, want 0", samples)
+	}
+
+	// One query, made the way any other client makes one.
+	if rec := postJSON(t, s, "/api/route", `{"from_node":"A","to_node":"D"}`); rec.Code != http.StatusOK {
+		t.Fatalf("route status = %d, want 200: %s", rec.Code, rec.Body)
+	}
+
+	after := object(t, decodeBody(t, getJSON(t, s, "/api/metrics")), "engine")
+	latency := object(t, after, "query_latency_ms")
+	if samples := number(t, latency, "samples"); samples != 1 {
+		t.Errorf("samples = %v after one query, want 1", samples)
+	}
+	// The fixture route is far quicker than the histogram's resolution, so the
+	// percentiles can legitimately be zero; what must hold is that they are
+	// durations and that they do not invert.
+	p50, p99 := number(t, latency, "p50"), number(t, latency, "p99")
+	if p50 < 0 || p99 < 0 {
+		t.Errorf("p50 = %v, p99 = %v, want non-negative durations", p50, p99)
+	}
+	if p99 < p50 {
+		t.Errorf("p99 = %v is below p50 = %v", p99, p50)
+	}
+}
+
 func TestMetrics_WithoutAnEngineIsUnavailable(t *testing.T) {
 	s := testServer(t)
 

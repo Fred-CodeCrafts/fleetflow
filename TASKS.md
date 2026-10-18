@@ -149,7 +149,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   `feat(api): add simulation control endpoints`
 - [x] 🔴 **T42** Add `GET /api/metrics`
   `feat(api): add metrics endpoint`
-- [ ] 🔴 **T42a** Measure and report route query latency (p50, p99) (US-6)
+- [x] 🔴 **T42a** Measure and report route query latency (p50, p99) (US-6)
   `feat(engine): measure route query latency`
   Done when: a query records its duration without taking a lock or blocking, and the metrics endpoint reports p50 and p99 next to the customization time.
 - [ ] 🔴 **T43** Add `GET /api/stream` (Server-Sent Events) for positions, congestion and metrics

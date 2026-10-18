@@ -29,6 +29,20 @@ type engineMetrics struct {
 	// CustomizeMS is how long the most recent customization pass took, in
 	// milliseconds.
 	CustomizeMS float64 `json:"customize_ms"`
+	// QueryLatencyMS is the distribution of route-query durations, in
+	// milliseconds.
+	QueryLatencyMS queryLatencyMetrics `json:"query_latency_ms"`
+}
+
+// queryLatencyMetrics is the distribution of route-query durations. It is
+// approximate by construction, and says so rather than implying more precision
+// than it has: the engine keeps a power-of-two bucket histogram and reports the
+// lower bound of the bucket a percentile falls in, so a figure is accurate to
+// within a factor of two and never overstates the delay (T42a).
+type queryLatencyMetrics struct {
+	P50     float64 `json:"p50"`
+	P99     float64 `json:"p99"`
+	Samples int64   `json:"samples"`
 }
 
 // runMetrics describes a live run and both arms of it.
@@ -116,11 +130,17 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now()
+	latency := s.eng.QueryLatency()
 	body := metricsResponse{
 		Engine: engineMetrics{
 			MetricVersion: s.eng.ActiveMetric().Version(),
 			MetricAgeS:    s.eng.MetricAge(now).Seconds(),
-			CustomizeMS:   float64(s.eng.CustomizeDuration().Microseconds()) / 1000,
+			CustomizeMS:   msOf(s.eng.CustomizeDuration()),
+			QueryLatencyMS: queryLatencyMetrics{
+				P50:     msOf(latency.P50),
+				P99:     msOf(latency.P99),
+				Samples: latency.Samples,
+			},
 		},
 	}
 	if live := s.currentRun(); live != nil {
@@ -128,4 +148,11 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, body)
+}
+
+// msOf converts a duration to milliseconds. Durations are recorded to the
+// microsecond, which is the finest resolution either figure has, so nothing is
+// lost by reporting them this way.
+func msOf(d time.Duration) float64 {
+	return float64(d.Microseconds()) / 1000
 }
