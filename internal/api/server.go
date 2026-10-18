@@ -10,6 +10,7 @@ import (
 	"log"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"fleetflow/internal/auth"
@@ -17,6 +18,7 @@ import (
 	"fleetflow/internal/driver"
 	"fleetflow/internal/engine"
 	"fleetflow/internal/graph"
+	"fleetflow/internal/sim"
 	"fleetflow/internal/trip"
 	"fleetflow/internal/vehicle"
 )
@@ -83,6 +85,15 @@ type Server struct {
 	// serve.
 	keys *auth.Service
 	mux  *http.ServeMux
+	// run is the live comparison, or nil when none is running. Only its own
+	// clock goroutine steps the arm simulators, so runMu guards the pointer and
+	// nothing else.
+	runMu sync.Mutex
+	run   *run
+	// fleetService builds the FleetService a run's FleetFlow arm uses. Nil means
+	// the engine in-process; production sets an HTTP client against the server's
+	// own public API.
+	fleetService func(*engine.Engine) sim.FleetService
 	// handler is the mux wrapped in the shared middleware, built once so every
 	// request pays for the chain only in the handler, not in ServeHTTP.
 	handler  http.Handler
@@ -183,6 +194,13 @@ func NewServer(g *graph.Graph, opts ...Option) *Server {
 	}
 	s.routes()
 
+	// A live simulation is a background component like the customizer, so it
+	// stops with the rest: shutdown stops the run and waits for its clock.
+	s.stoppers = append(s.stoppers, func(ctx context.Context) error {
+		s.stopRun(ctx)
+		return nil
+	})
+
 	// Request ID first, so the logging line and every error body can quote it.
 	s.handler = withRequestID(withLogging(s.logger, s.mux))
 	return s
@@ -201,6 +219,12 @@ func (s *Server) routes() {
 	// be browsable.
 	s.mux.Handle("POST /api/reports", s.authed(s.handleReport))
 	s.mux.Handle("POST /api/route", s.authed(s.handleRoute))
+
+	// Simulation control (DESIGN 3.5). These belong to the dashboard, like the
+	// record endpoints, so they are public; the traffic a run produces goes
+	// through the keyed ingest endpoints above.
+	s.mux.Handle("POST /api/sim/start", s.public(s.handleSimStart))
+	s.mux.Handle("POST /api/sim/reset", s.public(s.handleSimReset))
 
 	// Fleet records (DESIGN 3.5). These are the endpoints that touch PostgreSQL;
 	// the two above never do.
