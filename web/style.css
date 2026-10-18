@@ -648,6 +648,65 @@ body {
   color: var(--error);
 }
 
+/* The forms sit under their table, on the same row of fields the controls use,
+   so a create is the same gesture wherever it happens. */
+.record-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1.25rem;
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border);
+}
+
+.form-title {
+  flex: 1 1 100%;
+  margin: 0;
+  color: var(--on-surface-dim);
+  font-family: var(--font-mono);
+  font-size: var(--label-size);
+  font-weight: 700;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+}
+
+/* A select is styled to match the text inputs it stands beside: it is a field
+   like any other, and the page has no second kind of form. */
+.field select {
+  padding: 0.45rem 0.5rem;
+  background: var(--void);
+  border: 1px solid var(--border);
+  color: var(--on-surface);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+
+.field select:focus {
+  border-color: var(--primary);
+  outline: 1px solid var(--primary);
+  outline-offset: 1px;
+}
+
+/* A button inside a table row is the same button, one size down: a full-height
+   control per row would make the table read as a form. */
+.btn-small {
+  padding: 0.25rem 0.6rem;
+  font-size: var(--label-size);
+}
+
+.btn:disabled {
+  border-color: var(--border);
+  color: var(--outline-variant);
+  cursor: not-allowed;
+}
+
+.btn:focus-visible {
+  outline: 1px solid var(--primary);
+  outline-offset: 1px;
+}
+
 /* ---------- narrow viewports ---------- */
 
 @media (max-width: 760px) {
