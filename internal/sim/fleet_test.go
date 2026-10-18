@@ -9,8 +9,9 @@ import (
 )
 
 type fakeReport struct {
-	edgeID   string
-	speedMPS float64
+	vehicleID string
+	edgeID    string
+	speedMPS  float64
 }
 
 // fakeFleet records what fleet vehicles ask for and report, so the tests can
@@ -59,8 +60,8 @@ func (f *fakeFleet) Route(from, to string, held []int) (engine.RouteAnswer, erro
 	return answer, nil
 }
 
-func (f *fakeFleet) Report(edgeID string, speedMPS float64, _ time.Time) error {
-	f.reports = append(f.reports, fakeReport{edgeID: edgeID, speedMPS: speedMPS})
+func (f *fakeFleet) Report(vehicleID, edgeID string, speedMPS float64, _ time.Time) error {
+	f.reports = append(f.reports, fakeReport{vehicleID: vehicleID, edgeID: edgeID, speedMPS: speedMPS})
 	return nil
 }
 
@@ -102,6 +103,9 @@ func TestFleetVehicleReportsTheSpeedItExperiences(t *testing.T) {
 	for _, r := range fleet.reports {
 		if r.edgeID != "e_AB" {
 			t.Errorf("reported on %s, want e_AB", r.edgeID)
+		}
+		if r.vehicleID != v.ID() {
+			t.Errorf("reported as vehicle %q, want %q", r.vehicleID, v.ID())
 		}
 		if r.speedMPS <= 0 {
 			t.Errorf("reported speed %f, want a positive speed", r.speedMPS)

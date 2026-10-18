@@ -20,8 +20,10 @@ type FleetService interface {
 	// Route plans a path from fromID to toID. When held is non-nil the answer
 	// also prices those edge indices on the same snapshot as the plan.
 	Route(fromID, toID string, held []int) (engine.RouteAnswer, error)
-	// Report publishes one speed observation made on an edge.
-	Report(edgeID string, speedMPS float64, now time.Time) error
+	// Report publishes one speed observation a vehicle made on an edge. The
+	// vehicle is named because the public API requires it, and it is what lets a
+	// reader tell a simulated report from a live one.
+	Report(vehicleID, edgeID string, speedMPS float64, now time.Time) error
 }
 
 // EngineFleet serves a routing engine to the simulator in-process. The comparison
@@ -40,8 +42,9 @@ func (f *EngineFleet) Route(fromID, toID string, held []int) (engine.RouteAnswer
 	return f.eng.RouteWithHeld(fromID, toID, held)
 }
 
-// Report implements FleetService.
-func (f *EngineFleet) Report(edgeID string, speedMPS float64, now time.Time) error {
+// Report implements FleetService. The engine keeps no per-vehicle state, so the
+// vehicle a report names is only the API's concern; in-process it is not read.
+func (f *EngineFleet) Report(vehicleID, edgeID string, speedMPS float64, now time.Time) error {
 	return f.eng.Report(edgeID, speedMPS, now)
 }
 
@@ -359,7 +362,7 @@ func (s *Sim) reportSpeeds() {
 		}
 		edge := s.g.Edges[edgeIndex]
 		speed := EdgeSpeed(edge.SpeedLimitMPS, edge.Capacity, s.occ.Count(edgeIndex))
-		_ = s.fleet.Report(edge.ID, speed, now)
+		_ = s.fleet.Report(v.ID(), edge.ID, speed, now)
 	}
 }
 
