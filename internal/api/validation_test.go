@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 // T45: bad input, judged at two levels. decodeJSON is tested as a unit beside
@@ -114,6 +115,46 @@ func TestReport_SpeedBoundIsInclusive(t *testing.T) {
 			if tt.status == http.StatusBadRequest {
 				if got := decodeBody(t, rec)["code"]; got != codeSpeedOutOfRange {
 					t.Errorf("code = %v, want %s", got, codeSpeedOutOfRange)
+				}
+			}
+		})
+	}
+}
+
+// TestReport_RefusesATimestampFromTheFuture: an observation cannot have happened
+// yet. This is not untidiness. Observe stamps the report time on the edge, and
+// decay only resumes once hold has passed since that stamp, so a single report
+// dated next year holds an edge at its last congestion until next year -- on a
+// public endpoint, by accident or on purpose. A clock running slightly ahead is
+// ordinary, so a little of that is allowed.
+func TestReport_RefusesATimestampFromTheFuture(t *testing.T) {
+	now := time.Now()
+
+	tests := []struct {
+		name   string
+		at     time.Time
+		status int
+	}{
+		{"an hour ahead", now.Add(time.Hour), http.StatusBadRequest},
+		{"a year ahead", now.AddDate(1, 0, 0), http.StatusBadRequest},
+		{"a minute behind", now.Add(-time.Minute), http.StatusAccepted},
+		{"an hour behind", now.Add(-time.Hour), http.StatusAccepted},
+		{"within the clock allowance", now.Add(maxReportSkew - time.Second), http.StatusAccepted},
+	}
+
+	s := testServer(t, WithEngine(newEngine(t, testGraph(t))))
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body := fmt.Sprintf(`{"vehicle_id":"v1","edge_id":"e_AB","speed_mps":10,"ts":%d}`, tt.at.UnixMilli())
+			rec := postJSON(t, s, "/api/reports", body)
+
+			if rec.Code != tt.status {
+				t.Fatalf("status = %d, want %d: %s", rec.Code, tt.status, rec.Body)
+			}
+			if tt.status == http.StatusBadRequest {
+				if got := decodeBody(t, rec)["code"]; got != codeTimestampInFuture {
+					t.Errorf("code = %v, want %s", got, codeTimestampInFuture)
 				}
 			}
 		})

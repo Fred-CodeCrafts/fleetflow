@@ -15,6 +15,14 @@ import (
 // limits the road data carries.
 const maxReportSpeedMPS = 90.0
 
+// maxReportSkew is how far ahead of this server's clock a report may be dated
+// before it is refused. A source's clock running a little fast is ordinary, so
+// this is an allowance rather than a requirement; an observation from next year
+// is neither. It is bounded because a report's timestamp is stored on the edge
+// and decay only resumes once the hold time has passed since it, so one report
+// dated far ahead would hold that road at its last congestion until then.
+const maxReportSkew = 5 * time.Minute
+
 // Error codes for input the report endpoint refuses. They travel in API error
 // bodies, so they are part of the public contract.
 const (
@@ -22,6 +30,7 @@ const (
 	codeEdgeIDRequired    = "edge_id_required"
 	codeSpeedOutOfRange   = "speed_out_of_range"
 	codeTimestampInvalid  = "ts_invalid"
+	codeTimestampInFuture = "ts_in_future"
 )
 
 // reportRequest is the body of POST /api/reports (DESIGN 3.5).
@@ -99,7 +108,13 @@ func (r reportRequest) observeTime() (time.Time, error) {
 	if *r.TS <= 0 {
 		return time.Time{}, domain.Invalid(codeTimestampInvalid, "ts must be a Unix time in milliseconds")
 	}
-	return time.UnixMilli(*r.TS), nil
+
+	observedAt := time.UnixMilli(*r.TS)
+	if observedAt.After(time.Now().Add(maxReportSkew)) {
+		return time.Time{}, domain.Invalid(codeTimestampInFuture,
+			"ts must not be more than %s ahead of this server's clock", maxReportSkew)
+	}
+	return observedAt, nil
 }
 
 // validReportSpeed reports whether a measured speed is one the smoothing should
