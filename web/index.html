@@ -13,6 +13,7 @@
   <p class="subtitle">Dynamic routing &middot; baseline against fleetflow</p>
   <p class="masthead-meta" id="graph-meta">Roads &mdash;</p>
   <span class="chip" id="run-chip" data-state="idle">No run</span>
+  <span class="chip" id="stream-chip" data-state="idle">Stream idle</span>
 </header>
 
 <section class="controls" aria-label="Simulation controls">
@@ -31,6 +32,10 @@
   <button id="start" class="btn btn-primary" type="button">Start</button>
   <button id="reset" class="btn btn-secondary" type="button">Reset</button>
   <output id="control-result" class="result" role="status" data-kind="idle">&gt;_ Idle</output>
+  <p class="stream-note">
+    A run advances only while this page is connected to the event stream &mdash; opening the
+    dashboard is what makes <strong>Start</strong> produce movement.
+  </p>
 </section>
 
 <section class="strip" aria-label="Comparison metrics">
@@ -79,8 +84,24 @@
   <p class="strip-note">
     A road is saturated at or above its capacity, and capacity is lanes &times; length_m &divide; 7.5&nbsp;m
     (vehicle plus gap), both taken from <code>GET /api/graph</code>. B is baseline, F is fleetflow.
-    Figures read <span data-metric="run">no run</span>.
+    Figures update from the current run (<span id="run-state">no run</span>).
   </p>
+</section>
+
+<section class="legend" aria-label="Map legend">
+  <span class="legend-item"><i class="swatch swatch-free"></i>free flow</span>
+  <span class="legend-item"><i class="swatch swatch-busy"></i>cost &ge; 1.1&times; free flow</span>
+  <span class="legend-item"><i class="swatch swatch-severe"></i>cost &ge; 1.5&times; free flow</span>
+  <span class="legend-item"><i class="swatch swatch-fleet"></i>fleet vehicle</span>
+  <span class="legend-item"><i class="swatch swatch-background"></i>background traffic</span>
+  <span class="legend-item"><i class="swatch swatch-live"></i>live vehicle (both panels)</span>
+  <span class="legend-item legend-note">
+    Congestion is <code>cost_s &divide; free_flow_s</code> from the stream, and the FleetFlow panel
+    is the only one drawn with it: the baseline arm&rsquo;s weights are fixed at free flow and never
+    move, so its panel is drawn at free flow rather than shown congestion its router never sees.
+    Each panel shows its own arm over the same roads; a live vehicle belongs to neither arm, so it
+    is drawn on both and labelled <code>live</code>.
+  </span>
 </section>
 
 <main class="panels">
