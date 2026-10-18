@@ -90,9 +90,12 @@ Tests go in the same commit as the code they cover, or in the commit immediately
     so copied front-end code would attach AGPL obligations to the whole console
     and break the license. Reproducing a layout from observation is not a
     derivative work; pasting a component is.
-  - When a screen is modelled on one of theirs, say so in the commit body and, where
-    the dependency is real, in `NOTICE`. Credit is cheap and it keeps the history
-    honest.
+  - **No attribution is owed for studying a reference.** AGPL-3.0's attribution and
+    notice duties (sections 4, 5 and 13) attach only when you convey the Program
+    or a work based on it. Learning a layout from `../fleetbase/` and writing your
+    own implementation conveys nothing, so do **not** add a credit line, a `NOTICE`
+    entry or a commit-body acknowledgement for it. Credit is owed for third-party
+    code and data you actually ship, not for reference material you read.
 - **Third-party code and data:** only add dependencies with licenses compatible with this repo's license. Record attribution in `README.md` or `NOTICE` (for example OpenStreetMap data, ODbL).
 - **No history rewriting:** do not use `git rebase`, `git commit --amend` on pushed commits, `git push --force`, or `git filter-branch`. Do not backdate commits or change author dates. The history must be an honest record. If you made a mistake, fix it in a new commit.
 - **No secrets:** never commit API keys, tokens, credentials, or `.env` files. Use environment variables and keep `.env.example` with placeholders.
