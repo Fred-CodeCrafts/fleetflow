@@ -358,6 +358,62 @@ if (document.readyState === 'loading') {
   init();
 }
 
+/* ---------- metrics strip (T53) ---------- */
+
+// Every [data-metric] in index.html names a path into GET /api/metrics. The two
+// comparison arms live under the run, so a path that starts with an arm is
+// resolved there; everything else is resolved from the body's root. The Go test
+// in internal/api replays this rule against a real metric body, so a renamed
+// metric breaks the build rather than blanking a cell.
+function metricAt(body, path) {
+  const parts = path.split('.');
+  let node = body;
+  if (parts[0] === 'baseline' || parts[0] === 'fleet_flow') {
+    node = body ? body.run : null;
+  }
+  for (const part of parts) {
+    if (node === null || typeof node !== 'object') return undefined;
+    node = node[part];
+  }
+  return node;
+}
+
+// metricUnit names a figure's unit from its path, so a new cell needs no new
+// table: the pressures end in _s, the percentage in _pct, the engine's latencies
+// in _ms.
+function metricUnit(path) {
+  if (path.includes('query_latency_ms')) return ' ms';
+  if (path.endsWith('_pct')) return '%';
+  if (path.endsWith('_s')) return ' s';
+  return '';
+}
+
+// formatMetric renders a figure for a person: one decimal and a unit, and an em
+// dash when the run has not produced it.
+function formatMetric(path, value) {
+  if (typeof value !== 'number' || !isFinite(value)) return '\u2014';
+  return value.toFixed(1) + metricUnit(path);
+}
+
+// applyMetrics fills the strip from one metrics frame. The frame is exactly the
+// body of GET /api/metrics, whether it was asked for once or arrived on the
+// stream, so there is one shape and one place that reads it.
+function applyMetrics(body) {
+  for (const cell of document.querySelectorAll('[data-metric]')) {
+    cell.textContent = formatMetric(cell.dataset.metric, metricAt(body, cell.dataset.metric));
+  }
+
+  const running = !!(body && body.run);
+  const runState = document.getElementById('run-state');
+  if (runState) {
+    runState.textContent = running ? `run \u00b7 ${body.run.vehicles} vehicles` : 'no run';
+  }
+
+  // The stream is the authority on whether a run is going, so a run started or
+  // reset in another tab is reflected here too.
+  setRunChip(running ? 'Running' : 'No run', running ? 'running' : 'idle');
+}
+
 /* ---------- event stream (T55) ---------- */
 
 // One Server-Sent Events connection carries the three events, each at its own
@@ -403,6 +459,7 @@ function openStream() {
     retryDelay = STREAM_RETRY_START_MS;
     setStreamChip('Stream live', 'running');
   });
+  stream.addEventListener('metrics', (event) => onStreamMessage(event, applyMetrics));
   stream.addEventListener('error', reconnectStream);
 }
 
