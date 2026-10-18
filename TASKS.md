@@ -166,12 +166,12 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 
 ## Day 6 (Thu 22 Oct): Dashboard
 
-- [ ] 🔴 **T47** Add `web/` with static page, embedded via `go:embed`
+- [x] 🔴 **T47** Add `web/` with static page, embedded via `go:embed`
   `feat(web): serve embedded dashboard page`
 - [ ] 🔴 **T48** Add fleet views: vehicles, drivers, trips, trip history and saved runs
   `feat(web): add fleet management views`
   Done when: dispatcher can manage vehicles/drivers/trips and review history from the dashboard.
-- [ ] 🔴 **T49** Draw road graph on canvas
+- [x] 🔴 **T49** Draw road graph on canvas
   `feat(web): draw road network on canvas`
 - [ ] 🔴 **T50** Connect to SSE stream and draw vehicles
   `feat(web): render vehicles from stream`
@@ -182,7 +182,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 - [ ] 🔴 **T53** Add metrics strip (average trip time, p95, saturated %, route changes, query latency)
   `feat(web): show comparison metrics`
   Done when: the strip states how capacity is derived (lanes and length), so the saturation figure is not a black box (US-6).
-- [ ] 🔴 **T54** Add controls: start, reset, seed, vehicles, fleet share
+- [x] 🔴 **T54** Add controls: start, reset, seed, vehicles, fleet share
   `feat(web): add simulation controls`
   Done when: start loads a ready-made demo scenario, so one click shows a run (US-7).
 - [ ] 🔴 **T55** Auto-reconnect on stream drop, label each vehicle simulated or live
