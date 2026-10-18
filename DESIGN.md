@@ -190,7 +190,7 @@ Plain `net/http`. JSON in and out. `POST /api/reports` and `POST /api/route` req
 | `POST /api/vehicles/{id}/driver` | Assign or unassign a driver (one vehicle per driver enforced) |
 | `GET /api/trips`, `POST /api/trips` | List and create trips `{origin, destination, vehicle_id}` with assignment rules (vehicle must be available, not offline or on a trip; enforced atomically so concurrent requests cannot double-assign) |
 | `POST /api/trips/{id}/status` | Advance a trip (planned, in progress, completed) and keep the vehicle status in step; the run loop does this for simulated trips, and the dispatcher can override |
-| `GET /api/runs`, `POST /api/runs` | List finished comparison runs and save the current one `{seed, config, metrics}` (US-9) |
+| `GET /api/runs`, `POST /api/runs` | List saved comparison runs, most recent first (`GET` takes an optional `limit`), and save the run that is going. `POST` takes no body: the server captures `{seed, config, metrics}` from the run itself, so the record is what ran rather than what a client says ran (US-9) |
 | `GET /healthz` | Liveness |
 | `GET /readyz` | Readiness: graph loaded, DB reachable when configured |
 

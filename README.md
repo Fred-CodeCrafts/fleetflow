@@ -38,7 +38,7 @@ FleetFlow is designed as a single, self-contained Go binary:
 - `internal/weights`: Per-edge state, moving-average smoothing, hold-and-decay logic, and BPR-inspired cost calculations.
 - `internal/engine`: Customizer goroutine, atomic metric snapshots, and Dijkstra shortest-path router behind an interface.
 - `internal/sim`: Deterministic mesoscopic simulator with background traffic, fleet vehicles, and hysteresis rerouting.
-- `internal/api`: HTTP endpoints (`/healthz`, `/api/reports`, `/api/route`, `/api/sim/start`, `/api/stream`, `/api/metrics`).
+- `internal/api`: HTTP endpoints (`/healthz`, `/api/reports`, `/api/route`, `/api/sim/start`, `/api/stream`, `/api/metrics`, `/api/runs`).
 - `web`: Embedded real-time dual-canvas dashboard served via `go:embed`.
 
 ## Quick Start (Local Development)
@@ -70,6 +70,10 @@ Once running, open `http://localhost:8080` in your browser to view the operator 
 - `POST /api/sim/reset` - Stop and reset simulation
 - `GET /api/stream` - Server-Sent Events (SSE) telemetry stream for the dashboard
 - `GET /api/metrics` - Real-time metrics and comparative statistics
+- `GET /api/vehicles`, `POST /api/vehicles` - Fleet vehicle records
+- `GET /api/drivers`, `POST /api/drivers` - Driver records
+- `GET /api/trips`, `POST /api/trips` - Trip records, with `POST /api/trips/{id}/status` to advance one
+- `GET /api/runs`, `POST /api/runs` - Saved comparison runs
 
 ### API keys
 
@@ -112,8 +116,8 @@ curl -sS -X POST http://localhost:8080/api/route \
 
 A missing or wrong key returns `401` with `{"code":"unauthenticated"}` and does
 nothing else: no report reaches the weights, and no route is computed. The fleet
-record endpoints (`/api/vehicles`, `/api/drivers`, `/api/trips`) and the
-simulation controls stay open, because they belong to the dashboard.
+record endpoints (`/api/vehicles`, `/api/drivers`, `/api/trips`, `/api/runs`) and
+the simulation controls stay open, because they belong to the dashboard.
 
 #### The report format
 
@@ -186,6 +190,25 @@ SIM_API_KEY=flf_... go run ./cmd/fleetflow
 
 Without `SIM_API_KEY` a run still works; its fleet vehicles just call the engine
 in-process, so nothing crosses the wire.
+
+### Saving a run
+
+`POST /api/runs` keeps the run that is going, and `GET /api/runs` lists what has
+been kept. The endpoint takes no body: the server captures the seed, the demand
+and the metrics from the run itself, so what is stored is what ran. A save with
+no run going is `409` with `{"code":"no_run"}`, and a save that carries a body is
+refused rather than silently ignored.
+
+```sh
+curl -sS -X POST http://localhost:8080/api/runs
+# {"id":"run_d9a4...","seed":1,"config":{...},"metrics":{...},"created_at":"..."}
+
+curl -sS "http://localhost:8080/api/runs?limit=10"
+# {"runs":[...]}
+```
+
+Saved runs live in Postgres when a database is configured, so they are still
+there after a restart; without one they are in memory and lost with the process.
 
 ### Watching a run
 
