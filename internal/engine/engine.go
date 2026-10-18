@@ -41,6 +41,10 @@ type Engine struct {
 	// Engineering counters, readable without locks by the metrics endpoint.
 	lastCustomizeNanos atomic.Int64 // unix nanos of the last publish
 	customizeNanos     atomic.Int64 // duration of the last customization pass
+
+	// Query latency, read lock-free by the metrics endpoint next to the
+	// customization time.
+	latency queryLatencyHistogram
 }
 
 // New creates an engine with dynamic weights over g. The router is required and
