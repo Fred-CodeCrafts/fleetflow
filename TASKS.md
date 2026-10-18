@@ -173,11 +173,29 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   attached by `WithFleetService`), `current_edges` / `current_cost_s` /
   `metric_version` on the route response, the held-path route method with
   `PathCost` gone, synchronous reports, and a test that simulated traffic meets the
-  API policy. Still owed above: the ephemeral key (today `SIM_API_KEY`, a persisted
-  config secret, plus a rate-limit exemption in `WithInternalKey` — still
-  authenticated, so a secret rather than a hole), the 409 (a second start swaps the
-  running one out), the weight reset (not done: the state is not reset, so a run
-  inherits whatever the engine already held), and `-demo`.
+  API policy.
+
+  State on 2026-10-18, checked rather than assumed:
+  - Met: the 409 is unconditional (`handleSimStart` claims the run slot, and
+    `TestSimStart_RefusesASecondStart` plus `TestSimStart_ClaimsTheSlotBeforeBuilding`
+    hold it). Reset is `204` when idle and stoppable by design.
+  - Met: `-demo` serves the two routes and nothing else does, so they are `404`
+    without it (`TestSimStart_IsAbsentWithoutDemo`); the weight reset runs at start
+    (`TestSimStart_ResetsTheWeights`, `TestReset_ReturnsTheWeightsToFreeFlow`).
+  - Met: the simulator's key is minted at startup into an in-memory `auth.Overlay`
+    (`ephemeralKey`, `TestOverlay_*`), `SIM_API_KEY` is gone, and the log carries no
+    key. Verified against a real process: 12 s of a watched run produced 2,288
+    `/api/reports` and 569 `/api/route` requests through the API, zero
+    `reports_failed`, zero unroutable vehicles.
+  - Met: a saved run records `demo` (V4, `TestCreateKeepsTheDemoFlag`,
+    `TestListKeepsTheDemoFlag`, and `demo` in the `POST /api/runs` body).
+  - Not met: an HTTP error does not fail the run. `reportFailures` counts refused
+    reports and the run carries on (`internal/sim/sim.go`, the `reportFailures`
+    field), and a failed route marks the vehicle `VehicleUnroutable`. The comment
+    there argues the opposite of the done-when: one dropped report should not cost
+    the whole run. That is a real choice, not an oversight, so it needs deciding
+    rather than patching: abort on the first error, or keep counting and refuse to
+    call a run complete when the count is non-zero.
 
   `POST /api/sim/start` and `POST /api/sim/reset` stay public, which is its own
   decision and not part of this task: the dashboard is a static page with no
