@@ -302,11 +302,19 @@ async function postJSON(path, body) {
   return readAnswer(await fetch(path, options));
 }
 
-function showResult(text, kind) {
-  const out = document.getElementById('control-result');
+// setNote writes one line of progress or refusal into a status line. Every
+// request the page makes reports itself this way — the run controls into the one
+// line below them, each fleet pane into its own (T48) — so a reader reads the
+// same shape wherever they looked.
+function setNote(id, text, kind) {
+  const out = document.getElementById(id);
   if (!out) return;
   out.textContent = `>_ ${text}`;
   out.dataset.kind = kind;
+}
+
+function showResult(text, kind) {
+  setNote('control-result', text, kind);
 }
 
 function setRunChip(text, state) {
