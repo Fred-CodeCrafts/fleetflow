@@ -265,17 +265,12 @@ function drawVehicles(ctx, state) {
 
 /* ---------- run controls ---------- */
 
-// postJSON sends one request and returns what the server answered: status and
-// body both. Nothing is swallowed, because a rejected value has to be visible on
-// the page and the API's error codes are what name the value that was rejected.
-async function postJSON(path, body) {
-  const options = { method: 'POST', headers: { Accept: 'application/json' } };
-  if (body !== undefined) {
-    options.headers['Content-Type'] = 'application/json';
-    options.body = JSON.stringify(body);
-  }
-
-  const res = await fetch(path, options);
+// readAnswer turns one response into what the caller needs: the status, and the
+// body when it carries one. Nothing is swallowed, because a rejected value has to
+// be visible on the page and the API's error codes are what name the value that
+// was rejected. A body that does not parse becomes null rather than a throw: a
+// refusal from anything in front of the API is still an answer with a status.
+async function readAnswer(res) {
   const text = await res.text();
 
   let parsed = null;
@@ -287,6 +282,24 @@ async function postJSON(path, body) {
     }
   }
   return { status: res.status, body: parsed };
+}
+
+// getJSON reads one endpoint. Every fleet pane reads a list this way (T48), so a
+// refused read is reported the same way wherever it happens.
+async function getJSON(path) {
+  const res = await fetch(path, { headers: { Accept: 'application/json' } });
+  return readAnswer(res);
+}
+
+// postJSON sends one request and returns what the server answered.
+async function postJSON(path, body) {
+  const options = { method: 'POST', headers: { Accept: 'application/json' } };
+  if (body !== undefined) {
+    options.headers['Content-Type'] = 'application/json';
+    options.body = JSON.stringify(body);
+  }
+
+  return readAnswer(await fetch(path, options));
 }
 
 function showResult(text, kind) {
