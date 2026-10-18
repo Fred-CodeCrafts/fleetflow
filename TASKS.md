@@ -196,7 +196,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 
 - [x] 🔴 **T47** Add `web/` with static page, embedded via `go:embed`
   `feat(web): serve embedded dashboard page`
-- [ ] 🔴 **T48** Add fleet views: vehicles, drivers, trips, trip history and saved runs
+- [x] 🔴 **T48** Add fleet views: vehicles, drivers, trips, trip history and saved runs
   `feat(web): add fleet management views`
   Done when: dispatcher can manage vehicles/drivers/trips and review history from the dashboard.
 - [x] 🔴 **T49** Draw road graph on canvas
@@ -348,8 +348,17 @@ history. What stays below is what is still owed.
   but a reader comparing two saved runs cannot tell whether they cover the same amount of
   the run. Refusing to save an unfinished run instead would tie the endpoint to a clock
   that parks while nobody is watching (T44), which is exactly when a run is unfinished and
-  worth keeping. The dashboard's save button (T48) should say which it is; a field in the
+  worth keeping. The dashboard now says which it is for the one case that could mislead --
+  an arm with no finished trips shows an em dash, not `0.0 s` (fixed in the T48 branch) --
+  but a run that finished half its trips still reads like a whole one. A field in the
   stored metrics would say it for every reader.
+- **The fleet views are checked in a browser, but only against the in-memory server.** T48
+  was verified by driving headless Chrome over CDP: view switching, each create form,
+  driver assignment, a trip walked to completed and into history, a saved run listed, and
+  the `409 no_run` refusal. That run of the check used the dev Postgres; the committed
+  state has no such test, so the next change to `app.js` is unguarded again. What the
+  page's requests are (paths, bodies, statuses) is pinned only by the API tests, not by
+  anything that runs the JavaScript.
 - **The dashboard's JavaScript is verified by hand, not by a test in the repo.** The
   page is exercised against the running binary (all three event kinds arrive, both arms
   are labelled, 120 edges per congestion frame) and its drawing decisions were checked
