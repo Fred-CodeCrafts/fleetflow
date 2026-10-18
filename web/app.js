@@ -638,6 +638,23 @@ function renderTrips() {
     row.appendChild(el('td', null, trip.destination));
     row.appendChild(el('td', 'mono', textOf(trip.vehicle_id)));
     row.appendChild(el('td', 'mono', trip.status));
+
+    const cell = el('td', 'assign');
+    const next = nextTripStatus[trip.status];
+    if (next) {
+      // The button names the status it moves the trip to, so what it does is
+      // read from the button itself rather than inferred from its position.
+      const advance = el('button', 'btn btn-secondary btn-small', `\u2192 ${next}`);
+      advance.type = 'button';
+      advance.setAttribute('aria-label', `Move trip ${trip.id} to ${next}`);
+      advance.addEventListener('click', () => moveTrip(trip.id, next));
+      cell.appendChild(advance);
+    } else {
+      // A completed trip is a record of what happened; there is no move back, so
+      // the cell says so rather than offering one.
+      cell.textContent = 'finished';
+    }
+    row.appendChild(cell);
     tbody.appendChild(row);
   }
 }
@@ -897,15 +914,17 @@ async function createTrip(event) {
       return;
     }
     document.getElementById('trip-form').reset();
+    // Creating a trip on a vehicle moves that vehicle to on_trip, and a finished
+    // one frees it again, so the vehicle pane is read with the trips pane. The
+    // confirmation is said after the re-read, because a refresh writes its own
+    // count into the same line.
+    await refreshTrips();
+    await refreshVehicles();
     setPaneNote(
       'trips',
       `201 created ${res.body.origin} \u2192 ${res.body.destination} (${res.body.status})`,
       'ok'
     );
-    // Creating a trip on a vehicle moves that vehicle to on_trip, and a finished
-    // one frees it again, so the vehicle pane is read with the trips pane.
-    await refreshTrips();
-    await refreshVehicles();
   } catch (err) {
     setPaneNote('trips', `request failed: ${err.message}`, 'error');
   }
@@ -933,6 +952,29 @@ async function assignDriver(vehicleID, driverID) {
     setPaneNote('vehicles', `200 ${res.body.vehicle_id} now holds ${who}`, 'ok');
   } catch (err) {
     setPaneNote('vehicles', `request failed: ${err.message}`, 'error');
+  }
+}
+
+// moveTrip asks the server to apply one status. Which status comes next is the
+// only rule this page holds, and it is the shape of the button; whether the move
+// is allowed is the domain's, and its refusal is what the pane shows.
+async function moveTrip(tripID, status) {
+  setPaneNote('trips', `POST /api/trips/${tripID}/status \u2026`, 'idle');
+  try {
+    const res = await postJSON(`/api/trips/${encodeURIComponent(tripID)}/status`, { status });
+    if (res.status !== 200) {
+      setPaneNote('trips', describeError(res), 'error');
+      return;
+    }
+    // A move carries the vehicle with it: starting a trip puts the vehicle on
+    // the trip and finishing it frees the vehicle again, and a finished trip
+    // belongs in history. All three panes are read again for that reason.
+    await refreshTrips();
+    await refreshVehicles();
+    await refreshHistory();
+    setPaneNote('trips', `200 ${res.body.id} is ${res.body.status}`, 'ok');
+  } catch (err) {
+    setPaneNote('trips', `request failed: ${err.message}`, 'error');
   }
 }
 
