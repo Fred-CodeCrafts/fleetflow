@@ -7,11 +7,11 @@
  * no framework, and no request leaving this origin (DESIGN 3.6).
  *
  * Today it fetches the road network once from GET /api/graph and draws it on
- * both panels, so the two arms are compared over the same roads, wires the
- * controls to POST /api/sim/start and POST /api/sim/reset, and holds one
- * GET /api/stream connection open for the data that moves. It does not draw
- * vehicles or congestion yet: each arrives in its own commit, so the stream is
- * never wired halfway.
+ * both panels, so the two arms are compared over the same roads; wires the
+ * controls to POST /api/sim/start and POST /api/sim/reset; and holds one
+ * GET /api/stream connection open for everything that moves: vehicle positions,
+ * edge congestion and the metrics strip. A run advances only while that
+ * connection is open, so the page has to say so and has to keep it open.
  */
 
 /* ---------- map constants ---------- */
@@ -441,12 +441,6 @@ function repaintOnResize() {
   window.addEventListener('resize', repaint);
 }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
-} else {
-  init();
-}
-
 /* ---------- metrics strip (T53) ---------- */
 
 // Every [data-metric] in index.html names a path into GET /api/metrics. The two
@@ -606,4 +600,17 @@ function reconnectStream() {
     openStream();
   }, retryDelay);
   retryDelay = Math.min(retryDelay * 2, STREAM_RETRY_MAX_MS);
+}
+
+/* ---------- startup ---------- */
+
+// init waits for the whole file to have been evaluated before it runs: the
+// stream it opens reads bindings declared below, and a call before those exist
+// would see them in their temporal dead zone. A classic script at the end of the
+// body still runs while the document is loading, so the listener is the path a
+// browser takes; the immediate call is for a page that is already parsed.
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
 }
