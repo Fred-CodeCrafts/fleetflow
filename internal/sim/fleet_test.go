@@ -40,19 +40,23 @@ func (f *fakeFleet) price(edges []int) float64 {
 	return total
 }
 
-func (f *fakeFleet) Route(from, to string) (*engine.Path, error) {
+func (f *fakeFleet) Route(from, to string, held []int) (engine.RouteAnswer, error) {
 	key := from + "->" + to
 	f.routeCalls = append(f.routeCalls, key)
 
 	edges, ok := f.routes[key]
 	if !ok {
-		return nil, errors.New("fake has no route for " + key)
+		return engine.RouteAnswer{}, errors.New("fake has no route for " + key)
 	}
-	return &engine.Path{Edges: edges, CostS: f.price(edges)}, nil
-}
-
-func (f *fakeFleet) PathCost(edges []int) (float64, bool) {
-	return f.price(edges), true
+	answer := engine.RouteAnswer{
+		Path:    &engine.Path{Edges: edges, CostS: f.price(edges)},
+		Version: 1,
+	}
+	if held != nil {
+		answer.HeldCostS = f.price(held)
+		answer.HeldPriced = true
+	}
+	return answer, nil
 }
 
 func (f *fakeFleet) Report(edgeID string, speedMPS float64, _ time.Time) error {

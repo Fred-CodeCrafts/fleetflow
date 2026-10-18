@@ -9,13 +9,50 @@ import (
 )
 
 // FleetService is the routing service that fleet vehicles talk to: they ask it
-// for routes, price the routes they already hold, and report the speeds they
-// observe. *engine.Engine satisfies it.
+// to plan a route — and, when they already hold one, what that route costs — and
+// they report the speeds they observe.
+//
+// Planning and pricing come back from one call so the two are always measured on
+// the same snapshot, whether the service is the engine in-process or the public
+// HTTP API. That is the seam DESIGN 3.4 describes: tests inject a fake or the
+// engine, and production points an HTTP client at the server's own base URL.
 type FleetService interface {
-	Route(fromID, toID string) (*engine.Path, error)
-	PathCost(edges []int) (float64, bool)
+	// Route plans a path from fromID to toID. When held is non-nil the answer
+	// also prices those edge indices on the same snapshot as the plan.
+	Route(fromID, toID string, held []int) (engine.RouteAnswer, error)
+	// Report publishes one speed observation made on an edge.
 	Report(edgeID string, speedMPS float64, now time.Time) error
 }
+
+// EngineFleet serves a routing engine to the simulator in-process. The comparison
+// runs and the unit tests use it; production uses the HTTP client instead, so
+// simulated traffic takes the public, validated path.
+//
+// It also satisfies FleetCustomizer, so a simulation driven by an engine keeps
+// refreshing that engine's weights on the simulation clock.
+type EngineFleet struct{ eng *engine.Engine }
+
+// NewEngineFleet adapts an engine to FleetService.
+func NewEngineFleet(e *engine.Engine) *EngineFleet { return &EngineFleet{eng: e} }
+
+// Route implements FleetService.
+func (f *EngineFleet) Route(fromID, toID string, held []int) (engine.RouteAnswer, error) {
+	return f.eng.RouteWithHeld(fromID, toID, held)
+}
+
+// Report implements FleetService.
+func (f *EngineFleet) Report(edgeID string, speedMPS float64, now time.Time) error {
+	return f.eng.Report(edgeID, speedMPS, now)
+}
+
+// CustomizeEvery implements FleetCustomizer.
+func (f *EngineFleet) CustomizeEvery() time.Duration { return f.eng.CustomizeEvery() }
+
+// DecayStale implements FleetCustomizer.
+func (f *EngineFleet) DecayStale(now time.Time) { f.eng.DecayStale(now) }
+
+// Customize implements FleetCustomizer.
+func (f *EngineFleet) Customize() *engine.Metric { return f.eng.Customize() }
 
 // FleetCustomizer is implemented by a fleet service whose weights are refreshed
 // on the simulation clock rather than a wall clock. *engine.Engine satisfies it.
@@ -231,7 +268,11 @@ func (s *Sim) depart(v *Vehicle) {
 // route they would drive without any coordination.
 func (s *Sim) routeFor(v *Vehicle) (*engine.Path, error) {
 	if v.IsFleet() && s.fleet != nil {
-		return s.fleet.Route(v.Origin(), v.Destination())
+		answer, err := s.fleet.Route(v.Origin(), v.Destination(), nil)
+		if err != nil {
+			return nil, err
+		}
+		return answer.Path, nil
 	}
 	return s.staticRouter.Route(s.staticMetric, v.Origin(), v.Destination())
 }
@@ -259,31 +300,37 @@ func (s *Sim) rerouteFleet() {
 }
 
 // reroute reconsiders one vehicle's remaining route.
+//
+// The plan and the price of the tail come back from one call, so both are measured
+// on the same snapshot and the comparison means what it says. Pricing them with
+// two calls could straddle a customization and read one cost against the other.
 func (s *Sim) reroute(v *Vehicle) {
 	edgeIndex := v.currentEdge()
 	if edgeIndex < 0 {
 		return
 	}
 
+	// The vehicle must finish the edge it is on, so only the edges after it are
+	// at stake. With nothing left there is nothing to switch to.
 	tail := v.route[v.leg+1:]
-	currentCost, ok := s.fleet.PathCost(tail)
-	if !ok {
+	if len(tail) == 0 {
 		return
 	}
 
-	// The candidate starts at the node the vehicle is heading towards.
-	candidate, err := s.fleet.Route(s.g.Edges[edgeIndex].To, v.Destination())
-	if err != nil || candidate == nil {
+	// The candidate starts at the node the vehicle is heading towards, and the
+	// tail is priced alongside it.
+	answer, err := s.fleet.Route(s.g.Edges[edgeIndex].To, v.Destination(), tail)
+	if err != nil || answer.Path == nil || !answer.HeldPriced {
 		return
 	}
 
-	if candidate.CostS >= currentCost*(1-s.cfg.RerouteThreshold) {
+	if answer.Path.CostS >= answer.HeldCostS*(1-s.cfg.RerouteThreshold) {
 		return // not enough of an improvement to be worth switching
 	}
 
-	newRoute := make([]int, 0, len(candidate.Edges)+1)
+	newRoute := make([]int, 0, len(answer.Path.Edges)+1)
 	newRoute = append(newRoute, edgeIndex)
-	newRoute = append(newRoute, candidate.Edges...)
+	newRoute = append(newRoute, answer.Path.Edges...)
 
 	// The vehicle stays on the same edge and at the same spot, so occupancy is
 	// unchanged; only the edges ahead are replaced.

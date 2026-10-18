@@ -45,7 +45,11 @@ func RunBoth(g *graph.Graph, cfg Config, params weights.Params, maxSteps int) (C
 	var comparison Comparison
 
 	baseline, err := runOne(g, cfg, func() (FleetService, error) {
-		return engine.NewBaseline(g, engine.NewDijkstraRouter(g))
+		e, err := engine.NewBaseline(g, engine.NewDijkstraRouter(g))
+		if err != nil {
+			return nil, err
+		}
+		return NewEngineFleet(e), nil
 	}, maxSteps)
 	if err != nil {
 		return Comparison{}, err
@@ -53,7 +57,11 @@ func RunBoth(g *graph.Graph, cfg Config, params weights.Params, maxSteps int) (C
 	comparison.Baseline = baseline
 
 	dynamic, err := runOne(g, cfg, func() (FleetService, error) {
-		return engine.New(g, engine.NewDijkstraRouter(g), params)
+		e, err := engine.New(g, engine.NewDijkstraRouter(g), params)
+		if err != nil {
+			return nil, err
+		}
+		return NewEngineFleet(e), nil
 	}, maxSteps)
 	if err != nil {
 		return Comparison{}, err

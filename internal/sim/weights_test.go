@@ -30,7 +30,7 @@ func TestStep_RefreshesWeightsOnTheSimulationClock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error creating simulation: %v", err)
 	}
-	s.SetFleetService(e)
+	s.SetFleetService(NewEngineFleet(e))
 
 	if got := e.ActiveMetric().Version(); got != 1 {
 		t.Fatalf("initial version = %d, want 1", got)
