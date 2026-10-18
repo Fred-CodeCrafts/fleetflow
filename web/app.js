@@ -7,11 +7,11 @@
  * no framework, and no request leaving this origin (DESIGN 3.6).
  *
  * Today it fetches the road network once from GET /api/graph and draws it on
- * both panels, so the two arms are compared over the same roads, and wires the
- * controls to POST /api/sim/start and POST /api/sim/reset, showing what the
- * server answered. It does not open GET /api/stream yet on purpose: a stream
- * wired halfway is harder to reason about than none. The seam it plugs into is
- * at the end of this file.
+ * both panels, so the two arms are compared over the same roads, wires the
+ * controls to POST /api/sim/start and POST /api/sim/reset, and holds one
+ * GET /api/stream connection open for the data that moves. It does not draw
+ * vehicles or congestion yet: each arrives in its own commit, so the stream is
+ * never wired halfway.
  */
 
 /* ---------- map constants ---------- */
@@ -304,6 +304,11 @@ async function init() {
   // cannot draw the network can still start and reset a run.
   wireControls();
 
+  // The stream is opened before the graph is fetched, and independently of it:
+  // the metrics strip and the run chip do not need the road network, and the
+  // connection is what lets a run advance at all (T44).
+  openStream();
+
   let graph;
   try {
     graph = await fetchGraph();
@@ -353,27 +358,68 @@ if (document.readyState === 'loading') {
   init();
 }
 
-/*
- * ---- The stream seam (next dispatch: T50, T51, T53, T55) ----
- *
- * GET /api/stream is not opened yet, deliberately. The three events it carries
- * land in three different places, and each one repaints from the state above:
- *
- *   vehicles  {now_s, running, vehicles:[{id, kind, arm, edge_id, lat, lon, ...}]}
- *             five times a second. Keep the entries whose `arm` is this panel's,
- *             write them to state.vehicles and redrawPanel(). A live vehicle has
- *             no arm (it belongs to neither panel) and is drawn on both; `kind`
- *             is "simulated" or "live", and each marker is labelled with it.
- *   edges     {metric_version, edges:[{edge_id, cost_s, free_flow_s}]} once a
- *             second. Write them to state.congestion keyed by edge id and
- *             redrawPanel(). Congestion reads as cost_s / free_flow_s, so both
- *             numbers are kept: dividing here would lose the pair that makes the
- *             colour explicable.
- *   metrics   exactly the body of GET /api/metrics, once a second: fill the
- *             [data-metric] cells in the strip from run.baseline, run.fleet_flow
- *             and engine.
- *
- * A run only advances while somebody is watching the stream, so opening the
- * connection is also what makes Start produce movement; a dropped connection
- * has to be retried rather than reported once.
- */
+/* ---------- event stream (T55) ---------- */
+
+// One Server-Sent Events connection carries the three events, each at its own
+// cadence. EventSource reconnects on its own, but the wait it picks between
+// attempts is the browser's to choose and can stretch into many seconds, so a
+// dropped connection is handled here instead: the source is closed and reopened
+// on a short, explicit backoff. A run only advances while somebody is connected
+// (T44), so a stream left down is a run left standing still.
+const STREAM_URL = '/api/stream';
+const STREAM_RETRY_START_MS = 500;
+const STREAM_RETRY_MAX_MS = 8000;
+
+let stream = null;
+let retryDelay = STREAM_RETRY_START_MS;
+let retryTimer = null;
+
+function setStreamChip(text, state) {
+  const chip = document.getElementById('stream-chip');
+  if (!chip) return;
+  chip.textContent = text;
+  chip.dataset.state = state;
+}
+
+// onStreamMessage parses one event's data and hands it to the handler. A payload
+// that does not parse is dropped rather than thrown: one bad frame must not take
+// the connection down.
+function onStreamMessage(event, handler) {
+  let payload;
+  try {
+    payload = JSON.parse(event.data);
+  } catch (err) {
+    return;
+  }
+  handler(payload);
+}
+
+function openStream() {
+  if (stream) return;
+
+  stream = new EventSource(STREAM_URL);
+
+  stream.addEventListener('open', () => {
+    retryDelay = STREAM_RETRY_START_MS;
+    setStreamChip('Stream live', 'running');
+  });
+  stream.addEventListener('error', reconnectStream);
+}
+
+// reconnectStream closes the failed source and schedules a reopen on a short
+// backoff that doubles to a ceiling, so a server restart is picked up in half a
+// second but a down server is not hammered.
+function reconnectStream() {
+  if (stream) {
+    stream.close();
+    stream = null;
+  }
+  if (retryTimer !== null) return;
+
+  setStreamChip('Reconnecting\u2026', 'retry');
+  retryTimer = window.setTimeout(() => {
+    retryTimer = null;
+    openStream();
+  }, retryDelay);
+  retryDelay = Math.min(retryDelay * 2, STREAM_RETRY_MAX_MS);
+}

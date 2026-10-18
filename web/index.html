@@ -13,6 +13,7 @@
   <p class="subtitle">Dynamic routing &middot; baseline against fleetflow</p>
   <p class="masthead-meta" id="graph-meta">Roads &mdash;</p>
   <span class="chip" id="run-chip" data-state="idle">No run</span>
+  <span class="chip" id="stream-chip" data-state="idle">Stream idle</span>
 </header>
 
 <section class="controls" aria-label="Simulation controls">
@@ -31,6 +32,10 @@
   <button id="start" class="btn btn-primary" type="button">Start</button>
   <button id="reset" class="btn btn-secondary" type="button">Reset</button>
   <output id="control-result" class="result" role="status" data-kind="idle">&gt;_ Idle</output>
+  <p class="stream-note">
+    A run advances only while this page is connected to the event stream &mdash; opening the
+    dashboard is what makes <strong>Start</strong> produce movement.
+  </p>
 </section>
 
 <section class="strip" aria-label="Comparison metrics">

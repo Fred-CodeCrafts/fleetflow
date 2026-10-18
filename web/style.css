@@ -137,6 +137,12 @@ body {
   color: var(--secondary);
 }
 
+.chip[data-state='retry'] {
+  border-color: var(--tertiary);
+  background: rgba(255, 170, 0, 0.08);
+  color: var(--tertiary);
+}
+
 /* ---------- controls ---------- */
 
 .controls {
@@ -246,6 +252,23 @@ body {
 .result[data-kind='error'] {
   border-left-color: var(--error);
   color: var(--error);
+}
+
+/* The stream note explains why the page has to stay open (T44): a fact about the
+   page, not a result of a request, so it wears no result colouring. */
+.stream-note {
+  flex: 1 1 100%;
+  margin: 0;
+  color: var(--on-surface-dim);
+  font-family: var(--font-mono);
+  font-size: var(--label-size);
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+}
+
+.stream-note strong {
+  color: var(--primary);
+  font-weight: 700;
 }
 
 /* ---------- metrics strip ---------- */
