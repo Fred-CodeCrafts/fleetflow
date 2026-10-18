@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
@@ -147,13 +148,26 @@ type run struct {
 	mu     sync.Mutex
 	latest runSnapshot
 	steps  int
+
+	// logger reports the run's life: when it stopped and why, and how much traffic
+	// it actually sent over the wire. A run that ends with no line saying so is a
+	// run nobody can account for afterwards.
+	logger *slog.Logger
+	// observed is the FleetFlow arm's service with its calls counted, when the arm
+	// goes over the wire. Nil when the arm runs in-process, where there is no wire
+	// to count.
+	observed *observedFleet
+	// startedAt is when the clock began, so the run can report how long it took.
+	startedAt time.Time
 }
 
 // newRun builds both arms over the same seeded demand. The baseline arm routes on
 // the static engine in-process; the FleetFlow arm uses the service it is given,
-// which production points at the server's own public API. watched reports whether
-// anybody is watching, and wake is told whenever that changes.
-func newRun(g *graph.Graph, cfg sim.Config, baseline *engine.Engine, fleet sim.FleetService, watched func() bool, wake <-chan struct{}) (*run, error) {
+// which production points at the server's own public API. overWire says whether
+// that service speaks HTTP, which is the only case where its calls are worth
+// counting. watched reports whether anybody is watching, and wake is told whenever
+// that changes.
+func newRun(g *graph.Graph, cfg sim.Config, baseline *engine.Engine, fleet sim.FleetService, overWire bool, watched func() bool, wake <-chan struct{}, logger *slog.Logger) (*run, error) {
 	baselineArm, err := sim.New(g, cfg)
 	if err != nil {
 		return nil, err
@@ -164,7 +178,6 @@ func newRun(g *graph.Graph, cfg sim.Config, baseline *engine.Engine, fleet sim.F
 	}
 
 	baselineArm.SetFleetService(sim.NewEngineFleet(baseline))
-	fleetArm.SetFleetService(fleet)
 
 	live := &run{
 		cfg:       cfg,
@@ -175,7 +188,26 @@ func newRun(g *graph.Graph, cfg sim.Config, baseline *engine.Engine, fleet sim.F
 		done:      make(chan struct{}),
 		watched:   watched,
 		wake:      wake,
+		logger:    logger,
+		startedAt: time.Now(),
 	}
+
+	// The baseline arm calls the static engine in-process by construction, and an
+	// in-process FleetFlow arm does the same, so neither has a wire to count. Only
+	// an arm whose service speaks HTTP is observed; counting anything else would
+	// report API calls that were never made.
+	if overWire {
+		observed := observedFleetOf(fleet, logger)
+		switch counted := observed.(type) {
+		case *observedFleet:
+			live.observed = counted
+		case *observedCustomFleet:
+			live.observed = counted.observedFleet
+		}
+		fleet = observed
+	}
+	fleetArm.SetFleetService(fleet)
+
 	// A run reports its demand from the moment it starts, so a dashboard that
 	// asks before the first tick sees the run it started rather than zeros.
 	live.latest = live.picture()
@@ -198,6 +230,7 @@ func (r *run) clock() {
 	for {
 		select {
 		case <-r.stop:
+			r.report("stopped")
 			return
 		case <-ticker.C:
 		}
@@ -208,6 +241,7 @@ func (r *run) clock() {
 			// so the wait cannot outlast one that is there.
 			select {
 			case <-r.stop:
+				r.report("stopped")
 				return
 			case <-r.wake:
 			}
@@ -215,10 +249,77 @@ func (r *run) clock() {
 		}
 
 		r.advance()
-		if r.steps >= maxRunSteps || r.settled() {
+		if r.steps >= maxRunSteps {
+			r.report("step budget exhausted")
+			return
+		}
+		if r.settled() {
+			r.report("settled")
 			return
 		}
 	}
+}
+
+// report writes the line that accounts for a finished run: why it stopped, how far
+// it got, what both arms measured, and how much traffic actually crossed the wire.
+//
+// The traffic counts are the point. A run whose route queries all failed still
+// completes both arms and reports trip times, because the arms are measured on
+// whatever weights exist; the only thing that separates it from a good run is
+// whether the calls landed. That is not visible in the trip metrics, so it is
+// written here.
+func (r *run) report(why string) {
+	if r.logger == nil {
+		return
+	}
+
+	metrics := r.metrics()
+
+	attrs := []slog.Attr{
+		slog.String("reason", why),
+		slog.Int("steps", r.steps),
+		slog.Duration("took", time.Since(r.startedAt)),
+		slog.Int64("seed", r.cfg.Seed),
+		slog.Int("vehicles", r.cfg.Vehicles),
+		slog.Float64("fleet_share", r.cfg.FleetShare),
+		slog.Int("baseline_completed", metrics.Baseline.CompletedTrips),
+		slog.Int("fleetflow_completed", metrics.FleetFlow.CompletedTrips),
+		slog.Float64("baseline_average_s", metrics.Baseline.AverageTripS),
+		slog.Float64("fleetflow_average_s", metrics.FleetFlow.AverageTripS),
+		slog.Int("fleetflow_route_changes", metrics.FleetFlow.RouteChanges),
+		slog.Int("fleetflow_unroutable", metrics.FleetFlow.UnroutableVehicles),
+		slog.Int("fleetflow_reports_failed", metrics.FleetFlow.ReportsFailed),
+	}
+
+	level := slog.LevelInfo
+	msg := "comparison run finished"
+
+	if t := r.traffic(); t != nil {
+		attrs = append(attrs,
+			slog.Int("api_route_calls", t.Routes),
+			slog.Int("api_report_calls", t.Reports),
+			slog.Int("api_route_failures", t.RouteFailures),
+			slog.Int("api_report_failures", t.ReportFailures),
+		)
+		// A run that sent nothing over the wire did not measure what it claims to
+		// measure, whatever its trip times say.
+		if t.Routes == 0 && t.Reports == 0 {
+			level = slog.LevelWarn
+			msg = "comparison run finished without sending any traffic through the api"
+		}
+	}
+
+	r.logger.LogAttrs(context.Background(), level, msg, attrs...)
+}
+
+// traffic returns the FleetFlow arm's call counts, or nil when the arm ran
+// in-process and there was no wire to count.
+func (r *run) traffic() *traffic {
+	if r.observed == nil {
+		return nil
+	}
+	t := r.observed.traffic()
+	return &t
 }
 
 // advance steps both arms once and publishes what they now report.
@@ -356,6 +457,15 @@ func (s *Server) handleSimStart(w http.ResponseWriter, r *http.Request) {
 	// claim until it is reset, so a second start is refused rather than silently
 	// discarding a comparison somebody is looking at.
 	if !s.claimRun() {
+		// Worth a line: a refused start looks identical to a broken one from the
+		// caller's side, and the useful fact -- that a run is already going, and
+		// which one -- is only known here.
+		if current := s.currentRun(); current != nil {
+			s.logger.WarnContext(r.Context(), "refused a second start: a run is already going",
+				slog.String("request_id", requestIDFrom(r.Context())),
+				slog.Int64("running_seed", current.cfg.Seed),
+				slog.Int("running_steps", current.steps))
+		}
 		writeError(w, r, errRunInProgress)
 		return
 	}
@@ -368,13 +478,15 @@ func (s *Server) handleSimStart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fleet := sim.FleetService(sim.NewEngineFleet(s.eng))
+	wire := false
 	if s.fleetService != nil {
 		// The client speaks HTTP, so the clock's weight refresh has to be handed
 		// to the engine the server itself routes with.
 		fleet = selfFleet{FleetService: s.fleetService(s.eng), eng: s.eng}
+		wire = true
 	}
 
-	live, err := newRun(s.graph, cfg, baseline, fleet, s.watched, s.streams.wake)
+	live, err := newRun(s.graph, cfg, baseline, fleet, wire, s.watched, s.streams.wake, s.logger)
 	if err != nil {
 		s.releaseRun()
 		writeError(w, r, err)
@@ -391,13 +503,38 @@ func (s *Server) handleSimStart(w http.ResponseWriter, r *http.Request) {
 
 	live.start()
 
+	// The line that says a run exists and what it was asked for. Everything the
+	// finished-run line reports is only interpretable against this one.
+	s.logger.InfoContext(r.Context(), "comparison run started",
+		slog.String("request_id", requestIDFrom(r.Context())),
+		slog.Int64("seed", cfg.Seed),
+		slog.Int("vehicles", cfg.Vehicles),
+		slog.Float64("fleet_share", cfg.FleetShare),
+		slog.Float64("step_s", cfg.StepS),
+		slog.Float64("window_s", cfg.WindowS),
+		slog.Bool("fleet_traffic_over_the_api", wire),
+		slog.Bool("demo", s.demo),
+	)
+
 	writeJSON(w, http.StatusAccepted, live.status())
 }
 
 // handleSimReset stops the run and clears it. It answers 204 whether or not one
 // was running, because "there is no run now" is true either way.
 func (s *Server) handleSimReset(w http.ResponseWriter, r *http.Request) {
+	// Read before stopping: stopRun clears the pointer, and the line is worth more
+	// with the run it names than without.
+	current := s.currentRun()
+
 	s.stopRun(r.Context())
+
+	if current != nil {
+		s.logger.InfoContext(r.Context(), "comparison run reset",
+			slog.String("request_id", requestIDFrom(r.Context())),
+			slog.Int64("seed", current.cfg.Seed),
+			slog.Int("steps", current.steps))
+	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
 

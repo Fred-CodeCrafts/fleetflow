@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -300,8 +302,8 @@ func TestRun_StepsBothArmsFromOneDemand(t *testing.T) {
 	g := testGraph(t)
 	cfg := quickRunConfig()
 
-	live, err := newRun(g, cfg, baselineEngine(t, g), sim.NewEngineFleet(newEngine(t, g)),
-		func() bool { return true }, make(chan struct{}))
+	live, err := newRun(g, cfg, baselineEngine(t, g), sim.NewEngineFleet(newEngine(t, g)), false,
+		func() bool { return true }, make(chan struct{}), slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatalf("newRun() = %v", err)
 	}
