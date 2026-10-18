@@ -8,7 +8,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -25,6 +25,7 @@ import (
 	driverpostgres "fleetflow/internal/driver/postgres"
 	"fleetflow/internal/engine"
 	"fleetflow/internal/graph"
+	"fleetflow/internal/logging"
 	"fleetflow/internal/run"
 	runmemory "fleetflow/internal/run/memory"
 	runpostgres "fleetflow/internal/run/postgres"
@@ -59,9 +60,9 @@ const simHTTPTimeout = 5 * time.Second
 // The plaintext goes to stdout and nowhere else. That one line is the only moment
 // the key exists in readable form — the store keeps only its digest — so it must
 // not pass through the logger.
-func issueAPIKey(dsn, name string) {
+func issueAPIKey(logger *slog.Logger, dsn, name string) {
 	if dsn == "" {
-		log.Fatal("issuing an API key needs a database: a key that vanishes at restart is worse than none")
+		fatal(logger, "issuing an API key needs a database: a key that vanishes at restart is worse than none")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), issueKeyTimeout)
@@ -69,20 +70,22 @@ func issueAPIKey(dsn, name string) {
 
 	pool, err := store.Open(ctx, dsn)
 	if err != nil {
-		log.Fatalf("database configured but unusable: %v", err)
+		fatal(logger, "database configured but unusable", slog.String("error", err.Error()))
 	}
 	defer pool.Close()
 
 	plaintext, record, err := auth.NewService(authpostgres.New(pool)).Issue(ctx, auth.IssueInput{Name: name})
 	if err != nil {
-		log.Fatalf("could not issue an api key: %v", err)
+		fatal(logger, "could not issue an api key", slog.String("error", err.Error()))
 	}
 
 	fmt.Println(plaintext)
-	log.Printf("issued api key %q (prefix %s, id %s)", record.Name, record.Prefix, record.ID)
+	logger.Info("issued api key",
+		slog.String("name", record.Name),
+		slog.String("prefix", record.Prefix),
+		slog.String("id", record.ID))
 }
 
-// seedKey registers a key the operator named in the environment in a memory
 // ephemeralKey mints the key the process's own simulator authenticates with, and
 // returns the plaintext alongside the record an Overlay holds.
 //
@@ -122,25 +125,42 @@ func main() {
 
 	cfg, err := config.Load(os.Getenv)
 	if err != nil {
-		log.Fatalf("invalid configuration: %v", err)
+		// Configuration is read before the logger is built, so this one line is
+		// written by the default logger: the level is one of the things that
+		// could not be read.
+		slog.Error("invalid configuration", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 
+	logger := logging.New(os.Stderr, logging.Options{
+		Level:  cfg.LogLevel,
+		Format: logging.FormatFor(cfg.Env),
+		Env:    cfg.Env,
+	})
+	slog.SetDefault(logger)
+
 	if *issueKeyName != "" {
-		issueAPIKey(cfg.DatabaseDSN, *issueKeyName)
+		issueAPIKey(logger, cfg.DatabaseDSN, *issueKeyName)
 		return
 	}
 
 	g, err := graph.LoadFromFile(cfg.GraphPath)
 	if err != nil {
-		log.Fatalf("failed to load graph from %s: %v", cfg.GraphPath, err)
+		fatal(logger, "failed to load graph",
+			slog.String("path", cfg.GraphPath), slog.String("error", err.Error()))
 	}
-	log.Printf("FleetFlow loaded %d nodes and %d edges from %s", len(g.Nodes), len(g.Edges), cfg.GraphPath)
+	logger.Info("loaded graph",
+		slog.String("path", cfg.GraphPath),
+		slog.Int("nodes", len(g.Nodes)),
+		slog.Int("edges", len(g.Edges)))
 
 	eng, err := engine.New(g, engine.NewDijkstraRouter(g), weights.DefaultParams())
 	if err != nil {
-		log.Fatalf("failed to build the routing engine: %v", err)
+		fatal(logger, "failed to build the routing engine", slog.String("error", err.Error()))
 	}
-	log.Printf("customizing weights every %s", eng.CustomizeEvery())
+	logger.Info("engine ready",
+		slog.String("customize_every", eng.CustomizeEvery().String()),
+		slog.String("graph", cfg.GraphPath))
 
 	// SIGINT and SIGTERM both mean "stop accepting work and drain".
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -157,6 +177,7 @@ func main() {
 	opts := []api.Option{
 		api.WithEngine(eng),
 		api.WithDemo(*demo),
+		api.WithLogger(logger),
 		api.WithStopFunc(func(context.Context) error {
 			stopCustomizer()
 			return nil
@@ -171,7 +192,7 @@ func main() {
 	if *demo {
 		plaintext, record, err := ephemeralKey()
 		if err != nil {
-			log.Fatalf("could not mint the simulator's key: %v", err)
+			fatal(logger, "could not mint the simulator's key", slog.String("error", err.Error()))
 		}
 		simKey, overlayKeys = plaintext, []auth.Key{record}
 	}
@@ -183,7 +204,7 @@ func main() {
 		// database going away after a healthy start.
 		pool, err := store.Open(ctx, cfg.DatabaseDSN)
 		if err != nil {
-			log.Fatalf("database configured but unusable: %v", err)
+			fatal(logger, "database configured but unusable", slog.String("error", err.Error()))
 		}
 		defer pool.Close()
 
@@ -202,7 +223,8 @@ func main() {
 			api.WithRuns(run.NewService(runpostgres.New(pool))),
 			api.WithAPIKeys(keys),
 		)
-		log.Printf("fleet records and api keys in postgres at %s", cfg.DatabaseAddr)
+		logger.Info("fleet records and api keys in postgres",
+			slog.String("database", cfg.DatabaseAddr))
 	} else {
 		// Without a database the record endpoints still serve, from memory. That
 		// is what lets the service run locally without Postgres, and it is said
@@ -218,7 +240,7 @@ func main() {
 			// working simulator and still cannot mint keys through the API.
 			api.WithAPIKeys(auth.NewService(auth.NewOverlay(keys, overlayKeys...))),
 		)
-		log.Print("no database configured: fleet records and api keys are in memory and will be lost on restart")
+		logger.Warn("no database configured: fleet records and api keys are in memory and will be lost on restart")
 	}
 
 	// With a minted key the simulation's fleet vehicles reach the routing engine
@@ -235,11 +257,24 @@ func main() {
 			}),
 			api.WithInternalKey(simKey),
 		)
-		log.Printf("a simulation run's fleet traffic goes through the public api at %s", base)
+		logger.Info("a simulation run's fleet traffic goes through the public api",
+			slog.String("base", base),
+			slog.String("key_id", "simulator"))
 	}
 
-	log.Printf("listening on %s (%s)", cfg.Addr, cfg.Env)
+	logger.Info("listening", slog.String("addr", cfg.Addr))
 	if err := api.NewServer(g, opts...).Run(ctx, cfg.Addr); err != nil {
-		log.Fatalf("server stopped: %v", err)
+		fatal(logger, "server stopped", slog.String("error", err.Error()))
 	}
+}
+
+// fatal logs at error level and exits non-zero.
+//
+// slog has no Fatal, deliberately: a library must not decide to end the process.
+// This program does decide, at startup, where a failure to load the graph or bind
+// the port is not something to carry on from — and it should still say why in the
+// same format as every other line, which is what os.Exit after the log gives.
+func fatal(logger *slog.Logger, msg string, attrs ...slog.Attr) {
+	logger.LogAttrs(context.Background(), slog.LevelError, msg, attrs...)
+	os.Exit(1)
 }
