@@ -200,12 +200,12 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   Done when: the public URL loads, a demo run completes, and fleet records survive a restart. Put the URL in the README. Record the Postgres hosting choice and cost.
 - [ ] 🟡 **T59** Add `fly.toml` and test a Fly preview deploy
   `build: add fly.io config for preview deploys`
-- [ ] 🔴 **T60** Tune parameters (alpha, beta, gamma, lambda, delta, hold, threshold) until the demo scenario shows a clear, honest difference
+- [x] 🔴 **T60** Tune parameters (alpha, beta, gamma, lambda, delta, hold, threshold) until the demo scenario shows a clear, honest difference
   `chore(weights): tune default parameters from experiments`
   Done when: results are recorded in `docs/results.md` with seeds, including any cases where FleetFlow does not win.
 - [x] 🟡 **T61** Add multi-seed batch script that prints mean and spread
   `feat(scripts): add multi-seed comparison script`
-- [ ] 🟡 **T62** Test several fleet shares (for example 25%, 50%, 100%)
+- [x] 🟡 **T62** Test several fleet shares (for example 25%, 50%, 100%)
   `docs: record results across fleet shares`
 - [ ] 🟡 **T63** Add `NOTICE` with attributions (OpenStreetMap data if used, libraries)
   `docs: add notice with third-party attributions`
