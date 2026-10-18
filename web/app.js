@@ -140,6 +140,7 @@ function redrawPanel(panel) {
   ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
   ctx.clearRect(0, 0, state.width, state.height);
   drawRoads(ctx, state);
+  drawVehicles(ctx, state);
 }
 
 // roadWidth is the free-flow width: a road with more lanes carries more and
@@ -171,6 +172,63 @@ function drawRoads(ctx, state) {
     ctx.moveTo(toX(from.lon), toY(from.lat));
     ctx.lineTo(toX(to.lon), toY(to.lat));
     ctx.stroke();
+  }
+}
+
+/* ---------- vehicle markers (T50, T52, T55) ---------- */
+
+// Marker colours. A fleet vehicle chooses its own route and is the subject of the
+// comparison, so it takes the primary cyan; background traffic is drawn dim; a
+// live vehicle is the one thing on the map that came from outside a run, so it
+// takes the palette's rogue violet and is always labelled.
+const VEHICLE_FLEET = '#00f3ff';
+const VEHICLE_BACKGROUND = '#849495';
+const VEHICLE_LIVE = '#a855f7';
+
+// VEHICLE_LABEL_MAX is the count up to which every marker is labelled. A run can
+// carry thousands of vehicles, and a label on each would be unreadable overlap;
+// past this many only live markers — which are few — keep their word, and the
+// legend names the rest.
+const VEHICLE_LABEL_MAX = 80;
+
+// drawVehicles draws this panel's vehicles: the ones of its own arm, plus every
+// live vehicle, which belongs to neither arm and so is drawn on both (T50).
+function drawVehicles(ctx, state) {
+  const { toX, toY } = state.projection;
+  const vehicles = state.vehicles || [];
+  const labelAll = vehicles.length <= VEHICLE_LABEL_MAX;
+
+  ctx.font = "9px 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace";
+  ctx.textBaseline = 'middle';
+
+  for (const vehicle of vehicles) {
+    const x = toX(vehicle.lon);
+    const y = toY(vehicle.lat);
+    if (!isFinite(x) || !isFinite(y)) continue;
+
+    const live = vehicle.kind === 'live';
+    const colour = live ? VEHICLE_LIVE : vehicle.fleet ? VEHICLE_FLEET : VEHICLE_BACKGROUND;
+    const radius = live ? 3 : vehicle.fleet ? 2.6 : 2;
+
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    if (live) {
+      // A live vehicle is a ring around a dark core, so it reads as a sighting
+      // rather than a solid fleet dot.
+      ctx.fillStyle = 'rgba(7, 9, 14, 0.85)';
+      ctx.fill();
+      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = colour;
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = colour;
+      ctx.fill();
+    }
+
+    if (live || labelAll) {
+      ctx.fillStyle = colour;
+      ctx.fillText(live ? 'live' : 'sim', x + radius + 3, y);
+    }
   }
 }
 
@@ -460,7 +518,26 @@ function openStream() {
     setStreamChip('Stream live', 'running');
   });
   stream.addEventListener('metrics', (event) => onStreamMessage(event, applyMetrics));
+  stream.addEventListener('vehicles', (event) => onStreamMessage(event, applyVehicles));
   stream.addEventListener('error', reconnectStream);
+}
+
+// applyVehicles distributes one positions frame across the panels (T50, T52).
+// A simulated vehicle goes to the panel of its arm and nowhere else, so each
+// panel shows its own arm over the same network. A live vehicle carries no arm
+// because it belongs to neither, and is drawn on both.
+function applyVehicles(frame) {
+  const vehicles = frame && Array.isArray(frame.vehicles) ? frame.vehicles : [];
+
+  for (const panel of panels) {
+    if (!panel.state) continue;
+    panel.state.vehicles = vehicles.filter(
+      (vehicle) => vehicle.arm === panel.arm || vehicle.arm === undefined || vehicle.arm === null
+    );
+    redrawPanel(panel);
+  }
+
+  setRunChip(frame && frame.running ? 'Running' : 'No run', frame && frame.running ? 'running' : 'idle');
 }
 
 // reconnectStream closes the failed source and schedules a reopen on a short

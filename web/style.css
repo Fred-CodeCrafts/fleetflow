@@ -338,6 +338,63 @@ body {
   color: var(--primary);
 }
 
+/* ---------- map legend ---------- */
+
+/* One shared strip for what the map's colours and markers mean, so a reader
+   never has to guess which panel is showing what. */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 1.25rem;
+  padding: 0.5rem 1.25rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-mono);
+  font-size: var(--label-size);
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+  color: var(--on-surface-dim);
+}
+
+.legend-note {
+  flex: 1 1 100%;
+  color: var(--outline-variant);
+}
+
+.legend-note code {
+  font-family: inherit;
+  color: var(--primary);
+}
+
+.swatch {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border: 1px solid currentColor;
+}
+
+.swatch-fleet {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.swatch-background {
+  background: #849495;
+  border-color: #849495;
+}
+
+.swatch-live {
+  background: transparent;
+  border: 2px solid var(--glitch);
+}
+
 /* ---------- comparison panels ---------- */
 
 .panels {
