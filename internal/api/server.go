@@ -22,6 +22,7 @@ import (
 	"fleetflow/internal/sim"
 	"fleetflow/internal/trip"
 	"fleetflow/internal/vehicle"
+	"fleetflow/web"
 )
 
 const (
@@ -273,6 +274,18 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/trips", s.public(s.handleListTrips))
 	s.mux.Handle("POST /api/trips", s.public(s.handleCreateTrip))
 	s.mux.Handle("POST /api/trips/{id}/status", s.public(s.handleSetTripStatus))
+
+	// The dashboard itself: the page, and its assets under one prefix. It is
+	// public for the same reason the endpoints it reads are — it is what a
+	// person opens, and everything it shows is already served to anyone who
+	// asks for it.
+	//
+	// The page pattern is exact and the assets sit under a subtree rather than
+	// using a catch-all "GET /", because a catch-all would also match
+	// GET /api/reports, which answers 405 today (only POST is registered there).
+	// The page must not turn a wrong method on a real endpoint into a 404.
+	s.mux.Handle("GET /{$}", s.public(web.Handler().ServeHTTP))
+	s.mux.Handle("GET /static/", s.public(web.Handler().ServeHTTP))
 }
 
 // public wraps a handler with what every public endpoint shares: the per-client

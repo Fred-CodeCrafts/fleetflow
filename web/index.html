@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FleetFlow · comparison dashboard</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header class="masthead">
+  <h1 class="wordmark">FleetFlow</h1>
+  <p class="subtitle">Dynamic routing &middot; baseline against fleetflow</p>
+  <p class="masthead-meta" id="graph-meta">Roads &mdash;</p>
+  <span class="chip" id="run-chip" data-state="idle">No run</span>
+</header>
+
+<section class="controls" aria-label="Simulation controls">
+  <label class="field">
+    <span class="field-label">Seed</span>
+    <span class="input-shell"><i>&gt;_</i><input id="seed" type="number" step="1" value="1" inputmode="numeric"></span>
+  </label>
+  <label class="field">
+    <span class="field-label">Vehicles</span>
+    <span class="input-shell"><i>&gt;_</i><input id="vehicles" type="number" step="10" min="0" max="5000" value="200" inputmode="numeric"></span>
+  </label>
+  <label class="field">
+    <span class="field-label">Fleet share</span>
+    <span class="input-shell"><i>&gt;_</i><input id="fleet-share" type="number" step="0.05" min="0" max="1" value="0.5"></span>
+  </label>
+  <button id="start" class="btn btn-primary" type="button">Start</button>
+  <button id="reset" class="btn btn-secondary" type="button">Reset</button>
+  <output id="control-result" class="result" role="status" data-kind="idle">&gt;_ Idle</output>
+</section>
+
+<section class="strip" aria-label="Comparison metrics">
+  <div class="cell">
+    <span class="cell-label">Average trip</span>
+    <span class="cell-values">
+      <span class="arm"><i class="tag">B</i><span data-metric="baseline.average_trip_s">&mdash;</span></span>
+      <span class="arm"><i class="tag">F</i><span data-metric="fleet_flow.average_trip_s">&mdash;</span></span>
+    </span>
+  </div>
+  <div class="cell">
+    <span class="cell-label">95th percentile</span>
+    <span class="cell-values">
+      <span class="arm"><i class="tag">B</i><span data-metric="baseline.p95_trip_s">&mdash;</span></span>
+      <span class="arm"><i class="tag">F</i><span data-metric="fleet_flow.p95_trip_s">&mdash;</span></span>
+    </span>
+  </div>
+  <div class="cell">
+    <span class="cell-label">Saturated roads</span>
+    <span class="cell-values">
+      <span class="arm"><i class="tag">B</i><span data-metric="baseline.saturated_edges_pct">&mdash;</span></span>
+      <span class="arm"><i class="tag">F</i><span data-metric="fleet_flow.saturated_edges_pct">&mdash;</span></span>
+    </span>
+  </div>
+  <div class="cell">
+    <span class="cell-label">Route changes</span>
+    <span class="cell-values">
+      <span class="arm"><i class="tag">B</i><span data-metric="baseline.route_changes">&mdash;</span></span>
+      <span class="arm"><i class="tag">F</i><span data-metric="fleet_flow.route_changes">&mdash;</span></span>
+    </span>
+  </div>
+  <div class="cell">
+    <span class="cell-label">Route query latency</span>
+    <span class="cell-values">
+      <span class="arm"><i class="tag">P50</i><span data-metric="engine.query_latency_ms.p50">&mdash;</span></span>
+      <span class="arm"><i class="tag">P99</i><span data-metric="engine.query_latency_ms.p99">&mdash;</span></span>
+    </span>
+  </div>
+  <div class="cell">
+    <span class="cell-label">Fleet / background trip</span>
+    <span class="cell-values">
+      <span class="arm"><i class="tag">B</i><span data-metric="baseline.fairness.mean_fleet_trip_s">&mdash;</span></span>
+      <span class="arm"><i class="tag">F</i><span data-metric="fleet_flow.fairness.mean_fleet_trip_s">&mdash;</span></span>
+    </span>
+  </div>
+  <p class="strip-note">
+    A road is saturated at or above its capacity, and capacity is lanes &times; length_m &divide; 7.5&nbsp;m
+    (vehicle plus gap), both taken from <code>GET /api/graph</code>. B is baseline, F is fleetflow.
+    Figures read <span data-metric="run">no run</span>.
+  </p>
+</section>
+
+<main class="panels">
+  <section class="panel" aria-labelledby="panel-baseline">
+    <header class="panel-head">
+      <h2 id="panel-baseline">Baseline</h2>
+      <span class="panel-note">Static weights</span>
+    </header>
+    <div class="panel-body">
+      <canvas id="canvas-baseline" class="map" role="img" aria-label="Baseline road network">The road network is drawn here; this browser cannot render a canvas.</canvas>
+    </div>
+  </section>
+  <section class="panel" aria-labelledby="panel-fleetflow">
+    <header class="panel-head">
+      <h2 id="panel-fleetflow">FleetFlow</h2>
+      <span class="panel-note">Dynamic weights</span>
+    </header>
+    <div class="panel-body">
+      <canvas id="canvas-fleetflow" class="map" role="img" aria-label="FleetFlow road network">The road network is drawn here; this browser cannot render a canvas.</canvas>
+    </div>
+  </section>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
