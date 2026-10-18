@@ -236,6 +236,27 @@
         <tbody id="trips-rows"></tbody>
       </table>
       <p class="pane-note" id="trips-note" role="status" data-kind="idle">&gt;_ Not read yet</p>
+
+      <form class="record-form" id="trip-form">
+        <h3 class="form-title">Add a trip</h3>
+        <label class="field">
+          <span class="field-label">Origin</span>
+          <span class="input-shell"><i>&gt;_</i><input id="trip-origin" name="origin" type="text" required autocomplete="off"></span>
+        </label>
+        <label class="field">
+          <span class="field-label">Destination</span>
+          <span class="input-shell"><i>&gt;_</i><input id="trip-destination" name="destination" type="text" required autocomplete="off"></span>
+        </label>
+        <label class="field">
+          <span class="field-label">Vehicle</span>
+          <span class="input-shell">
+            <select id="trip-vehicle" name="vehicle_id">
+              <option value="">none</option>
+            </select>
+          </span>
+        </label>
+        <button class="btn btn-primary" type="submit">Create trip</button>
+      </form>
     </div>
   </section>
 

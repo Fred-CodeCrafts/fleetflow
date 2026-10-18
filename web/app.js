@@ -533,6 +533,7 @@ async function refreshVehicles() {
     fleetState.vehicles = vehicles;
     fleetState.drivers = drivers;
     renderVehicles();
+    renderVehicleOptions();
     noteCount('vehicles', vehicles.length, 'vehicle');
   } catch (err) {
     failPane('vehicles', err);
@@ -595,10 +596,17 @@ const nextTripStatus = { planned: 'in_progress', in_progress: 'completed' };
 async function refreshTrips() {
   setPaneNote('trips', 'GET /api/trips \u2026', 'idle');
   try {
-    const trips = await readList('/api/trips', 'trips');
+    // The vehicles are read with the trips because the create form offers them
+    // and each row names the one carrying the trip.
+    const [trips, vehicles] = await Promise.all([
+      readList('/api/trips', 'trips'),
+      readList('/api/vehicles', 'vehicles'),
+    ]);
     delete fleetState.errors.trips;
     fleetState.trips = trips;
+    fleetState.vehicles = vehicles;
     renderTrips();
+    renderVehicleOptions();
     noteCount('trips', trips.length, 'trip');
   } catch (err) {
     failPane('trips', err);
@@ -631,8 +639,30 @@ function renderTrips() {
   }
 }
 
-// completedTrips keeps the trips that finished, in the order the API answered
-// them: history is a record of what happened, not a second sort of the same list.
+// renderVehicleOptions keeps the trip form's vehicle select in step with the
+// vehicle table: a select offering a vehicle that no longer exists is a create
+// that can only fail. The status travels in the option's text because a vehicle
+// on a trip cannot take another one, and the refusal is easier to read before
+// the request than after it.
+function renderVehicleOptions() {
+  const select = document.getElementById('trip-vehicle');
+  if (!select) return;
+
+  const chosen = select.value;
+  select.replaceChildren();
+  const none = el('option', null, 'none');
+  none.value = '';
+  select.appendChild(none);
+
+  for (const vehicle of fleetState.vehicles) {
+    const option = el('option', null, `${vehicle.name} (${vehicle.status})`);
+    option.value = vehicle.id;
+    if (vehicle.id === chosen) option.selected = true;
+    select.appendChild(option);
+  }
+}
+
+// completedTrips keeps the trips that finished, in the order the API answered// them: history is a record of what happened, not a second sort of the same list.
 function completedTrips(trips) {
   return trips.filter((trip) => trip.status === 'completed');
 }
@@ -811,10 +841,44 @@ async function createDriver(event) {
   }
 }
 
+async function createTrip(event) {
+  event.preventDefault();
+  const vehicleID = readField('trip-vehicle');
+  const body = {
+    origin: readField('trip-origin'),
+    destination: readField('trip-destination'),
+  };
+  // A blank vehicle is left out rather than sent empty: the field is optional in
+  // the contract, and a trip with no vehicle is planned but not yet assigned.
+  if (vehicleID !== '') body.vehicle_id = vehicleID;
+
+  setPaneNote('trips', 'POST /api/trips \u2026', 'idle');
+  try {
+    const res = await postJSON('/api/trips', body);
+    if (res.status !== 201) {
+      setPaneNote('trips', describeError(res), 'error');
+      return;
+    }
+    document.getElementById('trip-form').reset();
+    setPaneNote(
+      'trips',
+      `201 created ${res.body.origin} \u2192 ${res.body.destination} (${res.body.status})`,
+      'ok'
+    );
+    // Creating a trip on a vehicle moves that vehicle to on_trip, and a finished
+    // one frees it again, so the vehicle pane is read with the trips pane.
+    await refreshTrips();
+    await refreshVehicles();
+  } catch (err) {
+    setPaneNote('trips', `request failed: ${err.message}`, 'error');
+  }
+}
+
 function wireFleetForms() {
   const forms = [
     ['vehicle-form', createVehicle],
     ['driver-form', createDriver],
+    ['trip-form', createTrip],
   ];
   for (const [id, submit] of forms) {
     const form = document.getElementById(id);
