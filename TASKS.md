@@ -155,7 +155,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 - [x] 🔴 **T43** Add `GET /api/stream` (Server-Sent Events) for positions, congestion and metrics
   `feat(api): stream simulation state over sse`
   Done when: each vehicle is labeled simulated or live.
-- [ ] 🔴 **T44** Run simulation only while a stream client is connected
+- [x] 🔴 **T44** Run simulation only while a stream client is connected
   `feat(api): tie simulation loop to open stream`
   Done when: closing the browser tab stops the simulation (needed for default Cloud Run CPU behavior).
 - [ ] 🟡 **T45** Add API handler tests for bad input (including bad reports and bad keys)

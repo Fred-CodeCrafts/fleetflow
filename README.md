@@ -175,6 +175,11 @@ the edge it reported on. The report carries a speed rather than a coordinate, so
 that is the edge rather than a point — drawing a position the API never received
 would be worse than drawing the edge it did.
 
+A run advances only while somebody is watching the stream, so `start` followed by
+`stream` is the whole sequence; a run nobody is watching waits where it is rather
+than spending CPU on a demo nobody can see. That is what lets the deployed service
+keep Cloud Run's default CPU allocation, which is throttled outside a request.
+
 ## Deployment
 
 FleetFlow is containerized with a multi-stage Dockerfile and deployed to **Google Cloud Run** with `max-instances=1` and `min-instances=1`.

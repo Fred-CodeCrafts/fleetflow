@@ -17,17 +17,17 @@ type sseEvent struct {
 	Data  map[string]any
 }
 
-// openStream connects to the event stream and returns a reader over it. The
-// connection is closed when the test ends, so a test that fails part way through
-// does not leave a stream open.
-func openStream(t *testing.T, s *Server) *bufio.Reader {
+// openStream connects to the event stream and returns a reader over it, plus a
+// function that closes it early. The connection is also closed when the test ends,
+// so a test that fails part way through does not leave a stream open.
+func openStream(t *testing.T, s *Server) (*bufio.Reader, context.CancelFunc) {
 	t.Helper()
 
 	ts := httptest.NewServer(s)
 	t.Cleanup(ts.Close)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	t.Cleanup(func() { cancel() })
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ts.URL+"/api/stream", nil)
 	if err != nil {
@@ -45,7 +45,26 @@ func openStream(t *testing.T, s *Server) *bufio.Reader {
 	if got := resp.Header.Get("Content-Type"); got != "text/event-stream" {
 		t.Errorf("Content-Type = %q, want text/event-stream", got)
 	}
-	return bufio.NewReader(resp.Body)
+	return bufio.NewReader(resp.Body), cancel
+}
+
+// waitForMovement reads vehicle frames until the run's clock has moved, which is
+// what a viewer sees while a run is going.
+func waitForMovement(t *testing.T, r *bufio.Reader) float64 {
+	t.Helper()
+
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		event, ok := readEvent(t, r, "vehicles")
+		if !ok {
+			t.Fatal("the stream ended before the run moved")
+		}
+		if now, _ := event.Data["now_s"].(float64); now > 0 {
+			return now
+		}
+	}
+	t.Fatal("the run never moved while a client was watching")
+	return 0
 }
 
 // readEvent reads events until it finds one named want, or the stream ends. It
@@ -122,7 +141,7 @@ func vehiclesOf(t *testing.T, r *bufio.Reader) []map[string]any {
 
 func TestStream_OpensWithEveryEventKind(t *testing.T) {
 	s := simServer(t)
-	r := openStream(t, s)
+	r, _ := openStream(t, s)
 
 	// A client that has just connected is given the whole picture at once, rather
 	// than having to wait an interval for each part of it.
@@ -161,7 +180,7 @@ func TestStream_LabelsEveryVehicleSimulatedOrLive(t *testing.T) {
 	s := simServer(t)
 	postJSON(t, s, "/api/sim/start", `{"seed":4,"vehicles":6,"fleet_share":0.5,"window_s":600}`)
 
-	r := openStream(t, s)
+	r, _ := openStream(t, s)
 
 	// Every simulated vehicle carries the arm it belongs to and the label that
 	// says it is simulated. Both arms are streamed, because both panels are drawn.
@@ -225,7 +244,7 @@ func TestStream_LabelsEveryVehicleSimulatedOrLive(t *testing.T) {
 func TestStream_CountsItsOpenClients(t *testing.T) {
 	s := simServer(t)
 	before := s.streams.count()
-	r := openStream(t, s)
+	r, _ := openStream(t, s)
 
 	// Read one event so the connection is certainly established and counted.
 	if _, ok := nextEvent(t, r); !ok {
@@ -233,6 +252,32 @@ func TestStream_CountsItsOpenClients(t *testing.T) {
 	}
 	if got := s.streams.count(); got != before+1 {
 		t.Errorf("streams = %d with one client connected, want %d", got, before+1)
+	}
+}
+
+// T44's own claim, over a real connection: closing the browser tab stops the
+// simulation. The run is paused rather than discarded, so opening the page again
+// picks up where it was instead of starting over.
+func TestRun_StopsWhenTheLastViewerLeaves(t *testing.T) {
+	s := simServer(t)
+	postJSON(t, s, "/api/sim/start", `{"seed":3,"vehicles":4,"window_s":0,"step_s":1}`)
+
+	r, close := openStream(t, s)
+	if now := waitForMovement(t, r); now <= 0 {
+		t.Fatalf("the run moved to %v, want it to have moved while watched", now)
+	}
+
+	close()
+
+	// The clock may already be inside a step when the viewer leaves, so it is
+	// allowed to finish that one. What it must not do is keep going.
+	time.Sleep(4 * tickInterval)
+	before := s.currentRun().snapshot().NowS
+	time.Sleep(6 * tickInterval)
+	after := s.currentRun().snapshot().NowS
+
+	if after != before {
+		t.Errorf("NowS went from %v to %v with nobody watching", before, after)
 	}
 }
 

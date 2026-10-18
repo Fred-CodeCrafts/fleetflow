@@ -113,16 +113,40 @@ type streamEdgesFrame struct {
 // tab closed.
 type streamClients struct {
 	n atomic.Int64
+	// wake carries one pending notification whenever the count changes, so a
+	// paused run can wait to be watched instead of polling for it.
+	wake chan struct{}
+}
+
+// newStreamClients returns a counter ready to be used. The channel is buffered by
+// one and drained by at most one waiter, so a notification that arrives while a
+// run is between checks is not lost, and none of them can block.
+func newStreamClients() *streamClients {
+	return &streamClients{wake: make(chan struct{}, 1)}
 }
 
 // add records a new stream.
-func (c *streamClients) add() { c.n.Add(1) }
+func (c *streamClients) add() {
+	c.n.Add(1)
+	c.notify()
+}
 
 // remove records a stream that has ended.
-func (c *streamClients) remove() { c.n.Add(-1) }
+func (c *streamClients) remove() {
+	c.n.Add(-1)
+	c.notify()
+}
 
 // count reports how many streams are open.
 func (c *streamClients) count() int64 { return c.n.Load() }
+
+// notify wakes anything waiting on a change, without blocking when nothing is.
+func (c *streamClients) notify() {
+	select {
+	case c.wake <- struct{}{}:
+	default:
+	}
+}
 
 // stream wraps the event stream: it takes the public rate limit but deliberately
 // not the request deadline every other endpoint gets. A response that is meant to
@@ -131,6 +155,10 @@ func (c *streamClients) count() int64 { return c.n.Load() }
 func (s *Server) stream(h http.HandlerFunc) http.Handler {
 	return s.rateLimited(h)
 }
+
+// watched reports whether anybody is watching the run. It is what the clock asks
+// before it spends a step (T44).
+func (s *Server) watched() bool { return s.streams.count() > 0 }
 
 // handleStream serves GET /api/stream: vehicle positions, edge congestion and
 // metrics, as Server-Sent Events, until the client goes away.

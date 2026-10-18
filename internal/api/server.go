@@ -110,7 +110,7 @@ type Server struct {
 	live *liveVehicles
 	// streams counts the clients holding the event stream open, so a run can be
 	// tied to somebody watching it (T44).
-	streams  streamClients
+	streams  *streamClients
 	dbCheck  func(context.Context) error
 	stoppers []StopFunc
 }
@@ -210,6 +210,7 @@ func NewServer(g *graph.Graph, opts ...Option) *Server {
 		logger:  slog.Default(),
 		limiter: newRateLimiter(ratePerSecond, rateBurst),
 		live:    newLiveVehicles(liveVehicleTTL, maxLiveVehicles),
+		streams: newStreamClients(),
 	}
 	for _, opt := range opts {
 		opt(s)

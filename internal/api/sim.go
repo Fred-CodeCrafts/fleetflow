@@ -128,6 +128,13 @@ type run struct {
 	done     chan struct{}
 	stopOnce sync.Once
 
+	// watched reports whether anybody is watching, and wake is signalled whenever
+	// that changes. The clock pauses while nobody is, so a run costs nothing with
+	// the browser tab closed -- which is what makes this work with Cloud Run's
+	// default CPU allocation, where CPU outside a request is throttled (T44).
+	watched func() bool
+	wake    <-chan struct{}
+
 	// mu guards latest, which the clock publishes after every step. Readers take
 	// a whole snapshot, so they never wait on the simulation's own work, and they
 	// never touch a vehicle while the clock is moving it.
@@ -138,8 +145,9 @@ type run struct {
 
 // newRun builds both arms over the same seeded demand. The baseline arm routes on
 // the static engine in-process; the FleetFlow arm uses the service it is given,
-// which production points at the server's own public API.
-func newRun(g *graph.Graph, cfg sim.Config, baseline *engine.Engine, fleet sim.FleetService) (*run, error) {
+// which production points at the server's own public API. watched reports whether
+// anybody is watching, and wake is told whenever that changes.
+func newRun(g *graph.Graph, cfg sim.Config, baseline *engine.Engine, fleet sim.FleetService, watched func() bool, wake <-chan struct{}) (*run, error) {
 	baselineArm, err := sim.New(g, cfg)
 	if err != nil {
 		return nil, err
@@ -159,6 +167,8 @@ func newRun(g *graph.Graph, cfg sim.Config, baseline *engine.Engine, fleet sim.F
 		fleetflow: fleetArm,
 		stop:      make(chan struct{}),
 		done:      make(chan struct{}),
+		watched:   watched,
+		wake:      wake,
 	}
 	// A run reports its demand from the moment it starts, so a dashboard that
 	// asks before the first tick sees the run it started rather than zeros.
@@ -169,8 +179,10 @@ func newRun(g *graph.Graph, cfg sim.Config, baseline *engine.Engine, fleet sim.F
 // start sets the clock going and returns at once.
 func (r *run) start() { go r.clock() }
 
-// clock advances the run every tick until it is reset, both arms have settled,
-// or the step budget runs out.
+// clock advances the run every tick until it is reset, both arms have settled, or
+// the step budget runs out. It also waits while nobody is watching: Cloud Run
+// throttles CPU outside a request, and a run nobody can see is work spent for
+// nothing (T44).
 func (r *run) clock() {
 	defer close(r.done)
 
@@ -182,6 +194,18 @@ func (r *run) clock() {
 		case <-r.stop:
 			return
 		case <-ticker.C:
+		}
+
+		if !r.watched() {
+			// Wait for somebody to look rather than spin over ticks. A viewer that
+			// arrived between the check and this wait would have signalled already,
+			// so the wait cannot outlast one that is there.
+			select {
+			case <-r.stop:
+				return
+			case <-r.wake:
+			}
+			continue
 		}
 
 		r.advance()
@@ -334,7 +358,7 @@ func (s *Server) handleSimStart(w http.ResponseWriter, r *http.Request) {
 		fleet = selfFleet{FleetService: s.fleetService(s.eng), eng: s.eng}
 	}
 
-	live, err := newRun(s.graph, cfg, baseline, fleet)
+	live, err := newRun(s.graph, cfg, baseline, fleet, s.watched, s.streams.wake)
 	if err != nil {
 		writeError(w, r, err)
 		return

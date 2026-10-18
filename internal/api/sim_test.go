@@ -202,7 +202,8 @@ func TestRun_StepsBothArmsFromOneDemand(t *testing.T) {
 	g := testGraph(t)
 	cfg := quickRunConfig()
 
-	live, err := newRun(g, cfg, baselineEngine(t, g), sim.NewEngineFleet(newEngine(t, g)))
+	live, err := newRun(g, cfg, baselineEngine(t, g), sim.NewEngineFleet(newEngine(t, g)),
+		func() bool { return true }, make(chan struct{}))
 	if err != nil {
 		t.Fatalf("newRun() = %v", err)
 	}
@@ -235,7 +236,8 @@ type plainFleet struct{ sim.FleetService }
 // TestSimStart_RefreshesWeightsForAnOutOfProcessFleetService covers the one thing
 // a fleet service over the wire cannot do for itself. Without the refresh a run
 // whose traffic goes through the API would route on a single snapshot from start
-// to finish.
+// to finish. The stream is the reason the run moves at all (T44), so a viewer
+// holds one open.
 func TestSimStart_RefreshesWeightsForAnOutOfProcessFleetService(t *testing.T) {
 	g := testGraph(t)
 	eng := newEngine(t, g)
@@ -250,6 +252,7 @@ func TestSimStart_RefreshesWeightsForAnOutOfProcessFleetService(t *testing.T) {
 
 	before := eng.ActiveMetric().Version()
 	postJSON(t, s, "/api/sim/start", `{"vehicles":8,"fleet_share":1,"window_s":0,"step_s":1}`)
+	openStream(t, s)
 
 	deadline := time.Now().Add(20 * time.Second)
 	for time.Now().Before(deadline) {
@@ -262,11 +265,13 @@ func TestSimStart_RefreshesWeightsForAnOutOfProcessFleetService(t *testing.T) {
 	t.Errorf("metric version stayed at %d: the run's clock never refreshed the weights", before)
 }
 
-// TestSimStart_AdvancesOnItsOwnClock checks the goroutine the endpoints rely on:
-// a run started over HTTP makes progress without anyone stepping it.
-func TestSimStart_AdvancesOnItsOwnClock(t *testing.T) {
+// TestSimStart_AdvancesWhileWatched checks the goroutine the endpoints rely on: a
+// run started over HTTP makes progress without anyone stepping it, as long as a
+// stream client is holding it open (T44).
+func TestSimStart_AdvancesWhileWatched(t *testing.T) {
 	s := simServer(t)
 	postJSON(t, s, "/api/sim/start", `{"seed":3,"vehicles":4,"window_s":0,"step_s":1}`)
+	openStream(t, s)
 
 	deadline := time.Now().Add(20 * time.Second)
 	for time.Now().Before(deadline) {
@@ -283,4 +288,25 @@ func TestSimStart_AdvancesOnItsOwnClock(t *testing.T) {
 	}
 
 	t.Fatal("the run's clock completed no trips within the deadline")
+}
+
+// TestSimStart_DoesNotMoveWithNobodyWatching is the other half of T44: with the
+// browser tab closed there is no viewer, and Cloud Run throttles CPU outside a
+// request, so a run that kept stepping would be invisible work at somebody else's
+// expense.
+func TestSimStart_DoesNotMoveWithNobodyWatching(t *testing.T) {
+	s := simServer(t)
+	postJSON(t, s, "/api/sim/start", `{"seed":3,"vehicles":4,"window_s":0,"step_s":1}`)
+
+	// Many ticks' worth of wall time, and the run must not have spent one step of
+	// it.
+	time.Sleep(20 * tickInterval)
+
+	live := s.currentRun()
+	if live == nil {
+		t.Fatal("the run vanished before it was watched")
+	}
+	if now := live.snapshot().NowS; now != 0 {
+		t.Errorf("NowS = %v after nobody watched it, want the clock untouched at 0", now)
+	}
 }
