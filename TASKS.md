@@ -101,7 +101,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   `feat(sim): add rerouting with hysteresis`
 - [x] 🔴 **T34** Add trip metrics (average, p95, route changes, saturated edges, utilization std dev)
   `feat(sim): collect trip and congestion metrics`
-- [ ] 🟡 **T34a** Add time lost versus free-flow time and fleet vs. background trip times (US-6 fairness check)
+- [x] 🟡 **T34a** Add time lost versus free-flow time and fleet vs. background trip times (US-6 fairness check)
   `feat(sim): add time lost and fairness metrics`
   Done when: both numbers reach the metrics endpoint and are labelled as a fairness check, not a headline result.
 - [x] 🔴 **T35** Run baseline and FleetFlow on the same seed in tests
@@ -147,7 +147,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   Done when: the simulator's fleet service is an HTTP client against `/api/reports` and `/api/route`, so simulated traffic takes the same validated path as an external client, and a seeded run stays deterministic (reports are sent synchronously). Needs T37 and T40.
 - [x] 🔴 **T41** Add `POST /api/sim/start` and `POST /api/sim/reset`
   `feat(api): add simulation control endpoints`
-- [ ] 🔴 **T42** Add `GET /api/metrics`
+- [x] 🔴 **T42** Add `GET /api/metrics`
   `feat(api): add metrics endpoint`
 - [ ] 🔴 **T42a** Measure and report route query latency (p50, p99) (US-6)
   `feat(engine): measure route query latency`
