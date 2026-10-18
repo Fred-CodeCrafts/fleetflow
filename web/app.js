@@ -555,6 +555,9 @@ async function refreshDrivers() {
     delete fleetState.errors.drivers;
     fleetState.drivers = drivers;
     renderDrivers();
+    // The vehicles table names every driver in each row's assignment select, so
+    // the driver list is not a private matter of the drivers pane.
+    renderVehicles();
     noteCount('drivers', drivers.length, 'driver');
   } catch (err) {
     failPane('drivers', err);
@@ -760,21 +763,53 @@ function renderVehicles() {
   if (!tbody) return;
 
   if (fleetState.errors.vehicles) {
-    emptyRow(tbody, 4, fleetState.errors.vehicles);
+    emptyRow(tbody, 6, fleetState.errors.vehicles);
     return;
   }
   if (fleetState.vehicles.length === 0) {
-    emptyRow(tbody, 4, 'No vehicles yet.');
+    emptyRow(tbody, 6, 'No vehicles yet.');
     return;
   }
 
   tbody.replaceChildren();
   for (const vehicle of fleetState.vehicles) {
+    const assigned = driverOnVehicle(vehicle.id);
     const row = el('tr');
+
     row.appendChild(el('td', 'mono', vehicle.id));
     row.appendChild(el('td', null, vehicle.name));
     row.appendChild(el('td', null, textOf(vehicle.type)));
     row.appendChild(el('td', 'mono', vehicle.status));
+    row.appendChild(el('td', null, assigned ? assigned.name : '\u2014'));
+
+    // The assignment is made from the vehicle's own row: the endpoint is
+    // addressed by vehicle, so this is the table the change belongs to.
+    const cell = el('td', 'assign');
+    const select = el('select');
+    select.setAttribute('aria-label', `Driver for ${vehicle.name}`);
+    const placeholder = el('option', null, 'select a driver');
+    placeholder.value = '';
+    select.appendChild(placeholder);
+    for (const driver of fleetState.drivers) {
+      const option = el('option', null, driver.name);
+      option.value = driver.id;
+      if (assigned && assigned.id === driver.id) option.selected = true;
+      select.appendChild(option);
+    }
+
+    const assign = el('button', 'btn btn-secondary btn-small', 'Assign');
+    assign.type = 'button';
+    assign.addEventListener('click', () => assignDriver(vehicle.id, select.value));
+
+    // Unassign is disabled when there is nobody on the vehicle: a button that
+    // can only be answered with "already unassigned" is better shown as spent.
+    const unassign = el('button', 'btn btn-secondary btn-small', 'Unassign');
+    unassign.type = 'button';
+    unassign.disabled = !assigned;
+    unassign.addEventListener('click', () => assignDriver(vehicle.id, ''));
+
+    cell.append(select, assign, unassign);
+    row.appendChild(cell);
     tbody.appendChild(row);
   }
 }
@@ -812,11 +847,13 @@ async function createVehicle(event) {
       return;
     }
     document.getElementById('vehicle-form').reset();
-    setPaneNote('vehicles', `201 created ${res.body.name} (${res.body.id})`, 'ok');
     // The trip form's vehicle select and the trips table both name vehicles, so
-    // a new one changes more than the table it was created in.
+    // a new one changes more than the table it was created in. The confirmation
+    // is said after the re-read, because a refresh writes its own count into the
+    // same line.
     await refreshVehicles();
     await refreshTrips();
+    setPaneNote('vehicles', `201 created ${res.body.name} (${res.body.id})`, 'ok');
   } catch (err) {
     setPaneNote('vehicles', `request failed: ${err.message}`, 'error');
   }
@@ -834,8 +871,8 @@ async function createDriver(event) {
       return;
     }
     document.getElementById('driver-form').reset();
-    setPaneNote('drivers', `201 created ${res.body.name} (${res.body.id})`, 'ok');
     await refreshDrivers();
+    setPaneNote('drivers', `201 created ${res.body.name} (${res.body.id})`, 'ok');
   } catch (err) {
     setPaneNote('drivers', `request failed: ${err.message}`, 'error');
   }
@@ -871,6 +908,31 @@ async function createTrip(event) {
     await refreshVehicles();
   } catch (err) {
     setPaneNote('trips', `request failed: ${err.message}`, 'error');
+  }
+}
+
+// assignDriver puts driverID on vehicleID, or takes the vehicle's driver off when
+// driverID is blank: the endpoint is addressed by vehicle, so "whichever driver
+// is there" is exactly what a blank id says.
+async function assignDriver(vehicleID, driverID) {
+  setPaneNote('vehicles', `POST /api/vehicles/${vehicleID}/driver \u2026`, 'idle');
+  try {
+    const res = await postJSON(`/api/vehicles/${encodeURIComponent(vehicleID)}/driver`, {
+      driver_id: driverID,
+    });
+    if (res.status !== 200) {
+      setPaneNote('vehicles', describeError(res), 'error');
+      return;
+    }
+    const who = res.body && res.body.driver ? res.body.driver.name : 'nobody';
+    // An assignment shows on both sides of it: the vehicle's row and the
+    // driver's, so both are read again. The confirmation is said after the
+    // re-read, because a refresh writes its own count into the same line.
+    await refreshVehicles();
+    await refreshDrivers();
+    setPaneNote('vehicles', `200 ${res.body.vehicle_id} now holds ${who}`, 'ok');
+  } catch (err) {
+    setPaneNote('vehicles', `request failed: ${err.message}`, 'error');
   }
 }
 
