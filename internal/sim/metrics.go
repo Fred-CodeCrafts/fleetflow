@@ -16,6 +16,12 @@ type Metrics struct {
 	RouteChanges           int
 	RouteChangesPerVehicle float64
 	UnroutableVehicles     int
+	// ReportsFailed is how many reports this arm's fleet service refused. One
+	// dropped report only makes the weights slightly stale; a run of them means
+	// the arm is not being told about its own traffic at all. On the HTTP path
+	// that is what a stopped server or a rejected key looks like, and without
+	// this figure it would be read as a run with nothing to report.
+	ReportsFailed int
 
 	SaturatedEdges    int
 	SaturatedEdgesPct float64
@@ -95,6 +101,7 @@ func (s *Sim) Collect() Metrics {
 			m.UnroutableVehicles++
 		}
 	}
+	m.ReportsFailed = s.reportFailures
 	if len(s.vehicles) > 0 {
 		m.RouteChangesPerVehicle = float64(m.RouteChanges) / float64(len(s.vehicles))
 	}

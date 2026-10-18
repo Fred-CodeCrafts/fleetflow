@@ -136,6 +136,12 @@ type Sim struct {
 	// simulation clock, so the simulation can drive that refresh.
 	customizer     FleetCustomizer
 	lastCustomizeS float64
+
+	// reportFailures counts reports the fleet service refused. A single dropped
+	// report costs one observation and the run carries on, but a run whose arm
+	// can never report has no dynamic weights at all, and without a count it
+	// looks exactly like a run with nothing to report.
+	reportFailures int
 }
 
 // New builds a simulation whose vehicles start pending. They step onto the
@@ -352,8 +358,9 @@ func (s *Sim) reroute(v *Vehicle) {
 }
 
 // reportSpeeds lets every running fleet vehicle tell the service how fast it is
-// going on the edge it occupies. Report failures are ignored: a dropped report
-// only makes the weights slightly stale.
+// going on the edge it occupies. A refused report does not stop the run -- the
+// weights only go stale -- but it is counted, because "one report was dropped"
+// and "this arm cannot report at all" are otherwise the same picture.
 func (s *Sim) reportSpeeds() {
 	if s.fleet == nil {
 		return
@@ -370,7 +377,9 @@ func (s *Sim) reportSpeeds() {
 		}
 		edge := s.g.Edges[edgeIndex]
 		speed := EdgeSpeed(edge.SpeedLimitMPS, edge.Capacity, s.occ.Count(edgeIndex))
-		_ = s.fleet.Report(v.ID(), edge.ID, speed, now)
+		if err := s.fleet.Report(v.ID(), edge.ID, speed, now); err != nil {
+			s.reportFailures++
+		}
 	}
 }
 

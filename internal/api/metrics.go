@@ -69,6 +69,11 @@ type armMetrics struct {
 	// UnroutableVehicles counts vehicles that never found a path. It should stay
 	// zero; anything else means a route request failed.
 	UnroutableVehicles int `json:"unroutable_vehicles"`
+	// ReportsFailed counts reports this arm's fleet service refused. It should
+	// stay zero: anything else means the arm has been routing on weights its own
+	// traffic never reached, and a comparison read without it could call that
+	// "no difference between the arms".
+	ReportsFailed int `json:"reports_failed"`
 
 	// An edge is saturated when it carries at least its capacity in vehicles.
 	// The percentage is over the whole graph, and both figures are derived from
@@ -106,6 +111,7 @@ func metricsOf(m sim.Metrics) armMetrics {
 		RouteChanges:           m.RouteChanges,
 		RouteChangesPerVehicle: m.RouteChangesPerVehicle,
 		UnroutableVehicles:     m.UnroutableVehicles,
+		ReportsFailed:          m.ReportsFailed,
 		SaturatedEdges:         m.SaturatedEdges,
 		SaturatedEdgesPct:      m.SaturatedEdgesPct,
 		UtilizationStdDev:      m.UtilizationStdDev,
