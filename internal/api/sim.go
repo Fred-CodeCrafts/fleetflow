@@ -154,6 +154,12 @@ func newRun(g *graph.Graph, cfg sim.Config, baseline *engine.Engine, fleet sim.F
 		fleetflow: fleetArm,
 		stop:      make(chan struct{}),
 		done:      make(chan struct{}),
+		// A run reports its demand from the moment it starts, so a dashboard that
+		// asks before the first tick sees the run it started rather than zeros.
+		latest: sim.Comparison{
+			Baseline:  baselineArm.Collect(),
+			FleetFlow: fleetArm.Collect(),
+		},
 	}, nil
 }
 
@@ -219,6 +225,28 @@ func (r *run) snapshot() sim.Comparison {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.latest
+}
+
+// metrics describes the run and both of its arms for the metrics endpoint.
+func (r *run) metrics() *runMetrics {
+	snapshot := r.snapshot()
+
+	return &runMetrics{
+		Seed:       r.cfg.Seed,
+		Vehicles:   r.cfg.Vehicles,
+		FleetShare: r.cfg.FleetShare,
+		StepS:      r.cfg.StepS,
+		WindowS:    r.cfg.WindowS,
+		Baseline:   metricsOf(snapshot.Baseline),
+		FleetFlow:  metricsOf(snapshot.FleetFlow),
+	}
+}
+
+// currentRun returns the live run, or nil when none is going.
+func (s *Server) currentRun() *run {
+	s.runMu.Lock()
+	defer s.runMu.Unlock()
+	return s.run
 }
 
 // status describes the run for the start response.

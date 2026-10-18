@@ -240,6 +240,10 @@ func (s *Server) routes() {
 	s.mux.Handle("POST /api/sim/start", s.public(s.handleSimStart))
 	s.mux.Handle("POST /api/sim/reset", s.public(s.handleSimReset))
 
+	// The metrics the dashboard's strip reads. Public for the same reason: it is
+	// read by a browser, and it discloses no more than the panels already show.
+	s.mux.Handle("GET /api/metrics", s.public(s.handleMetrics))
+
 	// Fleet records (DESIGN 3.5). These are the endpoints that touch PostgreSQL;
 	// the two above never do.
 	s.mux.Handle("GET /api/vehicles", s.public(s.handleListVehicles))
