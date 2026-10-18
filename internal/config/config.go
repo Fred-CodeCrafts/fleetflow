@@ -43,6 +43,11 @@ type Config struct {
 	// DatabaseAddr is the host:port used for readiness checks, or "" when no
 	// database is configured.
 	DatabaseAddr string
+	// SimAPIKey is the key the process presents for its own simulated traffic, or
+	// "" when none is set. With a key the FleetFlow arm of a simulation run
+	// reaches the routing engine over the public API, as an external client does
+	// (PRD US-7); without one it calls the engine in-process.
+	SimAPIKey string
 }
 
 // Load reads configuration from getenv (normally os.Getenv) and validates it.
@@ -55,6 +60,7 @@ func Load(getenv func(string) string) (Config, error) {
 	cfg := Config{
 		Env:       valueOr(getenv, "ENV", EnvDevelopment),
 		GraphPath: valueOr(getenv, "GRAPH_PATH", DefaultGraphPath),
+		SimAPIKey: strings.TrimSpace(getenv("SIM_API_KEY")),
 	}
 
 	port := valueOr(getenv, "PORT", strconv.Itoa(DefaultPort))

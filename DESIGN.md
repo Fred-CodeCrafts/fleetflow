@@ -169,12 +169,12 @@ v_edge = v_free / (1 + 0.15 * (N / capacity)^4)
   - **Fleet vehicles** (a configurable share, the fleet share): request routes and send speed reports through the public API (`POST /api/route`, `POST /api/reports`), so they behave exactly like an external client. Reports are sent synchronously, one call per step, which keeps a seeded run deterministic.
   - **Background vehicles:** use static free-flow routes and never contact the API, but add to congestion.
 - **Test seam:** `internal/sim` depends on a small `FleetService` interface. Production wires it to an HTTP client against the server's own base URL; tests inject the engine directly or a fake, so the simulator's logic is exercised without a network.
-- **Run clock:** simulated time belongs to the server's run loop, which advances the simulator, refreshes the weights every `delta`, and stops when no client holds an open stream.
+- **Run clock:** simulated time belongs to the server's run loop, which advances both arms a step at a time and stops when the run is reset, when both arms have settled, or when the server shuts down. A client that reaches the engine over HTTP cannot refresh the weights itself, so the run loop does it on the same simulated clock the in-process arm uses, through the engine the API serves from.
 - **Rerouting policy:** a fleet vehicle requests a route at departure and then every `K` simulated seconds. It switches only if the new route is cheaper by more than a threshold (default 10%), which is the hysteresis that limits oscillation.
 - **Determinism:** one seeded random source per run. Same seed gives the same demand.
 
 ### 3.5 HTTP API (`internal/api` + entity handlers)
-Plain `net/http`. JSON in and out. `POST /api/reports` and `POST /api/route` require a valid API key, presented as `Authorization: Bearer <key>` (missing or wrong key returns 401 and does nothing). Hot path stays in memory and out of the database: reports write to the weight store only, route queries read the engine snapshot only.
+Plain `net/http`. JSON in and out. `POST /api/reports` and `POST /api/route` require a valid API key, presented as `Authorization: Bearer <key>` (missing or wrong key returns 401 and does nothing). The controls and the record endpoints are open, because they belong to the dashboard. Hot path stays in memory and out of the database: reports write to the weight store only, route queries read the engine snapshot only.
 
 | Method and path | Purpose |
 |---|---|
@@ -182,8 +182,8 @@ Plain `net/http`. JSON in and out. `POST /api/reports` and `POST /api/route` req
 | `POST /api/route` | `{from_node, to_node}` returns `{edges, cost_s, metric_version}`. An optional `current_edges` list names the path the caller already holds from `from_node` on; the response then also carries `current_cost_s`, priced on the same snapshot, so a vehicle can compare the route it is driving against the plan and decide whether to switch |
 | `GET /api/metrics` | Current counters and comparison metrics |
 | `GET /api/stream` | Server-Sent Events: vehicle positions, edge congestion, metrics (each vehicle labeled simulated or live) |
-| `POST /api/sim/start` | Start a run with `{seed, vehicles, fleet_share, delta, params...}` |
-| `POST /api/sim/reset` | Stop and clear the run |
+| `POST /api/sim/start` | Start a comparison run: `{seed, vehicles, fleet_share, step_s, window_s, reroute_every_s, reroute_threshold}`, every field optional and defaulted, answered `202` with the run now going. One clock drives the same seeded demand through both engines |
+| `POST /api/sim/reset` | Stop and clear the run, answered `204` whether or not one was running |
 | `GET /api/vehicles`, `POST /api/vehicles` | List and create vehicles `{name/plate, type, status}` with validation |
 | `GET /api/drivers`, `POST /api/drivers` | List and create drivers `{name, contact}` |
 | `POST /api/vehicles/{id}/driver` | Assign or unassign a driver (one vehicle per driver enforced) |

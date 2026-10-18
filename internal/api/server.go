@@ -4,12 +4,14 @@ package api
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"fleetflow/internal/auth"
@@ -17,6 +19,7 @@ import (
 	"fleetflow/internal/driver"
 	"fleetflow/internal/engine"
 	"fleetflow/internal/graph"
+	"fleetflow/internal/sim"
 	"fleetflow/internal/trip"
 	"fleetflow/internal/vehicle"
 )
@@ -83,13 +86,26 @@ type Server struct {
 	// serve.
 	keys *auth.Service
 	mux  *http.ServeMux
+	// run is the live comparison, or nil when none is running. Only its own
+	// clock goroutine steps the arm simulators, so runMu guards the pointer and
+	// nothing else.
+	runMu sync.Mutex
+	run   *run
+	// fleetService builds the FleetService a run's FleetFlow arm uses. Nil means
+	// the engine in-process; production sets an HTTP client against the server's
+	// own public API.
+	fleetService func(*engine.Engine) sim.FleetService
 	// handler is the mux wrapped in the shared middleware, built once so every
 	// request pays for the chain only in the handler, not in ServeHTTP.
-	handler  http.Handler
-	logger   *slog.Logger
-	limiter  *rateLimiter
-	dbCheck  func(context.Context) error
-	stoppers []StopFunc
+	handler http.Handler
+	logger  *slog.Logger
+	limiter *rateLimiter
+	// internalKey is the key the process presents for its own simulated traffic,
+	// or empty when there is none. It is matched exactly and only to exempt that
+	// one client from the public rate limit.
+	internalKey string
+	dbCheck     func(context.Context) error
+	stoppers    []StopFunc
 }
 
 // Option customises a Server at construction time.
@@ -170,6 +186,15 @@ func WithRateLimit(perSecond, burst float64) Option {
 	}
 }
 
+// WithInternalKey names the API key the process uses for its own simulator. A
+// request bearing it is not rate limited, because that client is this process and
+// the limit is sized for real ones: a simulation compresses time, so it reports
+// far faster than any real fleet ever could while staying a single trusted
+// caller. The key is still authenticated like any other.
+func WithInternalKey(key string) Option {
+	return func(s *Server) { s.internalKey = key }
+}
+
 // NewServer builds the API handler for a road graph.
 func NewServer(g *graph.Graph, opts ...Option) *Server {
 	s := &Server{
@@ -182,6 +207,13 @@ func NewServer(g *graph.Graph, opts ...Option) *Server {
 		opt(s)
 	}
 	s.routes()
+
+	// A live simulation is a background component like the customizer, so it
+	// stops with the rest: shutdown stops the run and waits for its clock.
+	s.stoppers = append(s.stoppers, func(ctx context.Context) error {
+		s.stopRun(ctx)
+		return nil
+	})
 
 	// Request ID first, so the logging line and every error body can quote it.
 	s.handler = withRequestID(withLogging(s.logger, s.mux))
@@ -201,6 +233,12 @@ func (s *Server) routes() {
 	// be browsable.
 	s.mux.Handle("POST /api/reports", s.authed(s.handleReport))
 	s.mux.Handle("POST /api/route", s.authed(s.handleRoute))
+
+	// Simulation control (DESIGN 3.5). These belong to the dashboard, like the
+	// record endpoints, so they are public; the traffic a run produces goes
+	// through the keyed ingest endpoints above.
+	s.mux.Handle("POST /api/sim/start", s.public(s.handleSimStart))
+	s.mux.Handle("POST /api/sim/reset", s.public(s.handleSimReset))
 
 	// Fleet records (DESIGN 3.5). These are the endpoints that touch PostgreSQL;
 	// the two above never do.
@@ -222,7 +260,7 @@ func (s *Server) routes() {
 func (s *Server) public(h http.HandlerFunc) http.Handler {
 	// The limiter is outermost, so a client over its allowance is refused before
 	// a deadline it does not need is created for the request.
-	return s.limiter.middleware(withTimeout(requestTimeout, h))
+	return s.rateLimited(withTimeout(requestTimeout, h))
 }
 
 // authed wraps an endpoint that requires a valid API key. The layers are public's
@@ -230,7 +268,30 @@ func (s *Server) public(h http.HandlerFunc) http.Handler {
 // that can be too fast or too slow, so the rate limit and the deadline come first,
 // and the key lookup itself is bounded by that deadline.
 func (s *Server) authed(h http.HandlerFunc) http.Handler {
-	return s.limiter.middleware(withTimeout(requestTimeout, s.requireAPIKey(h)))
+	return s.rateLimited(withTimeout(requestTimeout, s.requireAPIKey(h)))
+}
+
+// rateLimited applies the public per-client limit to a handler, with one
+// exception: a request bearing this process's own key. That client is the
+// simulator, which runs here and compresses time, so the limit — sized to keep a
+// real dashboards and reporting fleet comfortable — would only make the server
+// throttle itself (DESIGN 3.4). Every other caller, authenticated or not, is
+// limited as before; the exception is an exact match, not a bypass.
+func (s *Server) rateLimited(next http.Handler) http.Handler {
+	limited := s.limiter.middleware(next)
+	if s.internalKey == "" {
+		return limited
+	}
+
+	internal := []byte(s.internalKey)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if presented, ok := bearerKey(r); ok &&
+			subtle.ConstantTimeCompare([]byte(presented), internal) == 1 {
+			next.ServeHTTP(w, r)
+			return
+		}
+		limited.ServeHTTP(w, r)
+	})
 }
 
 // newHTTPServer builds the listener's settings.
