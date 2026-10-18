@@ -122,6 +122,24 @@ func (e *Engine) Route(fromID, toID string) (*Path, error) {
 	return path, err
 }
 
+// RouteAnswer is a route query answered from a single metric snapshot: the
+// least-cost path, and, when the caller sent the path it already holds, what
+// that path costs on the same snapshot.
+//
+// Answering both from one snapshot is the point. A caller compares the two
+// costs to decide whether switching route is worth it, so a refresh landing
+// between a route query and a separate price query would make the comparison
+// meaningless.
+type RouteAnswer struct {
+	Path *Path
+	// HeldCostS is what the edges the caller already holds cost on the same
+	// snapshot as Path. It is only meaningful when HeldPriced is true.
+	HeldCostS  float64
+	HeldPriced bool
+	// Version identifies the snapshot both costs came from.
+	Version uint64
+}
+
 // RouteWithVersion is Route, and also reports the version of the snapshot that
 // answered the query. The pointer is loaded exactly once, so the version always
 // belongs to the metric the path was computed from — not to whatever happens to
@@ -130,16 +148,42 @@ func (e *Engine) Route(fromID, toID string) (*Path, error) {
 // A caller that quotes the version it used needs this: the API returns
 // metric_version so a client can tell whether a route predates a refresh.
 func (e *Engine) RouteWithVersion(fromID, toID string) (*Path, uint64, error) {
+	answer, err := e.RouteWithHeld(fromID, toID, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	return answer.Path, answer.Version, nil
+}
+
+// RouteWithHeld answers a route query and, when held is non-nil, prices those
+// edges on the very snapshot the path was computed from. held holds edge indices
+// into the graph the engine was built over; an index outside the graph is
+// ErrEdgeNotFound.
+//
+// The active pointer is loaded exactly once, so the path, the held cost and the
+// version all belong to one immutable metric even if a refresh lands mid-query.
+func (e *Engine) RouteWithHeld(fromID, toID string, held []int) (RouteAnswer, error) {
 	m := e.active.Load()
 	if m == nil {
-		return nil, 0, ErrNoMetric
+		return RouteAnswer{}, ErrNoMetric
 	}
 
 	path, err := e.router.Route(m, fromID, toID)
 	if err != nil {
-		return nil, 0, err
+		return RouteAnswer{}, err
 	}
-	return path, m.Version(), nil
+
+	answer := RouteAnswer{Path: path, Version: m.Version()}
+	if held != nil {
+		for _, i := range held {
+			if i < 0 || i >= m.Len() {
+				return RouteAnswer{}, fmt.Errorf("%w: edge index %d", ErrEdgeNotFound, i)
+			}
+			answer.HeldCostS += m.Cost(i)
+		}
+		answer.HeldPriced = true
+	}
+	return answer, nil
 }
 
 // PathCost returns the cost of a sequence of edge indices on the active metric.
