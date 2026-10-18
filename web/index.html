@@ -152,6 +152,29 @@
         <tbody id="vehicles-rows"></tbody>
       </table>
       <p class="pane-note" id="vehicles-note" role="status" data-kind="idle">&gt;_ Not read yet</p>
+
+      <form class="record-form" id="vehicle-form">
+        <h3 class="form-title">Add a vehicle</h3>
+        <label class="field">
+          <span class="field-label">Name</span>
+          <span class="input-shell"><i>&gt;_</i><input id="vehicle-name" name="name" type="text" required autocomplete="off"></span>
+        </label>
+        <label class="field">
+          <span class="field-label">Type</span>
+          <span class="input-shell"><i>&gt;_</i><input id="vehicle-type" name="type" type="text" placeholder="van" autocomplete="off"></span>
+        </label>
+        <label class="field">
+          <span class="field-label">Status</span>
+          <span class="input-shell">
+            <select id="vehicle-status" name="status">
+              <option value="available" selected>available</option>
+              <option value="on_trip">on_trip</option>
+              <option value="offline">offline</option>
+            </select>
+          </span>
+        </label>
+        <button class="btn btn-primary" type="submit">Create vehicle</button>
+      </form>
     </div>
   </section>
 

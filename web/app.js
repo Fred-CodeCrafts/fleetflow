@@ -749,6 +749,76 @@ function renderVehicles() {
   }
 }
 
+/* ---------- fleet changes (T48) ---------- */
+
+// Every change below is one request and then a re-read of the panes that change
+// can move. The re-read is what keeps the tables honest: a trip that finishes
+// frees its vehicle, and only the server knows that.
+//
+// A failure is reported in the pane it came from, in the API's own words, and
+// never as a silent no-op: a create refused for a blank name, or a move refused
+// because it goes backwards, is something the dispatcher has to see.
+
+// readField returns a form field's value, trimmed. An absent field is the empty
+// string, which the API refuses in its own words rather than this page guessing.
+function readField(id) {
+  const input = document.getElementById(id);
+  return input ? input.value.trim() : '';
+}
+
+async function createVehicle(event) {
+  event.preventDefault();
+  const body = {
+    name: readField('vehicle-name'),
+    type: readField('vehicle-type'),
+    status: readField('vehicle-status'),
+  };
+
+  setPaneNote('vehicles', 'POST /api/vehicles \u2026', 'idle');
+  try {
+    const res = await postJSON('/api/vehicles', body);
+    if (res.status !== 201) {
+      setPaneNote('vehicles', describeError(res), 'error');
+      return;
+    }
+    document.getElementById('vehicle-form').reset();
+    setPaneNote('vehicles', `201 created ${res.body.name} (${res.body.id})`, 'ok');
+    // The trip form's vehicle select and the trips table both name vehicles, so
+    // a new one changes more than the table it was created in.
+    await refreshVehicles();
+    await refreshTrips();
+  } catch (err) {
+    setPaneNote('vehicles', `request failed: ${err.message}`, 'error');
+  }
+}
+
+function wireFleetForms() {
+  const form = document.getElementById('vehicle-form');
+  if (form) form.addEventListener('submit', createVehicle);
+
+  for (const button of document.querySelectorAll('[data-refresh]')) {
+    button.addEventListener('click', () => refreshPane(button.dataset.refresh));
+  }
+}
+
+// refreshPane re-reads one pane by name, which is what its Refresh button asks
+// for. One button per pane rather than one for the view: a dispatcher watching
+// trips does not need the history re-read to see the next status.
+function refreshPane(name) {
+  switch (name) {
+    case 'vehicles':
+      return refreshVehicles();
+    case 'drivers':
+      return refreshDrivers();
+    case 'trips':
+      return refreshTrips();
+    case 'history':
+      return refreshHistory();
+    default:
+      return undefined;
+  }
+}
+
 /* ---------- startup ---------- */
 
 async function fetchGraph() {
@@ -769,6 +839,7 @@ async function init() {
   // cannot draw the network can still start and reset a run.
   wireControls();
   wireViews();
+  wireFleetForms();
 
   // The stream is opened before the graph is fetched, and independently of it:
   // the metrics strip and the run chip do not need the road network, and the
