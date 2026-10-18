@@ -18,6 +18,17 @@ type Node struct {
 	Lon float64 `json:"lon"`
 }
 
+// Point is one vertex of an edge's drawn geometry, in latitude and longitude.
+//
+// It exists because a road is not a straight line between two junctions. The
+// generated grid happens to be straight, so its edges carry no shape and the
+// dashboard draws node to node; an imported city network carries the vertices
+// the source file gave, so its roads bend where the real ones bend.
+type Point struct {
+	Lat float64 `json:"lat"`
+	Lon float64 `json:"lon"`
+}
+
 // Edge represents a directed road segment connecting two nodes.
 type Edge struct {
 	ID            string  `json:"id"`
@@ -26,6 +37,13 @@ type Edge struct {
 	LengthM       float64 `json:"length_m"`
 	SpeedLimitMPS float64 `json:"speed_limit_mps"`
 	Lanes         int     `json:"lanes"`
+
+	// Shape is the drawn centreline, when the source had one. Empty means
+	// "straight from From's node to To's node", which is what the grid is.
+	//
+	// This makes Edge non-comparable with ==, which is why nothing in this
+	// package compares two edges as values; lookups go through edgeIndices.
+	Shape []Point `json:"shape,omitempty"`
 
 	// Derived values computed when the graph is loaded.
 	FreeFlowS float64 `json:"free_flow_s,omitempty"`
