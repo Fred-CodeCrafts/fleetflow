@@ -253,6 +253,38 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 
 ---
 
+## Found along the way
+
+Findings that are not tasks in the plan, kept in writing so they cannot evaporate.
+A finding that is a bug in shipped behaviour does not belong here: it is fixed at
+once, with a test that fails before the fix and passes after, and it lives in the
+history. What stays below is what is still owed.
+
+- **The database layer is never run by automation.** Every `postgres` test skips
+  unless `TEST_DATABASE_URL` is set, and CI has no database, so `go test -race ./...`
+  passes without executing a single Postgres store or a single migration. Checked by
+  hand on 2026-10-18 against the dev container (`127.0.0.1:55432`): all four suites
+  pass. Remedy: a Postgres service in CI, the migrations applied to it, and the
+  database tests run in their own step.
+- **That suite is only correct with `-p 1`, or one database per package.** The
+  packages share one schema and truncate it between tests, so run in parallel they
+  erase each other's rows. The failure looks like a bug in the store rather than in
+  the harness: running four of them in one `go test` invocation failed three on
+  duplicate keys and leftover rows, and passed unchanged with `-p 1`. It is
+  documented in `internal/store/storetest`, which is not where somebody running the
+  suite will look. Remedy: hold a shared advisory lock for the length of a test, or
+  make CI the only place these run.
+- **The default grid shows no difference between the arms.** At the demo defaults on
+  `data/graph.json`, both arms are identical over ten seeds: zero route changes,
+  every metric tied. That is an honest result but a thin one, and it owes T60: either
+  find the traffic level where congestion makes the route matter, or record plainly
+  that on this graph it does not. T62's sweep repeats the same nothing until then.
+- **T39b (saved runs) is not started.** It is a should-have and squarely in the cut
+  order, so it waits behind the dashboard rather than competing for the same wiring
+  file. Recorded here so "we meant to" and "we ran out of time" are not confused.
+
+---
+
 ## Questions to prepare for
 
 - Why not just use Fleetbase or Google Maps? (They decide who goes where or optimize each vehicle separately. FleetFlow coordinates which roads the fleet uses.)
