@@ -203,6 +203,44 @@
     </div>
   </section>
 
+  <section class="pane" aria-labelledby="pane-history">
+    <header class="pane-head">
+      <h2 id="pane-history">History</h2>
+      <button class="btn btn-secondary btn-small" type="button" data-refresh="history">Refresh</button>
+    </header>
+
+    <div class="pane-body">
+      <h3 class="form-title">Completed trips</h3>
+      <table class="records" id="history-trips-table">
+        <caption>Trips that have finished.</caption>
+        <thead>
+          <tr>
+            <th scope="col">Id</th>
+            <th scope="col">Origin</th>
+            <th scope="col">Destination</th>
+            <th scope="col">Vehicle</th>
+          </tr>
+        </thead>
+        <tbody id="history-trips-rows"></tbody>
+      </table>
+
+      <h3 class="form-title">Saved runs</h3>
+      <table class="records" id="history-runs-table">
+        <caption>Runs saved from the comparison, most recent first.</caption>
+        <thead>
+          <tr>
+            <th scope="col">Id</th>
+            <th scope="col">Seed</th>
+            <th scope="col">Saved</th>
+            <th scope="col">Average trip (B / F)</th>
+          </tr>
+        </thead>
+        <tbody id="history-runs-rows"></tbody>
+      </table>
+      <p class="pane-note" id="history-note" role="status" data-kind="idle">&gt;_ Not read yet</p>
+    </div>
+  </section>
+
 </main>
 
 <script src="/static/app.js"></script>

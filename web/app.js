@@ -516,7 +516,7 @@ function failPane(pane, err) {
 // opened, so the tables are the server's answer at the moment they are looked
 // at rather than whatever the last visit left behind.
 function refreshFleet() {
-  return Promise.all([refreshVehicles(), refreshDrivers(), refreshTrips()]);
+  return Promise.all([refreshVehicles(), refreshDrivers(), refreshTrips(), refreshHistory()]);
 }
 
 async function refreshVehicles() {
@@ -628,6 +628,100 @@ function renderTrips() {
     row.appendChild(el('td', 'mono', textOf(trip.vehicle_id)));
     row.appendChild(el('td', 'mono', trip.status));
     tbody.appendChild(row);
+  }
+}
+
+// completedTrips keeps the trips that finished, in the order the API answered
+// them: history is a record of what happened, not a second sort of the same list.
+function completedTrips(trips) {
+  return trips.filter((trip) => trip.status === 'completed');
+}
+
+// savedRunMetric reads one figure out of a saved run's own metrics document. The
+// document is the object GET /api/metrics reports under "run", so the two
+// comparison arms are resolved by the same rule the metrics strip uses. A figure
+// the run never produced is an em dash, not a zero: zero is a measurement.
+function savedRunMetric(run, path) {
+  return formatMetric(path, metricAt({ run: run.metrics }, path));
+}
+
+// savedAt renders a run's created_at in the reader's own clock: the API sends
+// UTC, and the person reading saved it in local time.
+function savedAt(value) {
+  const at = new Date(value);
+  if (Number.isNaN(at.getTime())) return textOf(value);
+  return at.toLocaleString();
+}
+
+async function refreshHistory() {
+  setPaneNote('history', 'GET /api/trips and GET /api/runs \u2026', 'idle');
+  try {
+    // History is two records in one pane: the trips that finished, and the runs
+    // that were saved. Both are read together because one pane shows both, and a
+    // trip that finishes is history from that moment.
+    const [trips, runs] = await Promise.all([
+      readList('/api/trips', 'trips'),
+      readList('/api/runs', 'runs'),
+    ]);
+    delete fleetState.errors.history;
+    fleetState.trips = trips;
+    fleetState.runs = runs;
+    renderHistory();
+    renderTrips();
+    const completed = completedTrips(trips).length;
+    setPaneNote(
+      'history',
+      `${completed} completed trip${completed === 1 ? '' : 's'}, ` +
+        `${runs.length} saved run${runs.length === 1 ? '' : 's'}`,
+      'ok'
+    );
+  } catch (err) {
+    failPane('history', err);
+    renderHistory();
+  }
+}
+
+function renderHistory() {
+  const tripsBody = document.getElementById('history-trips-rows');
+  const runsBody = document.getElementById('history-runs-rows');
+  if (!tripsBody || !runsBody) return;
+
+  if (fleetState.errors.history) {
+    emptyRow(tripsBody, 4, fleetState.errors.history);
+    emptyRow(runsBody, 4, fleetState.errors.history);
+    return;
+  }
+
+  const completed = completedTrips(fleetState.trips);
+  if (completed.length === 0) {
+    emptyRow(tripsBody, 4, 'No completed trips yet.');
+  } else {
+    tripsBody.replaceChildren();
+    for (const trip of completed) {
+      const row = el('tr');
+      row.appendChild(el('td', 'mono', trip.id));
+      row.appendChild(el('td', null, trip.origin));
+      row.appendChild(el('td', null, trip.destination));
+      row.appendChild(el('td', 'mono', textOf(trip.vehicle_id)));
+      tripsBody.appendChild(row);
+    }
+  }
+
+  if (fleetState.runs.length === 0) {
+    emptyRow(runsBody, 4, 'No saved runs yet \u2014 save one from the comparison controls.');
+    return;
+  }
+
+  runsBody.replaceChildren();
+  for (const run of fleetState.runs) {
+    const baseline = savedRunMetric(run, 'baseline.average_trip_s');
+    const fleetflow = savedRunMetric(run, 'fleet_flow.average_trip_s');
+    const row = el('tr');
+    row.appendChild(el('td', 'mono', run.id));
+    row.appendChild(el('td', 'mono', run.seed));
+    row.appendChild(el('td', 'mono', savedAt(run.created_at)));
+    row.appendChild(el('td', 'mono', `B ${baseline} / F ${fleetflow}`));
+    runsBody.appendChild(row);
   }
 }
 
