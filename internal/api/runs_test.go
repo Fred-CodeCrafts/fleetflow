@@ -20,6 +20,8 @@ func runsServer(t *testing.T) *Server {
 	s := testServer(t,
 		WithEngine(newEngine(t, testGraph(t))),
 		WithRuns(runstore.NewService(runmemory.New())),
+		// Saving a run needs one to have run, and runs are served only in demo.
+		WithDemo(true),
 	)
 	t.Cleanup(func() { s.stopRun(context.Background()) })
 	return s

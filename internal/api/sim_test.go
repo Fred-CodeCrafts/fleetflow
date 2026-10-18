@@ -17,7 +17,7 @@ import (
 func simServer(t *testing.T) *Server {
 	t.Helper()
 
-	s := testServer(t, WithEngine(newEngine(t, testGraph(t))))
+	s := testServer(t, WithEngine(newEngine(t, testGraph(t))), WithDemo(true))
 	t.Cleanup(func() { s.stopRun(context.Background()) })
 	return s
 }
@@ -27,7 +27,7 @@ func simServer(t *testing.T) *Server {
 func simServerWithEngine(t *testing.T, e *engine.Engine) *Server {
 	t.Helper()
 
-	s := testServer(t, WithEngine(e))
+	s := testServer(t, WithEngine(e), WithDemo(true))
 	t.Cleanup(func() { s.stopRun(context.Background()) })
 	return s
 }
@@ -100,6 +100,30 @@ func TestSimControl_IsOpenToTheDashboard(t *testing.T) {
 
 	if rec.Code != http.StatusNoContent {
 		t.Errorf("status = %d, want 204 without an API key", rec.Code)
+	}
+}
+
+// TestSimStart_IsAbsentWithoutDemo is the gate: a deployment that did not ask for a
+// simulation cannot start one, and gets the same 404 as any other unregistered path
+// rather than a refusal from a handler that exists.
+func TestSimStart_IsAbsentWithoutDemo(t *testing.T) {
+	s := testServer(t, WithEngine(newEngine(t, testGraph(t))))
+
+	for _, path := range []string{"/api/sim/start", "/api/sim/reset"} {
+		rec := postJSON(t, s, path, `{"vehicles":2,"window_s":10}`)
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("%s status = %d without -demo, want 404: %s", path, rec.Code, rec.Body)
+		}
+	}
+}
+
+// TestSimStart_IsServedWithDemo is the other side of the gate, so the 404 above
+// cannot pass by the routes being broken for everybody.
+func TestSimStart_IsServedWithDemo(t *testing.T) {
+	s := simServer(t)
+
+	if rec := postJSON(t, s, "/api/sim/start", `{"vehicles":2,"window_s":10}`); rec.Code != http.StatusAccepted {
+		t.Fatalf("status = %d with -demo, want 202: %s", rec.Code, rec.Body)
 	}
 }
 
@@ -245,7 +269,8 @@ func TestSimStart_RejectsBadInput(t *testing.T) {
 }
 
 func TestSimStart_WithoutAnEngineIsUnavailable(t *testing.T) {
-	s := testServer(t)
+	// Demo is on, so the route exists: the 503 is about the engine, not the gate.
+	s := testServer(t, WithDemo(true))
 
 	rec := postJSON(t, s, "/api/sim/start", `{}`)
 
@@ -317,6 +342,7 @@ func TestSimStart_RefreshesWeightsForAnOutOfProcessFleetService(t *testing.T) {
 
 	s := testServerFor(t, g,
 		WithEngine(eng),
+		WithDemo(true),
 		WithFleetService(func(e *engine.Engine) sim.FleetService {
 			return plainFleet{FleetService: sim.NewEngineFleet(e)}
 		}),

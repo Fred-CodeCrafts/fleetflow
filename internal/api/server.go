@@ -112,6 +112,9 @@ type Server struct {
 	// the engine in-process; production sets an HTTP client against the server's
 	// own public API.
 	fleetService func(*engine.Engine) sim.FleetService
+	// demo serves the simulation control routes. False means they are not
+	// registered, so a run cannot be started at all.
+	demo bool
 	// handler is the mux wrapped in the shared middleware, built once so every
 	// request pays for the chain only in the handler, not in ServeHTTP.
 	handler http.Handler
@@ -174,6 +177,17 @@ func WithRuns(svc *runstore.Service) Option {
 // endpoint that cannot check the key it is supposed to require must not publish.
 func WithAPIKeys(svc *auth.Service) Option {
 	return func(s *Server) { s.keys = svc }
+}
+
+// WithDemo serves the simulation control routes when enabled. Otherwise they are
+// not registered at all, so /api/sim/* answers 404.
+//
+// A run owns the engine's weights while it lasts — it starts from free flow and
+// then feeds them — so a deployment that live vehicles report to must not offer
+// one. Making this opt-in means the deployed demo asks for it explicitly, and a
+// real deployment cannot get a simulation by leaving a setting alone.
+func WithDemo(enabled bool) Option {
+	return func(s *Server) { s.demo = enabled }
 }
 
 // WithDatabaseCheck registers the readiness probe for the database. Without it,
@@ -269,8 +283,16 @@ func (s *Server) routes() {
 	// Simulation control (DESIGN 3.5). These belong to the dashboard, like the
 	// record endpoints, so they are public; the traffic a run produces goes
 	// through the keyed ingest endpoints above.
-	s.mux.Handle("POST /api/sim/start", s.public(s.handleSimStart))
-	s.mux.Handle("POST /api/sim/reset", s.public(s.handleSimReset))
+	//
+	// They exist only under -demo. A run owns the engine's weights while it lasts,
+	// so serving these in a deployment that live traffic is feeding would let a
+	// caller clear the congestion real vehicles reported. Not registering them at
+	// all is the strongest form of that: without the flag the routes are 404, and
+	// no handler is reachable to get the check wrong.
+	if s.demo {
+		s.mux.Handle("POST /api/sim/start", s.public(s.handleSimStart))
+		s.mux.Handle("POST /api/sim/reset", s.public(s.handleSimReset))
+	}
 
 	// The metrics the dashboard's strip reads. Public for the same reason: it is
 	// read by a browser, and it discloses no more than the panels already show.

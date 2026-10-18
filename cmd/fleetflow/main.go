@@ -106,6 +106,7 @@ func selfBaseURL(addr string) string {
 
 func main() {
 	issueKeyName := flag.String("issue-key", "", "issue an API key with this name, print it once, and exit")
+	demo := flag.Bool("demo", false, "serve the simulation control routes (/api/sim/*) and let a run own the weights")
 	flag.Parse()
 
 	cfg, err := config.Load(os.Getenv)
@@ -144,6 +145,7 @@ func main() {
 
 	opts := []api.Option{
 		api.WithEngine(eng),
+		api.WithDemo(*demo),
 		api.WithStopFunc(func(context.Context) error {
 			stopCustomizer()
 			return nil
