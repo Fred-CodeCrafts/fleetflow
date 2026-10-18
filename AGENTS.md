@@ -81,14 +81,19 @@ Tests go in the same commit as the code they cover, or in the commit immediately
 - **Originality:** all code in this repo must be written new for this project.
   - Do **not** copy files or code from `../sumo-routing/` (thesis prototype) or `../fleetbase/`.
   - Do **not** paste thesis text into the repo.
-  - **Studying a reference implementation is allowed and encouraged.** Read
-    `../fleetbase/` and `../sumo-routing/` to learn their information architecture,
-    page layout, interaction patterns, naming and feature set, then write this
-    repo's version yourself. Matching a screen's structure and behaviour is fine;
-    copying its source, templates, styles or assets is not.
+  - **Build to their architecture; do not copy their files.** Read `../fleetbase/`
+    and `../sumo-routing/` to learn their information architecture, page layout,
+    navigation, interaction patterns, visual design, naming and feature set, then
+    write this repo's version yourself. A screen that follows their layout,
+    hierarchy, flow and look is the goal, not a compromise: same structure, same
+    behaviour, same idiom, our implementation.
+  - **The only prohibition is verbatim reuse.** Do not paste their source files,
+    templates, stylesheets or assets into this repo, and do not vendor their
+    packages. Writing a similar screen from scratch is not copying; shipping a
+    file of theirs is.
   - **Why the line sits there:** Fleetbase is AGPL-3.0 and this repo is Apache-2.0,
     so copied front-end code would attach AGPL obligations to the whole console
-    and break the license. Reproducing a layout from observation is not a
+    and break the license. Reproducing an architecture from observation is not a
     derivative work; pasting a component is.
   - **No attribution is owed for studying a reference.** AGPL-3.0's attribution and
     notice duties (sections 4, 5 and 13) attach only when you convey the Program
