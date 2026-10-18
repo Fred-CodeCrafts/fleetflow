@@ -1,3 +1,16 @@
+// Command generate_grid writes the demo road network: a regular grid of streets
+// around central Jakarta, in the graph JSON the server loads.
+//
+// The network's size is not decoration, it sets capacity. Capacity per edge is
+// lanes * length_m / 7.5, so 450 m blocks and two lanes hold 16,800 vehicles
+// across the graph -- more than any run this simulator can drive, which costs a
+// run its congestion and with it any difference between static and dynamic
+// routing. The demo graph is therefore generated with both dialled down:
+//
+//	go run ./scripts/generate_grid.go -spacing-m 150 -lanes 1
+//
+// That is 20 vehicles per edge, and a peak-hour run congests it. See DESIGN,
+// "The demo network", for the measurement behind the choice.
 package main
 
 import (
@@ -33,12 +46,23 @@ func main() {
 	outPath := flag.String("out", "data/graph.json", "Output path for the generated graph JSON")
 	rows := flag.Int("rows", 6, "Number of grid rows (North-South)")
 	cols := flag.Int("cols", 6, "Number of grid columns (East-West)")
+	spacing := flag.Float64("spacing-m", 450, "Meters between grid intersections")
+	lanes := flag.Int("lanes", 2, "Lanes on an ordinary street; the central arterials get one more")
 	flag.Parse()
+
+	if *rows < 2 || *cols < 2 {
+		fmt.Fprintln(os.Stderr, "the grid needs at least 2 rows and 2 columns")
+		os.Exit(1)
+	}
+	if *spacing <= 0 || *lanes < 1 {
+		fmt.Fprintln(os.Stderr, "spacing must be positive and there must be at least one lane")
+		os.Exit(1)
+	}
 
 	// Center around Jakarta (Sudirman / Thamrin area)
 	centerLat := -6.2088
 	centerLon := 106.8456
-	spacingM := 450.0 // meters between grid intersections
+	spacingM := *spacing // meters between grid intersections
 
 	// Approximate meters to degrees conversion around Jakarta (-6 deg latitude)
 	latDegPerMeter := 1.0 / 111320.0
@@ -72,11 +96,11 @@ func main() {
 	midC := (*cols) / 2
 
 	addEdgePair := func(u, v string, isArterial bool, length float64) {
-		lanes := 2
+		streetLanes := *lanes
 		speed := 13.89 // ~50 km/h
 
 		if isArterial {
-			lanes = 3
+			streetLanes = *lanes + 1
 			speed = 16.67 // ~60 km/h
 		}
 
@@ -87,7 +111,7 @@ func main() {
 			To:            v,
 			LengthM:       length,
 			SpeedLimitMPS: speed,
-			Lanes:         lanes,
+			Lanes:         streetLanes,
 		})
 
 		// Reverse edge
@@ -97,7 +121,7 @@ func main() {
 			To:            u,
 			LengthM:       length,
 			SpeedLimitMPS: speed,
-			Lanes:         lanes,
+			Lanes:         streetLanes,
 		})
 	}
 
