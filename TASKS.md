@@ -158,7 +158,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 - [x] 🔴 **T44** Run simulation only while a stream client is connected
   `feat(api): tie simulation loop to open stream`
   Done when: closing the browser tab stops the simulation (needed for default Cloud Run CPU behavior).
-- [ ] 🟡 **T45** Add API handler tests for bad input (including bad reports and bad keys)
+- [x] 🟡 **T45** Add API handler tests for bad input (including bad reports and bad keys)
   `test(api): cover invalid requests`
 - [ ] 🟡 **T46** Document the reports format and reject invalid/out-of-range values (US-14, should)
   `docs(api): document reports format and validation`
