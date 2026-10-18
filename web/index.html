@@ -178,6 +178,31 @@
     </div>
   </section>
 
+  <section class="pane" aria-labelledby="pane-trips">
+    <header class="pane-head">
+      <h2 id="pane-trips">Trips</h2>
+      <button class="btn btn-secondary btn-small" type="button" data-refresh="trips">Refresh</button>
+    </header>
+
+    <div class="pane-body">
+      <table class="records" id="trips-table">
+        <caption>Every trip on record, with the vehicle carrying it and the next step in its life.</caption>
+        <thead>
+          <tr>
+            <th scope="col">Id</th>
+            <th scope="col">Origin</th>
+            <th scope="col">Destination</th>
+            <th scope="col">Vehicle</th>
+            <th scope="col">Status</th>
+            <th scope="col">Advance</th>
+          </tr>
+        </thead>
+        <tbody id="trips-rows"></tbody>
+      </table>
+      <p class="pane-note" id="trips-note" role="status" data-kind="idle">&gt;_ Not read yet</p>
+    </div>
+  </section>
+
 </main>
 
 <script src="/static/app.js"></script>

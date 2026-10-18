@@ -516,7 +516,7 @@ function failPane(pane, err) {
 // opened, so the tables are the server's answer at the moment they are looked
 // at rather than whatever the last visit left behind.
 function refreshFleet() {
-  return Promise.all([refreshVehicles(), refreshDrivers()]);
+  return Promise.all([refreshVehicles(), refreshDrivers(), refreshTrips()]);
 }
 
 async function refreshVehicles() {
@@ -583,6 +583,50 @@ function renderDrivers() {
     // The vehicle the driver holds travels back from the API, so an assignment
     // is visible from the driver's side of it and not only the vehicle's.
     row.appendChild(el('td', 'mono', textOf(driver.vehicle_id)));
+    tbody.appendChild(row);
+  }
+}
+
+// nextTripStatus is the one status a trip can move to from where it is:
+// planned, then in progress, then completed. A finished trip is a record of what
+// happened, so it offers no move.
+const nextTripStatus = { planned: 'in_progress', in_progress: 'completed' };
+
+async function refreshTrips() {
+  setPaneNote('trips', 'GET /api/trips \u2026', 'idle');
+  try {
+    const trips = await readList('/api/trips', 'trips');
+    delete fleetState.errors.trips;
+    fleetState.trips = trips;
+    renderTrips();
+    noteCount('trips', trips.length, 'trip');
+  } catch (err) {
+    failPane('trips', err);
+    renderTrips();
+  }
+}
+
+function renderTrips() {
+  const tbody = document.getElementById('trips-rows');
+  if (!tbody) return;
+
+  if (fleetState.errors.trips) {
+    emptyRow(tbody, 6, fleetState.errors.trips);
+    return;
+  }
+  if (fleetState.trips.length === 0) {
+    emptyRow(tbody, 6, 'No trips yet.');
+    return;
+  }
+
+  tbody.replaceChildren();
+  for (const trip of fleetState.trips) {
+    const row = el('tr');
+    row.appendChild(el('td', 'mono', trip.id));
+    row.appendChild(el('td', null, trip.origin));
+    row.appendChild(el('td', null, trip.destination));
+    row.appendChild(el('td', 'mono', textOf(trip.vehicle_id)));
+    row.appendChild(el('td', 'mono', trip.status));
     tbody.appendChild(row);
   }
 }
