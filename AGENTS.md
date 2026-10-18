@@ -114,10 +114,32 @@ actually been run and passed.
 
 ---
 
-## 6. When to push
+## 6. Branches and pushing
 
-- Push after every few commits, and always at the end of a session.
-- Use a short-lived branch for anything experimental (`feat/<name>`), then merge into `main` with a normal merge. Do not squash away the small commits.
+Three levels, and a change lands on the lowest one it belongs to and moves up only
+when it is meant to:
+
+- **`main` — stable.** The released version: what is deployed and what a judge
+  clones. Only a release lands here, and always as a merge from `dev`, tagged
+  (`v0.1.0`, T67). Work does not happen on `main`.
+- **`dev` — development.** The integration branch. Every change reaches `dev` first,
+  and a release is `dev` merged into `main` with a normal merge.
+- **Feature branches — named after the change, like the commit types.** Branch from
+  `dev` and name it for the kind of work: `feat/dynamic-weights`,
+  `fix/decay-underflow`, `refactor/route-seam`, `docs/branch-model`, `test/...`,
+  `chore/...`. A feature branch is short-lived — one piece of work — and is merged
+  back into `dev` with a normal merge, then deleted. Do not squash away the small
+  commits: the history is evidence (section 1).
+
+Parallel workers each get their own worktree and feature branch, and their merges
+into `dev` are serialized, one at a time (section 8).
+
+**Pushing**
+
+- Push after every few commits, and always at the end of a session: `git push origin dev`.
+- `git push origin --all` pushes every branch; `git push origin --tags` pushes tags.
+- Never force-push, and never rebase or amend a pushed branch (section 4). A mistake
+  is fixed in a new commit; published history is not edited.
 
 ---
 
@@ -168,8 +190,8 @@ consequences of it.
 
 - **Parallel workers get their own worktree and branch.** A branch can be checked out in
   only one worktree, and merges into a shared branch must be serialized: merge workers
-  one at a time. `dev` is an integration branch from the branch-merge trial; it is not
-  part of the release path — `main` is.
+  one at a time. `dev` is the integration branch every change lands on first, and
+  `main` is the stable, released branch (section 6).
 - **The history is evidence (section 1), so keep scaffolding out of it.** A scratch
   ledger or experiment artifact is deleted in its own commit, never left behind.
 - **Verification debt, honestly recorded.** `internal/driver` and `internal/trip` were
