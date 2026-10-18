@@ -22,6 +22,16 @@ func simServer(t *testing.T) *Server {
 	return s
 }
 
+// simServerWithEngine builds a simulation server over a specific engine, for the
+// tests that inspect the weights a run starts from.
+func simServerWithEngine(t *testing.T, e *engine.Engine) *Server {
+	t.Helper()
+
+	s := testServer(t, WithEngine(e))
+	t.Cleanup(func() { s.stopRun(context.Background()) })
+	return s
+}
+
 // baselineEngine builds the static engine a run's baseline arm routes on.
 func baselineEngine(t *testing.T, g *graph.Graph) *engine.Engine {
 	t.Helper()
@@ -93,22 +103,85 @@ func TestSimControl_IsOpenToTheDashboard(t *testing.T) {
 	}
 }
 
-func TestSimStart_ReplacesTheRunningRun(t *testing.T) {
+// TestSimStart_RefusesASecondStart is the correctness rule: a live comparison is
+// not replaced. Both the running run and its clock are left alone, so a caller
+// cannot discard somebody else's comparison by starting another one.
+func TestSimStart_RefusesASecondStart(t *testing.T) {
 	s := simServer(t)
 
-	postJSON(t, s, "/api/sim/start", `{"seed":1,"vehicles":20,"window_s":600}`)
-	postJSON(t, s, "/api/sim/start", `{"seed":2,"vehicles":3,"window_s":60}`)
+	first := postJSON(t, s, "/api/sim/start", `{"seed":1,"vehicles":20,"window_s":600}`)
+	if first.Code != http.StatusAccepted {
+		t.Fatalf("first start status = %d, want 202: %s", first.Code, first.Body)
+	}
+
+	rec := postJSON(t, s, "/api/sim/start", `{"seed":2,"vehicles":3,"window_s":60}`)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("second start status = %d, want 409: %s", rec.Code, rec.Body)
+	}
+	if code := field(t, decodeBody(t, rec), "code"); code != "run_in_progress" {
+		t.Errorf("code = %q, want run_in_progress", code)
+	}
 
 	s.runMu.Lock()
 	live := s.run
 	s.runMu.Unlock()
 
 	if live == nil {
-		t.Fatal("no run after a second start")
+		t.Fatal("the second start stopped the first run")
 	}
-	if live.cfg.Seed != 2 || live.cfg.Vehicles != 3 {
-		t.Errorf("current run = seed %d, vehicles %d, want the second start",
+	if live.cfg.Seed != 1 || live.cfg.Vehicles != 20 {
+		t.Errorf("current run = seed %d, vehicles %d, want the first start untouched",
 			live.cfg.Seed, live.cfg.Vehicles)
+	}
+}
+
+// TestSimStart_ClaimsTheSlotBeforeBuilding keeps two starts that arrive together
+// from both finding the slot empty: the claim is taken before any of the work, so
+// one of them is refused.
+func TestSimStart_ClaimsTheSlotBeforeBuilding(t *testing.T) {
+	s := simServer(t)
+
+	if !s.claimRun() {
+		t.Fatal("claimRun refused an empty slot")
+	}
+	if s.claimRun() {
+		t.Error("claimRun took a slot that was already claimed")
+	}
+
+	s.releaseRun()
+	if !s.claimRun() {
+		t.Error("claimRun refused the slot after it was released")
+	}
+}
+
+// TestSimStart_ResetsTheWeights is the other half of owning the weights: a run
+// starts from free flow, so its numbers do not depend on what ran before it.
+func TestSimStart_ResetsTheWeights(t *testing.T) {
+	g := testGraph(t)
+	e := newEngine(t, g)
+	s := simServerWithEngine(t, e)
+
+	_, index, ok := g.EdgeByID("e_AB")
+	if !ok {
+		t.Fatal("the fixture graph has no e_AB edge")
+	}
+	freeFlow := e.ActiveMetric().Cost(index)
+
+	// Congest the edge the way a previous run would have, and confirm it moved.
+	if err := e.Report("e_AB", 1, time.Now()); err != nil {
+		t.Fatalf("report: %v", err)
+	}
+	e.Customize()
+	if congested := e.ActiveMetric().Cost(index); congested <= freeFlow {
+		t.Fatalf("cost after a crawl = %v, want more than free flow %v", congested, freeFlow)
+	}
+
+	if rec := postJSON(t, s, "/api/sim/start", `{"vehicles":2,"window_s":10}`); rec.Code != http.StatusAccepted {
+		t.Fatalf("start status = %d, want 202: %s", rec.Code, rec.Body)
+	}
+
+	if got := e.ActiveMetric().Cost(index); got != freeFlow {
+		t.Errorf("cost after a start = %v, want the run to begin at free flow %v", got, freeFlow)
 	}
 }
 

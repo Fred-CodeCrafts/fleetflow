@@ -35,6 +35,12 @@ const (
 	codeRerouteThresholdOutOfRan = "reroute_threshold_out_of_range"
 )
 
+// errRunInProgress is a start while a comparison already holds the run slot. It is
+// a conflict rather than a refusal of the request's contents: the request may be
+// perfectly good, but only one comparison can own the weights at a time.
+var errRunInProgress = domain.Conflict("run_in_progress",
+	"a comparison run is already in progress; reset it before starting another")
+
 // simRequest is the body of POST /api/sim/start (DESIGN 3.5). Every field is
 // optional: a one-click start sends an empty object and gets the demo defaults.
 //
@@ -345,8 +351,18 @@ func (s *Server) handleSimStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The claim is taken before the run is built, so two starts that arrive
+	// together cannot both pass the check. A run that has finished still holds the
+	// claim until it is reset, so a second start is refused rather than silently
+	// discarding a comparison somebody is looking at.
+	if !s.claimRun() {
+		writeError(w, r, errRunInProgress)
+		return
+	}
+
 	baseline, err := engine.NewBaseline(s.graph, engine.NewDijkstraRouter(s.graph))
 	if err != nil {
+		s.releaseRun()
 		writeError(w, r, err)
 		return
 	}
@@ -360,11 +376,19 @@ func (s *Server) handleSimStart(w http.ResponseWriter, r *http.Request) {
 
 	live, err := newRun(s.graph, cfg, baseline, fleet, s.watched, s.streams.wake)
 	if err != nil {
+		s.releaseRun()
 		writeError(w, r, err)
 		return
 	}
 
-	s.swapRun(r.Context(), live)
+	// A run starts from free flow. Without this it inherits whatever congestion
+	// the engine already held, so its numbers would depend on what ran before it.
+	// Only -demo serves this route, which is what makes that safe: no live traffic
+	// is feeding the weights it clears.
+	s.eng.Reset()
+
+	s.installRun(live)
+
 	live.start()
 
 	writeJSON(w, http.StatusAccepted, live.status())
@@ -377,17 +401,37 @@ func (s *Server) handleSimReset(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// swapRun replaces the running comparison, stopping whatever was there first.
-// Stopping before starting means the two clocks never overlap.
-func (s *Server) swapRun(ctx context.Context, next *run) {
+// claimRun takes the run slot, reporting false when a run already holds it or
+// another start is part-way through building one. A finished run keeps the slot
+// until it is reset, so a second start is refused rather than silently discarding
+// a comparison somebody is looking at.
+func (s *Server) claimRun() bool {
 	s.runMu.Lock()
-	previous := s.run
-	s.run = next
-	s.runMu.Unlock()
+	defer s.runMu.Unlock()
 
-	if previous != nil {
-		previous.stopRun(ctx)
+	if s.run != nil || s.claiming {
+		return false
 	}
+	s.claiming = true
+	return true
+}
+
+// releaseRun gives the slot back without installing a run, for a start that failed
+// after claiming it.
+func (s *Server) releaseRun() {
+	s.runMu.Lock()
+	defer s.runMu.Unlock()
+
+	s.claiming = false
+}
+
+// installRun fills a claimed slot with the run that was just built.
+func (s *Server) installRun(live *run) {
+	s.runMu.Lock()
+	defer s.runMu.Unlock()
+
+	s.run = live
+	s.claiming = false
 }
 
 // stopRun stops the running comparison, if any, and clears it.

@@ -101,8 +101,13 @@ type Server struct {
 	// run is the live comparison, or nil when none is running. Only its own
 	// clock goroutine steps the arm simulators, so runMu guards the pointer and
 	// nothing else.
-	runMu sync.Mutex
-	run   *run
+	//
+	// claiming closes the gap between checking the slot and filling it: a start
+	// holds it while it builds its run, so two starts arriving together cannot
+	// both find the slot empty.
+	runMu    sync.Mutex
+	run      *run
+	claiming bool
 	// fleetService builds the FleetService a run's FleetFlow arm uses. Nil means
 	// the engine in-process; production sets an HTTP client against the server's
 	// own public API.
