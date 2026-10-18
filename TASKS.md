@@ -142,7 +142,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 - [x] 🔴 **T40** Add API key auth on `POST /api/reports` and `POST /api/route` (`internal/auth`)
   `feat(auth): require api key on reports and route`
   Done when: missing or wrong key returns 401 and does nothing, keys are stored hashed and never logged, and the README shows an example request for each endpoint.
-- [ ] 🔴 **T40a** Send simulated reports and route requests through the public API (US-7)
+- [x] 🔴 **T40a** Send simulated reports and route requests through the public API (US-7)
   `feat(sim): report through the public api`
   Done when: the simulator's fleet service is an HTTP client against `/api/reports` and `/api/route`, so simulated traffic takes the same validated path as an external client, and a seeded run stays deterministic (reports are sent synchronously). Needs T37 and T40.
 - [ ] 🔴 **T41** Add `POST /api/sim/start` and `POST /api/sim/reset`
