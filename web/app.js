@@ -573,6 +573,62 @@ function driverOnVehicle(vehicleID) {
   return fleetState.drivers.find((driver) => driver.vehicle_id === vehicleID) || null;
 }
 
+function renderVehicles() {
+  const tbody = document.getElementById('vehicles-rows');
+  if (!tbody) return;
+
+  if (fleetState.errors.vehicles) {
+    emptyRow(tbody, 6, fleetState.errors.vehicles);
+    return;
+  }
+  if (fleetState.vehicles.length === 0) {
+    emptyRow(tbody, 6, 'No vehicles yet.');
+    return;
+  }
+
+  tbody.replaceChildren();
+  for (const vehicle of fleetState.vehicles) {
+    const assigned = driverOnVehicle(vehicle.id);
+    const row = el('tr');
+
+    row.appendChild(el('td', 'mono', vehicle.id));
+    row.appendChild(el('td', null, vehicle.name));
+    row.appendChild(el('td', null, textOf(vehicle.type)));
+    row.appendChild(el('td', 'mono', vehicle.status));
+    row.appendChild(el('td', null, assigned ? assigned.name : '\u2014'));
+
+    // The assignment is made from the vehicle's own row: the endpoint is
+    // addressed by vehicle, so this is the table the change belongs to.
+    const cell = el('td', 'assign');
+    const select = el('select');
+    select.setAttribute('aria-label', `Driver for ${vehicle.name}`);
+    const placeholder = el('option', null, 'select a driver');
+    placeholder.value = '';
+    select.appendChild(placeholder);
+    for (const driver of fleetState.drivers) {
+      const option = el('option', null, driver.name);
+      option.value = driver.id;
+      if (assigned && assigned.id === driver.id) option.selected = true;
+      select.appendChild(option);
+    }
+
+    const assign = el('button', 'btn btn-secondary btn-small', 'Assign');
+    assign.type = 'button';
+    assign.addEventListener('click', () => assignDriver(vehicle.id, select.value));
+
+    // Unassign is disabled when there is nobody on the vehicle: a button that
+    // can only be answered with "already unassigned" is better shown as spent.
+    const unassign = el('button', 'btn btn-secondary btn-small', 'Unassign');
+    unassign.type = 'button';
+    unassign.disabled = !assigned;
+    unassign.addEventListener('click', () => assignDriver(vehicle.id, ''));
+
+    cell.append(select, assign, unassign);
+    row.appendChild(cell);
+    tbody.appendChild(row);
+  }
+}
+
 async function refreshDrivers() {
   setPaneNote('drivers', 'GET /api/drivers \u2026', 'idle');
   try {
@@ -797,62 +853,6 @@ function renderHistory() {
     row.appendChild(el('td', 'mono', savedAt(run.created_at)));
     row.appendChild(el('td', 'mono', `B ${baseline} / F ${fleetflow}`));
     runsBody.appendChild(row);
-  }
-}
-
-function renderVehicles() {
-  const tbody = document.getElementById('vehicles-rows');
-  if (!tbody) return;
-
-  if (fleetState.errors.vehicles) {
-    emptyRow(tbody, 6, fleetState.errors.vehicles);
-    return;
-  }
-  if (fleetState.vehicles.length === 0) {
-    emptyRow(tbody, 6, 'No vehicles yet.');
-    return;
-  }
-
-  tbody.replaceChildren();
-  for (const vehicle of fleetState.vehicles) {
-    const assigned = driverOnVehicle(vehicle.id);
-    const row = el('tr');
-
-    row.appendChild(el('td', 'mono', vehicle.id));
-    row.appendChild(el('td', null, vehicle.name));
-    row.appendChild(el('td', null, textOf(vehicle.type)));
-    row.appendChild(el('td', 'mono', vehicle.status));
-    row.appendChild(el('td', null, assigned ? assigned.name : '\u2014'));
-
-    // The assignment is made from the vehicle's own row: the endpoint is
-    // addressed by vehicle, so this is the table the change belongs to.
-    const cell = el('td', 'assign');
-    const select = el('select');
-    select.setAttribute('aria-label', `Driver for ${vehicle.name}`);
-    const placeholder = el('option', null, 'select a driver');
-    placeholder.value = '';
-    select.appendChild(placeholder);
-    for (const driver of fleetState.drivers) {
-      const option = el('option', null, driver.name);
-      option.value = driver.id;
-      if (assigned && assigned.id === driver.id) option.selected = true;
-      select.appendChild(option);
-    }
-
-    const assign = el('button', 'btn btn-secondary btn-small', 'Assign');
-    assign.type = 'button';
-    assign.addEventListener('click', () => assignDriver(vehicle.id, select.value));
-
-    // Unassign is disabled when there is nobody on the vehicle: a button that
-    // can only be answered with "already unassigned" is better shown as spent.
-    const unassign = el('button', 'btn btn-secondary btn-small', 'Unassign');
-    unassign.type = 'button';
-    unassign.disabled = !assigned;
-    unassign.addEventListener('click', () => assignDriver(vehicle.id, ''));
-
-    cell.append(select, assign, unassign);
-    row.appendChild(cell);
-    tbody.appendChild(row);
   }
 }
 
