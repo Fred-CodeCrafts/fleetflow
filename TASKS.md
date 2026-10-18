@@ -160,7 +160,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   Done when: closing the browser tab stops the simulation (needed for default Cloud Run CPU behavior).
 - [x] 🟡 **T45** Add API handler tests for bad input (including bad reports and bad keys)
   `test(api): cover invalid requests`
-- [ ] 🟡 **T46** Document the reports format and reject invalid/out-of-range values (US-14, should)
+- [x] 🟡 **T46** Document the reports format and reject invalid/out-of-range values (US-14, should)
   `docs(api): document reports format and validation`
   Done when: format is documented, bad values get a clear error, and the dashboard labels simulated vs. live.
 
@@ -173,19 +173,19 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   Done when: dispatcher can manage vehicles/drivers/trips and review history from the dashboard.
 - [x] 🔴 **T49** Draw road graph on canvas
   `feat(web): draw road network on canvas`
-- [ ] 🔴 **T50** Connect to SSE stream and draw vehicles
+- [x] 🔴 **T50** Connect to SSE stream and draw vehicles
   `feat(web): render vehicles from stream`
-- [ ] 🔴 **T51** Color edges by congestion
+- [x] 🔴 **T51** Color edges by congestion
   `feat(web): color roads by congestion`
-- [ ] 🔴 **T52** Show two panels side by side (Baseline, FleetFlow)
+- [x] 🔴 **T52** Show two panels side by side (Baseline, FleetFlow)
   `feat(web): add side-by-side comparison panels`
-- [ ] 🔴 **T53** Add metrics strip (average trip time, p95, saturated %, route changes, query latency)
+- [x] 🔴 **T53** Add metrics strip (average trip time, p95, saturated %, route changes, query latency)
   `feat(web): show comparison metrics`
   Done when: the strip states how capacity is derived (lanes and length), so the saturation figure is not a black box (US-6).
 - [x] 🔴 **T54** Add controls: start, reset, seed, vehicles, fleet share
   `feat(web): add simulation controls`
   Done when: start loads a ready-made demo scenario, so one click shows a run (US-7).
-- [ ] 🔴 **T55** Auto-reconnect on stream drop, label each vehicle simulated or live
+- [x] 🔴 **T55** Auto-reconnect on stream drop, label each vehicle simulated or live
   `feat(web): reconnect stream automatically`
 - [ ] 🟡 **T56** Mobile-friendly layout and basic styling pass
   `style(web): improve layout and styling`
