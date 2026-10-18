@@ -274,22 +274,41 @@ history. What stays below is what is still owed.
   documented in `internal/store/storetest`, which is not where somebody running the
   suite will look. Remedy: hold a shared advisory lock for the length of a test, or
   make CI the only place these run.
-- **The comparison has nothing to compare: this graph cannot congest.** Both arms come
-  out identical at every density, and the cause is arithmetic, not routing. Capacity is
-  `lanes x length_m / 7.5`, so a 450 m two-lane edge holds 120 vehicles and the whole
-  120-edge graph holds 16,800. Even at the API's maximum of 5,000 vehicles -- ten times
-  the demo default -- a run peaks near 1,000 vehicles on the network at once, so the
-  busiest edges sit under 1% of that. `EdgeSpeed` is BPR with a fourth power, so nothing
-  moves until occupancy approaches capacity: measured mid-run at 5,000 vehicles,
-  `cost_s / free_flow_s` is exactly 1 on every edge, `route_changes` is 0 for both arms,
-  and time lost is 0.00066 s per trip. So T60 has a real choice to record and T62's
-  sweep repeats the same nothing until it is made: report the tie and this arithmetic as
-  the result, or scale the demo network until congestion is reachable (shorter blocks
-  and one lane per edge cut capacity by the order of magnitude needed). Raising the BPR
-  coefficient instead would make the demo look good for the wrong reason.
-- **T39b (saved runs) is not started.** It is a should-have and squarely in the cut
-  order, so it waits behind the dashboard rather than competing for the same wiring
-  file. Recorded here so "we meant to" and "we ran out of time" are not confused.
+- **The demo configuration cannot congest, so the arms tie -- but a scenario that can is
+  now measured.** Both arms come out identical at every density, and the cause is
+  arithmetic rather than routing. Capacity is `lanes x length_m / 7.5`, so a 450 m
+  two-lane edge holds 120 vehicles and the whole graph holds 16,800. Even at the API's
+  maximum of 5,000 vehicles a run peaks near 1,000 on the network, and `EdgeSpeed` is BPR
+  with a fourth power, so nothing moves until occupancy approaches capacity: measured
+  mid-run at 5,000 vehicles, `cost_s / free_flow_s` is exactly 1 on every edge,
+  `route_changes` is 0 for both arms, and time lost is 0.00066 s per trip.
+
+  The lever is the peak, not the vehicle count: what congests a road is how many trips
+  overlap, so shortening the network alone does not help -- shorter edges make shorter
+  trips and the concurrent count falls with them. Measured on a capacity-matched network
+  (150 m blocks, one lane, 20 vehicles per edge) with 2,000 vehicles and a 120 s
+  departure window instead of the default 600 s, the difference stops being subtle: the
+  baseline averages 189.1 s per trip with a p95 of 2,257 s, and FleetFlow 42.5 s with a
+  p95 of 84.5 s, off 37 reroutes. That is this project's own claim demonstrated -- static
+  shortest paths jam and dynamic ones spread -- and it is a scenario choice, not a model
+  change. T60 decides between adopting a peak scenario like it and recording the tie
+  above for the uniform default. Raising the BPR coefficient instead would make the demo
+  look good for the wrong reason.
+- **The congestion columns of a finished run are always zero.** They are a snapshot of
+  the network at the moment `Collect` runs, and a run that has settled has no vehicles
+  left on it, so `saturated_edges_pct` and `utilization_std_dev` read 0.0000 in every row
+  of the comparison CSV -- including the run above, whose baseline trip is five times
+  slower than free flow. They mean something mid-run, which is what `GET /api/metrics`
+  and the dashboard show, but not in a record. Owes T60: keep the peak during the run, or
+  say plainly which figures are end-of-run.
+- **T39b (saved runs) has its store but not its endpoint.** `internal/run`, its memory and
+  Postgres repositories and `db/migration/V3__runs.sql` are merged, and the integration
+  tests pass against the real database. Nothing serves them yet: `GET /api/runs` and
+  `POST /api/runs` still need the handler and the two route lines, which belong to the
+  wiring file the parallel workers were kept out of. Until that lands the package is
+  additive and unimported, which is cheap now and expensive to leave. When it does, note
+  that `jsonb` canonicalizes: what the endpoint returns is the stored form, not the bytes
+  that were posted.
 - **The dashboard's JavaScript is verified by hand, not by a test in the repo.** The
   page is exercised against the running binary (all three event kinds arrive, both arms
   are labelled, 120 edges per congestion frame) and its drawing decisions were checked
