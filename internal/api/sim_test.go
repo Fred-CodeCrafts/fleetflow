@@ -227,6 +227,41 @@ func TestRun_StepsBothArmsFromOneDemand(t *testing.T) {
 	}
 }
 
+// plainFleet is a FleetService that is deliberately not a sim.FleetCustomizer,
+// like the HTTP client: it can route and report but cannot reach the engine to
+// refresh weights.
+type plainFleet struct{ sim.FleetService }
+
+// TestSimStart_RefreshesWeightsForAnOutOfProcessFleetService covers the one thing
+// a fleet service over the wire cannot do for itself. Without the refresh a run
+// whose traffic goes through the API would route on a single snapshot from start
+// to finish.
+func TestSimStart_RefreshesWeightsForAnOutOfProcessFleetService(t *testing.T) {
+	g := testGraph(t)
+	eng := newEngine(t, g)
+
+	s := testServerFor(t, g,
+		WithEngine(eng),
+		WithFleetService(func(e *engine.Engine) sim.FleetService {
+			return plainFleet{FleetService: sim.NewEngineFleet(e)}
+		}),
+	)
+	t.Cleanup(func() { s.stopRun(context.Background()) })
+
+	before := eng.ActiveMetric().Version()
+	postJSON(t, s, "/api/sim/start", `{"vehicles":8,"fleet_share":1,"window_s":0,"step_s":1}`)
+
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		if eng.ActiveMetric().Version() > before {
+			return
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+
+	t.Errorf("metric version stayed at %d: the run's clock never refreshed the weights", before)
+}
+
 // TestSimStart_AdvancesOnItsOwnClock checks the goroutine the endpoints rely on:
 // a run started over HTTP makes progress without anyone stepping it.
 func TestSimStart_AdvancesOnItsOwnClock(t *testing.T) {

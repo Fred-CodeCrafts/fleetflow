@@ -251,6 +251,25 @@ func WithFleetService(fn func(*engine.Engine) sim.FleetService) Option {
 	return func(s *Server) { s.fleetService = fn }
 }
 
+// selfFleet is the FleetFlow arm's routing service when its traffic goes over the
+// public API. An in-process arm refreshes the weights as it goes, because it holds
+// the engine itself; an HTTP client cannot reach the engine behind the API, so
+// that refresh is delegated here, through the same engine the API serves from.
+// Without it a run over the wire would route on one snapshot for its whole length.
+type selfFleet struct {
+	sim.FleetService
+	eng *engine.Engine
+}
+
+// CustomizeEvery implements sim.FleetCustomizer.
+func (f selfFleet) CustomizeEvery() time.Duration { return f.eng.CustomizeEvery() }
+
+// DecayStale implements sim.FleetCustomizer.
+func (f selfFleet) DecayStale(now time.Time) { f.eng.DecayStale(now) }
+
+// Customize implements sim.FleetCustomizer.
+func (f selfFleet) Customize() *engine.Metric { return f.eng.Customize() }
+
 // handleSimStart builds a fresh comparison run from the request and sets its
 // clock going, replacing whatever was running before.
 func (s *Server) handleSimStart(w http.ResponseWriter, r *http.Request) {
@@ -278,7 +297,9 @@ func (s *Server) handleSimStart(w http.ResponseWriter, r *http.Request) {
 
 	fleet := sim.FleetService(sim.NewEngineFleet(s.eng))
 	if s.fleetService != nil {
-		fleet = s.fleetService(s.eng)
+		// The client speaks HTTP, so the clock's weight refresh has to be handed
+		// to the engine the server itself routes with.
+		fleet = selfFleet{FleetService: s.fleetService(s.eng), eng: s.eng}
 	}
 
 	live, err := newRun(s.graph, cfg, baseline, fleet)
