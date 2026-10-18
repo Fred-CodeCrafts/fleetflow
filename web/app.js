@@ -386,12 +386,37 @@ async function resetRun() {
   }
 }
 
+// saveRun stores the comparison run that is going (T48). The endpoint takes no
+// body at all: the record is captured from the server, so what is saved is what
+// ran rather than what a client says ran. A save with no run going answers 409
+// no_run, and that message is what the page shows — a button that looked like it
+// had worked would be a promise of a record that does not exist.
+async function saveRun() {
+  showResult('POST /api/runs \u2026', 'idle');
+  try {
+    const res = await postJSON('/api/runs');
+    if (res.status !== 201) {
+      showResult(describeError(res), 'error');
+      return;
+    }
+    const saved = res.body;
+    showResult(`201 saved run ${saved.id} \u2014 seed ${saved.seed}`, 'ok');
+    // The run is history now, so the pane that lists saved runs is stale.
+    await refreshHistory();
+  } catch (err) {
+    showResult(`request failed: ${err.message}`, 'error');
+  }
+}
+
 function wireControls() {
   const start = document.getElementById('start');
   if (start) start.addEventListener('click', startRun);
 
   const reset = document.getElementById('reset');
   if (reset) reset.addEventListener('click', resetRun);
+
+  const save = document.getElementById('save-run');
+  if (save) save.addEventListener('click', saveRun);
 }
 
 /* ---------- view switcher (T48) ---------- */
