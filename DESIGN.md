@@ -67,15 +67,15 @@ Honest status, not the target: this is what is in the repository today versus wh
 | Part | Choice | Status |
 |---|---|---|
 | Language | Go 1.25.5, module `fleetflow` | In place |
-| Dependencies | Standard library only; no `go.sum` yet | In place |
-| HTTP | `net/http` + `http.ServeMux` with method patterns; no framework | In place (only `GET /healthz`) |
+| Dependencies | Standard library plus `github.com/jackc/pgx/v5` for PostgreSQL | In place |
+| HTTP | `net/http` + `http.ServeMux` with method patterns; no framework | In place (the whole route table, including the SSE stream) |
 | Routing | Hand-written Dijkstra behind a `Router` interface | In place |
 | Simulation | Own deterministic mesoscopic model | In place |
-| Persistence | PostgreSQL with versioned SQL migrations; driver not chosen yet | Planned (dev Postgres 17 runs in Docker; no Go code yet) |
-| Dashboard | Plain HTML/CSS/JS on two canvases, no map tiles, embedded with `go:embed` | Planned (`web/` does not exist yet) |
-| Streaming | Server-Sent Events | Planned |
+| Persistence | PostgreSQL with versioned SQL migrations, applied with Flyway; `pgx` as the driver | In place for keys, vehicles, drivers and trips (the integration tests need `TEST_DATABASE_URL`) |
+| Dashboard | Plain HTML/CSS/JS on two canvases, no map tiles, embedded with `go:embed` | In place as a page, a map and the run controls; the views fed by the stream are pending |
+| Streaming | Server-Sent Events | In place (`GET /api/stream`) |
 | Deployment | Multi-stage Dockerfile to Cloud Run, `max-instances=1`; Fly as a preview | Planned (no Dockerfile yet) |
-| CI | Build, vet, lint, `gofmt` and `go test -race` on every push | Planned |
+| CI | Build, vet, `gofmt` and `go test -race` on every push | In place, but with no database: the Postgres suites skip without `TEST_DATABASE_URL` (TASKS, "Found along the way") |
 | Testing | `go test` with table-driven unit tests; race detector run from WSL | In place |
 | Database MCP (dev only) | Google MCP Toolbox for Databases, read-only role, off by default | In place (local only) |
 
