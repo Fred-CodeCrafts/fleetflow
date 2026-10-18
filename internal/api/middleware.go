@@ -24,12 +24,38 @@ func withRequestID(next http.Handler) http.Handler {
 	})
 }
 
+// contextLoggerKey is the context key for the request's logger. A struct type keeps
+// any other package from colliding with it.
+type contextLoggerKey struct{}
+
+// contextWithLogger puts logger in ctx, so handlers below log through the logger
+// the server was configured with rather than through the package default.
+func contextWithLogger(ctx context.Context, logger *slog.Logger) context.Context {
+	return context.WithValue(ctx, contextLoggerKey{}, logger)
+}
+
+// loggerFromContext returns the logger the request was given. It falls back to the
+// default one when a handler runs outside the middleware, which is what a unit test
+// calling writeError directly does.
+func loggerFromContext(ctx context.Context) *slog.Logger {
+	if logger, ok := ctx.Value(contextLoggerKey{}).(*slog.Logger); ok && logger != nil {
+		return logger
+	}
+	return slog.Default()
+}
+
 // withLogging writes one structured line per request. The request ID ties the line
 // to the response the client saw, so a reported ID can be looked up.
 func withLogging(logger *slog.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		rec := &statusRecorder{ResponseWriter: w}
+
+		// The logger travels with the request so a failure deeper down is written
+		// by the same logger as the request line, not by the package default: a
+		// server configured with JSON output must not emit one plain line per
+		// internal error.
+		r = r.WithContext(contextWithLogger(r.Context(), logger))
 
 		next.ServeHTTP(rec, r)
 

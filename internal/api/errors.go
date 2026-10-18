@@ -132,7 +132,7 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		// database or driver detail, so the detail goes to the log and the client
 		// gets a generic message.
 		code, message = "internal", "internal server error"
-		slog.ErrorContext(r.Context(), "request failed",
+		loggerFromContext(r.Context()).ErrorContext(r.Context(), "request failed",
 			slog.String("request_id", requestIDFrom(r.Context())),
 			slog.String("method", r.Method),
 			slog.String("path", r.URL.Path),
