@@ -7,9 +7,11 @@
  * no framework, and no request leaving this origin (DESIGN 3.6).
  *
  * Today it fetches the road network once from GET /api/graph and draws it on
- * both panels, so the two arms are compared over the same roads. It does not
- * open GET /api/stream yet on purpose: a stream wired halfway is harder to
- * reason about than none. The seam it plugs into is at the end of this file.
+ * both panels, so the two arms are compared over the same roads, and wires the
+ * controls to POST /api/sim/start and POST /api/sim/reset, showing what the
+ * server answered. It does not open GET /api/stream yet on purpose: a stream
+ * wired halfway is harder to reason about than none. The seam it plugs into is
+ * at the end of this file.
  */
 
 /* ---------- map constants ---------- */
@@ -172,6 +174,116 @@ function drawRoads(ctx, state) {
   }
 }
 
+/* ---------- run controls ---------- */
+
+// postJSON sends one request and returns what the server answered: status and
+// body both. Nothing is swallowed, because a rejected value has to be visible on
+// the page and the API's error codes are what name the value that was rejected.
+async function postJSON(path, body) {
+  const options = { method: 'POST', headers: { Accept: 'application/json' } };
+  if (body !== undefined) {
+    options.headers['Content-Type'] = 'application/json';
+    options.body = JSON.stringify(body);
+  }
+
+  const res = await fetch(path, options);
+  const text = await res.text();
+
+  let parsed = null;
+  if (text !== '') {
+    try {
+      parsed = JSON.parse(text);
+    } catch (err) {
+      parsed = null;
+    }
+  }
+  return { status: res.status, body: parsed };
+}
+
+function showResult(text, kind) {
+  const out = document.getElementById('control-result');
+  if (!out) return;
+  out.textContent = `>_ ${text}`;
+  out.dataset.kind = kind;
+}
+
+function setRunChip(text, state) {
+  const chip = document.getElementById('run-chip');
+  if (!chip) return;
+  chip.textContent = text;
+  chip.dataset.state = state;
+}
+
+// readNumber returns the field's value, null when it was left empty (the server
+// then applies its own default), and NaN when it is not a number at all.
+function readNumber(id) {
+  const input = document.getElementById(id);
+  if (!input || input.value.trim() === '') return null;
+  return input.valueAsNumber;
+}
+
+function describeError(res) {
+  if (res.body && res.body.code) {
+    return `${res.status} ${res.body.code} — ${res.body.message}`;
+  }
+  return `${res.status} unexpected response`;
+}
+
+async function startRun() {
+  const body = {
+    seed: readNumber('seed'),
+    vehicles: readNumber('vehicles'),
+    fleet_share: readNumber('fleet-share'),
+  };
+
+  for (const [field, value] of Object.entries(body)) {
+    if (Number.isNaN(value)) {
+      showResult(`${field.replace('_', ' ')} is not a number`, 'error');
+      return;
+    }
+  }
+
+  showResult('POST /api/sim/start …', 'idle');
+  try {
+    const res = await postJSON('/api/sim/start', body);
+    if (res.status === 202 && res.body) {
+      setRunChip('Running', 'running');
+      showResult(
+        `202 accepted — seed ${res.body.seed}, ${res.body.vehicles} vehicles, ` +
+          `fleet share ${res.body.fleet_share}, step ${res.body.step_s}s`,
+        'ok'
+      );
+      return;
+    }
+    showResult(describeError(res), 'error');
+  } catch (err) {
+    showResult(`request failed: ${err.message}`, 'error');
+  }
+}
+
+async function resetRun() {
+  showResult('POST /api/sim/reset …', 'idle');
+  try {
+    const res = await postJSON('/api/sim/reset');
+    if (res.status === 204) {
+      setRunChip('No run', 'idle');
+      showResult('204 reset — no run', 'ok');
+      return;
+    }
+    showResult(describeError(res), 'error');
+  } catch (err) {
+    showResult(`request failed: ${err.message}`, 'error');
+  }
+}
+
+function wireControls() {
+  const start = document.getElementById('start');
+  if (start) start.addEventListener('click', startRun);
+
+  const reset = document.getElementById('reset');
+  if (reset) reset.addEventListener('click', resetRun);
+}
+
 /* ---------- startup ---------- */
 
 async function fetchGraph() {
@@ -188,6 +300,10 @@ function setRoadCount(text) {
 }
 
 async function init() {
+  // The controls are wired before the graph is fetched, so a dashboard that
+  // cannot draw the network can still start and reset a run.
+  wireControls();
+
   let graph;
   try {
     graph = await fetchGraph();
