@@ -36,6 +36,19 @@ func (s *EdgeState) Rho() float64 {
 	return s.rhoBar
 }
 
+// Reset returns the edge to free flow, discarding its history. It exists for a
+// simulation run that owns the weights and must start from an empty network;
+// nothing else may call it, because a live edge's history is its only record of
+// congestion.
+func (s *EdgeState) Reset() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.rhoBar = 0
+	s.lastReport = time.Time{}
+	s.reported = false
+}
+
 // Observe folds one vehicle report into the smoothed congestion:
 //
 //	rhoBar = (1 - gamma) * rhoBar + gamma * rho

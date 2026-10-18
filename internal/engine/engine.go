@@ -118,6 +118,23 @@ func (e *Engine) Report(edgeID string, speedMPS float64, now time.Time) error {
 	return nil
 }
 
+// Reset returns every edge to free flow and publishes a fresh snapshot, so the
+// next query routes on an empty network.
+//
+// It is for a simulation run that owns the weights: a run has to start from the
+// same state every time or its numbers depend on what ran before it. Clearing them
+// while live traffic is feeding them would throw away real reports, so only a
+// deployment that has asserted it is running a demo may call it.
+func (e *Engine) Reset() {
+	if e.static {
+		return // baseline mode has no state to clear
+	}
+	for _, st := range e.states {
+		st.Reset()
+	}
+	e.publish(buildDynamicCosts(e.graph, e.states, e.params), 0)
+}
+
 // Route answers a route query from the currently published snapshot. The pointer
 // is loaded exactly once, so the whole query runs on one immutable metric even if
 // a new snapshot is published mid-query. The query is timed once, in
