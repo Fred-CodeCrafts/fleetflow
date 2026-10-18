@@ -104,8 +104,12 @@ type Server struct {
 	// or empty when there is none. It is matched exactly and only to exempt that
 	// one client from the public rate limit.
 	internalKey string
-	dbCheck     func(context.Context) error
-	stoppers    []StopFunc
+	// live is where real vehicles are last seen, so the dashboard can show them
+	// beside simulated ones. It is always present; an empty register is a valid
+	// state, not a missing dependency.
+	live     *liveVehicles
+	dbCheck  func(context.Context) error
+	stoppers []StopFunc
 }
 
 // Option customises a Server at construction time.
@@ -202,6 +206,7 @@ func NewServer(g *graph.Graph, opts ...Option) *Server {
 		mux:     http.NewServeMux(),
 		logger:  slog.Default(),
 		limiter: newRateLimiter(ratePerSecond, rateBurst),
+		live:    newLiveVehicles(liveVehicleTTL, maxLiveVehicles),
 	}
 	for _, opt := range opts {
 		opt(s)

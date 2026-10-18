@@ -63,6 +63,11 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A real vehicle that has just reported is on the road now. The weights have
+	// already taken the speed; this is what lets the dashboard show live traffic
+	// beside simulated traffic and label which is which (T43).
+	s.live.observe(req.VehicleID, req.EdgeID, req.SpeedMPS, observedAt)
+
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})
 }
 
