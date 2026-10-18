@@ -291,16 +291,29 @@ history. What stays below is what is still owed.
   baseline averages 189.1 s per trip with a p95 of 2,257 s, and FleetFlow 42.5 s with a
   p95 of 84.5 s, off 37 reroutes. That is this project's own claim demonstrated -- static
   shortest paths jam and dynamic ones spread -- and it is a scenario choice, not a model
-  change. T60 decides between adopting a peak scenario like it and recording the tie
-  above for the uniform default. Raising the BPR coefficient instead would make the demo
-  look good for the wrong reason.
+  change. T60 did both halves: the demo network and departure window were resized to that
+  scenario (DESIGN 3.1, `docs/results.md`), and the uniform default's tie is recorded there
+  as a case where FleetFlow does not win, so the record does not rest on the scenario being
+  the only one measured. Raising the BPR coefficient instead would have made the demo look
+  good for the wrong reason. `internal/sim`'s demo-scenario test fails if the adopted
+  scenario ever stops congesting.
 - **The congestion columns of a finished run are always zero.** They are a snapshot of
   the network at the moment `Collect` runs, and a run that has settled has no vehicles
   left on it, so `saturated_edges_pct` and `utilization_std_dev` read 0.0000 in every row
   of the comparison CSV -- including the run above, whose baseline trip is five times
   slower than free flow. They mean something mid-run, which is what `GET /api/metrics`
-  and the dashboard show, but not in a record. Owes T60: keep the peak during the run, or
-  say plainly which figures are end-of-run.
+  and the dashboard show, but not in a record. `docs/results.md` therefore says which
+  figures are end-of-run and does not use them at all. Keeping the peak during the run -- a
+  running maximum in the simulator -- is still the better answer if a congestion figure is
+  ever wanted in the record, and it is a small one.
+- **The baseline panel stays green while its own traffic jams.** The stream carries one
+  engine's metric, and the baseline's weights never move, so its panel is drawn at free
+  flow by definition while its vehicles queue behind each other: 0.83% of edges at capacity
+  mid-run on the demo scenario, against 0 for FleetFlow. The jam is in the metrics strip,
+  in the route-change count and in how slowly its dots move, but not in the colour of the
+  map a viewer is looking at. Streaming each arm's occupancy would put it there, at the
+  cost of a contract change (DESIGN 3.5, `docs/results.md`). Worth deciding when the
+  dashboard is next opened in a browser rather than reasoned about.
 - **T39b (saved runs) has its store but not its endpoint.** `internal/run`, its memory and
   Postgres repositories and `db/migration/V3__runs.sql` are merged, and the integration
   tests pass against the real database. Nothing serves them yet: `GET /api/runs` and
