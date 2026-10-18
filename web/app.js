@@ -516,7 +516,7 @@ function failPane(pane, err) {
 // opened, so the tables are the server's answer at the moment they are looked
 // at rather than whatever the last visit left behind.
 function refreshFleet() {
-  return Promise.all([refreshVehicles()]);
+  return Promise.all([refreshVehicles(), refreshDrivers()]);
 }
 
 async function refreshVehicles() {
@@ -545,6 +545,46 @@ async function refreshVehicles() {
 // at once, so the join is made here rather than with a request per row.
 function driverOnVehicle(vehicleID) {
   return fleetState.drivers.find((driver) => driver.vehicle_id === vehicleID) || null;
+}
+
+async function refreshDrivers() {
+  setPaneNote('drivers', 'GET /api/drivers \u2026', 'idle');
+  try {
+    const drivers = await readList('/api/drivers', 'drivers');
+    delete fleetState.errors.drivers;
+    fleetState.drivers = drivers;
+    renderDrivers();
+    noteCount('drivers', drivers.length, 'driver');
+  } catch (err) {
+    failPane('drivers', err);
+    renderDrivers();
+  }
+}
+
+function renderDrivers() {
+  const tbody = document.getElementById('drivers-rows');
+  if (!tbody) return;
+
+  if (fleetState.errors.drivers) {
+    emptyRow(tbody, 4, fleetState.errors.drivers);
+    return;
+  }
+  if (fleetState.drivers.length === 0) {
+    emptyRow(tbody, 4, 'No drivers yet.');
+    return;
+  }
+
+  tbody.replaceChildren();
+  for (const driver of fleetState.drivers) {
+    const row = el('tr');
+    row.appendChild(el('td', 'mono', driver.id));
+    row.appendChild(el('td', null, driver.name));
+    row.appendChild(el('td', null, textOf(driver.contact)));
+    // The vehicle the driver holds travels back from the API, so an assignment
+    // is visible from the driver's side of it and not only the vehicle's.
+    row.appendChild(el('td', 'mono', textOf(driver.vehicle_id)));
+    tbody.appendChild(row);
+  }
 }
 
 function renderVehicles() {
