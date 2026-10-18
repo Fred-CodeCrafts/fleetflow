@@ -67,7 +67,11 @@ func NewService(repo Repository) *Service { return &Service{repo: repo} }
 // this layer inventing a rule the domain does not have. The two documents are
 // required, though: a run saved without its config or its metrics records
 // nothing worth keeping, so a blank one is refused before the store is reached.
-func (s *Service) Save(ctx context.Context, seed int64, config, metrics []byte) (Run, error) {
+//
+// demo is passed through for the same reason the seed is: whether the deployment
+// served the control routes is a fact about where the run happened, and only the
+// process knows it.
+func (s *Service) Save(ctx context.Context, seed int64, demo bool, config, metrics []byte) (Run, error) {
 	if len(config) == 0 {
 		return Run{}, domain.Invalid(codeConfigRequired, "run config is required")
 	}
@@ -80,7 +84,7 @@ func (s *Service) Save(ctx context.Context, seed int64, config, metrics []byte) 
 		return Run{}, err
 	}
 
-	stored, err := s.repo.Create(ctx, Run{ID: id, Seed: seed, Config: config, Metrics: metrics})
+	stored, err := s.repo.Create(ctx, Run{ID: id, Seed: seed, Demo: demo, Config: config, Metrics: metrics})
 	if err != nil {
 		return Run{}, storageError(codeCreateFailed, err)
 	}

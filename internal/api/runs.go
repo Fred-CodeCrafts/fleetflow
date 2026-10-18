@@ -38,6 +38,11 @@ const codeBodyNotTaken = "body_not_taken"
 type runView struct {
 	ID   string `json:"id"`
 	Seed int64  `json:"seed"`
+	// Demo records whether the deployment that ran this served the simulation
+	// control routes, and therefore whether the run owned the engine's weights.
+	// A record that did not say would leave the reader unable to tell a controlled
+	// comparison from one measured alongside live traffic.
+	Demo bool `json:"demo"`
 	// Config is the demand the run was started with, in the shape
 	// POST /api/sim/start accepts.
 	Config json.RawMessage `json:"config"`
@@ -55,6 +60,7 @@ func viewOfRun(saved runstore.Run) runView {
 	return runView{
 		ID:        saved.ID,
 		Seed:      saved.Seed,
+		Demo:      saved.Demo,
 		Config:    json.RawMessage(saved.Config),
 		Metrics:   json.RawMessage(saved.Metrics),
 		CreatedAt: saved.CreatedAt.UTC(),
@@ -178,7 +184,7 @@ func (s *Server) handleSaveRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	saved, err := s.runs.Save(r.Context(), live.cfg.Seed, config, metrics)
+	saved, err := s.runs.Save(r.Context(), live.cfg.Seed, s.demo, config, metrics)
 	if err != nil {
 		writeError(w, r, err)
 		return

@@ -56,11 +56,11 @@ func New(pool *pgxpool.Pool) *Repository { return &Repository{pool: pool} }
 // one this code guessed. The config and metrics are written as the JSON bytes the
 // API produced, into jsonb columns: the store never parses or reshapes them.
 func (r *Repository) Create(ctx context.Context, rec run.Run) (run.Run, error) {
-	const q = `insert into runs (id, seed, config, metrics)
-		values ($1, $2, $3, $4)
+	const q = `insert into runs (id, seed, demo, config, metrics)
+		values ($1, $2, $3, $4, $5)
 		returning created_at`
 
-	if err := r.pool.QueryRow(ctx, q, rec.ID, rec.Seed, rec.Config, rec.Metrics).Scan(&rec.CreatedAt); err != nil {
+	if err := r.pool.QueryRow(ctx, q, rec.ID, rec.Seed, rec.Demo, rec.Config, rec.Metrics).Scan(&rec.CreatedAt); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == uniqueViolation && pgErr.ConstraintName == constraintRunPK {
 			return run.Run{}, domain.Conflict(codeRunExists, "run %s already exists", rec.ID).WithCause(err)
@@ -77,7 +77,7 @@ func (r *Repository) Create(ctx context.Context, rec run.Run) (run.Run, error) {
 // The limit is clamped by the service before it reaches here, so this store
 // trusts it rather than second-guessing the caller.
 func (r *Repository) List(ctx context.Context, limit int) ([]run.Run, error) {
-	const q = `select id, seed, config, metrics, created_at
+	const q = `select id, seed, demo, config, metrics, created_at
 		from runs
 		order by created_at desc, id desc
 		limit $1`
@@ -91,7 +91,7 @@ func (r *Repository) List(ctx context.Context, limit int) ([]run.Run, error) {
 	found := make([]run.Run, 0)
 	for rows.Next() {
 		var rec run.Run
-		if err := rows.Scan(&rec.ID, &rec.Seed, &rec.Config, &rec.Metrics, &rec.CreatedAt); err != nil {
+		if err := rows.Scan(&rec.ID, &rec.Seed, &rec.Demo, &rec.Config, &rec.Metrics, &rec.CreatedAt); err != nil {
 			return nil, err
 		}
 		found = append(found, rec)
@@ -106,10 +106,10 @@ func (r *Repository) List(ctx context.Context, limit int) ([]run.Run, error) {
 // memory store, so the transport maps a missing run to 404 the same way whichever
 // store backs the service.
 func (r *Repository) Get(ctx context.Context, id string) (run.Run, error) {
-	const q = `select id, seed, config, metrics, created_at from runs where id = $1`
+	const q = `select id, seed, demo, config, metrics, created_at from runs where id = $1`
 
 	var rec run.Run
-	err := r.pool.QueryRow(ctx, q, id).Scan(&rec.ID, &rec.Seed, &rec.Config, &rec.Metrics, &rec.CreatedAt)
+	err := r.pool.QueryRow(ctx, q, id).Scan(&rec.ID, &rec.Seed, &rec.Demo, &rec.Config, &rec.Metrics, &rec.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return run.Run{}, domain.NotFound(codeRunNotFound, "run %s does not exist", id)
 	}

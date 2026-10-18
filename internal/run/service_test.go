@@ -23,7 +23,7 @@ func TestSaveStoresRun(t *testing.T) {
 	config := []byte(`{"fleet_share":0.4}`)
 	metrics := []byte(`{"baseline":{"trip_time":10}}`)
 
-	got, err := svc.Save(ctx, 7, config, metrics)
+	got, err := svc.Save(ctx, 7, true, config, metrics)
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestSaveKeepsTheSeedUnjudged(t *testing.T) {
 	ctx := context.Background()
 
 	for _, seed := range []int64{0, -1, -12345, math.MaxInt64, math.MinInt64} {
-		got, err := svc.Save(ctx, seed, []byte(`{}`), []byte(`{}`))
+		got, err := svc.Save(ctx, seed, true, []byte(`{}`), []byte(`{}`))
 		if err != nil {
 			t.Fatalf("Save(seed=%d): %v", seed, err)
 		}
@@ -86,7 +86,7 @@ func TestSaveRefusesBlankDocuments(t *testing.T) {
 			svc := newService()
 			ctx := context.Background()
 
-			got, err := svc.Save(ctx, 1, tt.config, tt.metrics)
+			got, err := svc.Save(ctx, 1, true, tt.config, tt.metrics)
 			if err == nil {
 				t.Fatalf("Save accepted a blank document as %+v", got)
 			}
@@ -117,7 +117,7 @@ func TestListReturnsMostRecentFirst(t *testing.T) {
 
 	seeds := []int64{10, 20, 30}
 	for _, seed := range seeds {
-		if _, err := svc.Save(ctx, seed, []byte(`{}`), []byte(`{}`)); err != nil {
+		if _, err := svc.Save(ctx, seed, true, []byte(`{}`), []byte(`{}`)); err != nil {
 			t.Fatalf("Save(seed=%d): %v", seed, err)
 		}
 	}
@@ -146,7 +146,7 @@ func TestListClampsTheLimit(t *testing.T) {
 
 	const saved = 120
 	for i := 0; i < saved; i++ {
-		if _, err := svc.Save(ctx, int64(i), []byte(`{}`), []byte(`{}`)); err != nil {
+		if _, err := svc.Save(ctx, int64(i), true, []byte(`{}`), []byte(`{}`)); err != nil {
 			t.Fatalf("Save %d: %v", i, err)
 		}
 	}
@@ -212,7 +212,7 @@ func TestServiceIDsAreUnique(t *testing.T) {
 
 	seen := make(map[string]bool)
 	for i := 0; i < 200; i++ {
-		got, err := svc.Save(ctx, int64(i), []byte(`{}`), []byte(`{}`))
+		got, err := svc.Save(ctx, int64(i), true, []byte(`{}`), []byte(`{}`))
 		if err != nil {
 			t.Fatalf("Save %d: %v", i, err)
 		}
@@ -243,7 +243,7 @@ func TestServiceHidesRawStorageError(t *testing.T) {
 	raw := errors.New("pq: dial tcp 10.0.0.7:5432: connection refused")
 	svc := run.NewService(stubRepo{err: raw})
 
-	_, err := svc.Save(context.Background(), 1, []byte(`{}`), []byte(`{}`))
+	_, err := svc.Save(context.Background(), 1, true, []byte(`{}`), []byte(`{}`))
 	if err == nil {
 		t.Fatal("Save succeeded although the repository failed")
 	}
@@ -267,7 +267,7 @@ func TestServiceReportsCancelledRequestAsUnavailable(t *testing.T) {
 	cancel()
 
 	svc := newService()
-	_, err := svc.Save(ctx, 1, []byte(`{}`), []byte(`{}`))
+	_, err := svc.Save(ctx, 1, true, []byte(`{}`), []byte(`{}`))
 	if err == nil {
 		t.Fatal("Save succeeded with a cancelled context")
 	}

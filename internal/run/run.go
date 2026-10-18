@@ -30,6 +30,11 @@ type Run struct {
 	Config []byte
 	// Metrics is the run's result metrics document, as the API serialized it.
 	Metrics []byte
+	// Demo records whether the run came from a deployment that served the
+	// simulation control routes. A run owns the engine's weights while it lasts,
+	// so this is the difference between a comparison that was safe to run and one
+	// that was measured against traffic nobody accounted for.
+	Demo bool
 	// CreatedAt is when the run was saved, set by the store.
 	CreatedAt time.Time
 }

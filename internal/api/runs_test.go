@@ -51,6 +51,11 @@ func TestRuns_SaveThenList(t *testing.T) {
 	}
 
 	saved := decodeBody(t, rec)
+	// The run was started on a server built with WithDemo(true), so the record says
+	// so: whether a run owned the weights is part of what it measured.
+	if demo, ok := saved["demo"].(bool); !ok || !demo {
+		t.Errorf("saved run demo = %v, want true", saved["demo"])
+	}
 	if id := field(t, saved, "id"); id == "" {
 		t.Error("saved run has no id")
 	}
