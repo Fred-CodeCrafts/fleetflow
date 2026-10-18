@@ -394,6 +394,46 @@ function wireControls() {
   if (reset) reset.addEventListener('click', resetRun);
 }
 
+/* ---------- view switcher (T48) ---------- */
+
+// The dashboard has two views. Comparison is what it has always shown, so it is
+// the one the page opens on and nothing about it changes; Fleet is the
+// dispatcher's records. Only one view is in the document's flow at a time, so a
+// hidden canvas has no size to measure — which is why returning to the
+// comparison view lays the panels out again rather than trusting what the last
+// paint left (T49).
+const VIEWS = ['comparison', 'fleet'];
+
+function showView(name) {
+  if (!VIEWS.includes(name)) return;
+
+  for (const section of document.querySelectorAll('[data-view]')) {
+    section.hidden = section.dataset.view !== name;
+  }
+  for (const view of VIEWS) {
+    const button = document.getElementById('view-' + view);
+    if (button) button.setAttribute('aria-pressed', view === name ? 'true' : 'false');
+  }
+
+  if (name === 'fleet') {
+    // The panes read their endpoints when the view is opened, in the commit
+    // that adds them.
+    return;
+  }
+
+  for (const panel of panels) {
+    layout(panel);
+    redrawPanel(panel);
+  }
+}
+
+function wireViews() {
+  for (const view of VIEWS) {
+    const button = document.getElementById('view-' + view);
+    if (button) button.addEventListener('click', () => showView(view));
+  }
+}
+
 /* ---------- startup ---------- */
 
 async function fetchGraph() {
@@ -413,6 +453,7 @@ async function init() {
   // The controls are wired before the graph is fetched, so a dashboard that
   // cannot draw the network can still start and reset a run.
   wireControls();
+  wireViews();
 
   // The stream is opened before the graph is fetched, and independently of it:
   // the metrics strip and the run chip do not need the road network, and the
