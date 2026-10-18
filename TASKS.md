@@ -156,8 +156,12 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   - The simulator authenticates with an ephemeral in-memory key minted at
     startup (hashed, never logged, never persisted), through the real
     middleware. No auth bypass.
-  - The run resets engine weight state at start; a second concurrent start
-    returns 409; run mode is behind `-demo`.
+  - A second start while a run is in progress returns 409, in every mode. The
+    run replaces nothing and stops nothing.
+  - Simulation is opt-in: `-demo` serves `/api/sim/start` and `/api/sim/reset`,
+    and without it both are 404. A run resets the engine's weight state at
+    start, which is safe because `-demo` asserts nothing live is feeding it.
+    A saved run records that it was a demo run.
   - Simulated time advances in ticks; each tick blocks until its HTTP calls
     return. An HTTP error fails the run loudly, with no silent fallback.
   - Tests: same seed twice gives identical demand and identical baseline
@@ -172,9 +176,23 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   API policy. Still owed above: the ephemeral key (today `SIM_API_KEY`, a persisted
   config secret, plus a rate-limit exemption in `WithInternalKey` — still
   authenticated, so a secret rather than a hole), the 409 (a second start swaps the
-  running one out), the weight reset (deliberately not done), and `-demo`.
+  running one out), the weight reset (not done: the state is not reset, so a run
+  inherits whatever the engine already held), and `-demo`.
+
+  `POST /api/sim/start` and `POST /api/sim/reset` stay public, which is its own
+  decision and not part of this task: the dashboard is a static page with no
+  credential, so a key would have to ship in it and protect nothing. Reset is
+  therefore still a way for any caller to stop a run. It stays stoppable on
+  purpose — the dashboard's stop control posts to it — and the rate limit on the
+  public routes covers spam. Operator-only controls, with a read-only dashboard,
+  would be a later task.
 - [x] 🔴 **T41** Add `POST /api/sim/start` and `POST /api/sim/reset`
   `feat(api): add simulation control endpoints`
+  Done when: both routes are registered and answer `POST` only; a start decodes
+  its body, fills in the demo defaults, refuses out-of-range values with a named
+  400, builds both arms and answers `202` with the run's status; a reset answers
+  `204` whether or not a run was running, and clears one that was; a start with
+  no engine configured answers `503`.
 - [x] 🔴 **T42** Add `GET /api/metrics`
   `feat(api): add metrics endpoint`
 - [x] 🔴 **T42a** Measure and report route query latency (p50, p99) (US-6)
