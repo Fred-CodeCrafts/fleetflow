@@ -772,8 +772,17 @@ function completedTrips(trips) {
 // document is the object GET /api/metrics reports under "run", so the two
 // comparison arms are resolved by the same rule the metrics strip uses. A figure
 // the run never produced is an em dash, not a zero: zero is a measurement.
+//
+// An arm that finished no trips is exactly that case, and the count is what
+// decides it. A run saved before its first arrival reports an average trip of
+// 0 s, which is arithmetic on an empty list rather than a trip that took no time,
+// and a saved run is a record: printing "B 0.0 s" there states a result the run
+// never had, for as long as the record exists.
 function savedRunMetric(run, path) {
-  return formatMetric(path, metricAt({ run: run.metrics }, path));
+  const arm = path.split('.')[0];
+  const document = { run: run.metrics };
+  if (metricAt(document, `${arm}.completed_trips`) === 0) return '\u2014';
+  return formatMetric(path, metricAt(document, path));
 }
 
 // savedAt renders a run's created_at in the reader's own clock: the API sends
