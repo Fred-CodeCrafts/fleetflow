@@ -44,6 +44,12 @@
   border-radius: 0;
 }
 
+/* Every view is a flex or grid container, and a class selector beats the
+   browser's own [hidden] rule, so the attribute has to be honoured explicitly. */
+[hidden] {
+  display: none !important;
+}
+
 html {
   background: var(--void);
 }
@@ -479,6 +485,47 @@ body {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+/* ---------- view switcher (T48) ---------- */
+
+/* Two views, one page. The switcher sits under the masthead and looks like the
+   controls' buttons, because that is what it is: a choice the reader makes, not
+   a link somewhere else. */
+.views {
+  display: flex;
+  gap: 1px;
+  padding: 0 1.25rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.view-btn {
+  padding: 0.55rem 1.1rem;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--on-surface-dim);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.view-btn:hover {
+  color: var(--on-surface);
+}
+
+.view-btn[aria-pressed='true'] {
+  border-bottom-color: var(--primary);
+  color: var(--primary);
+}
+
+.view-btn:focus-visible {
+  outline: 1px solid var(--primary);
+  outline-offset: -3px;
 }
 
 /* ---------- narrow viewports ---------- */

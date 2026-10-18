@@ -16,7 +16,12 @@
   <span class="chip" id="stream-chip" data-state="idle">Stream idle</span>
 </header>
 
-<section class="controls" aria-label="Simulation controls">
+<nav class="views" aria-label="Dashboard views">
+  <button id="view-comparison" class="view-btn" type="button" aria-pressed="true">Comparison</button>
+  <button id="view-fleet" class="view-btn" type="button" aria-pressed="false">Fleet</button>
+</nav>
+
+<section class="controls" data-view="comparison" aria-label="Simulation controls">
   <label class="field">
     <span class="field-label">Seed</span>
     <span class="input-shell"><i>&gt;_</i><input id="seed" type="number" step="1" value="1" inputmode="numeric"></span>
@@ -38,7 +43,7 @@
   </p>
 </section>
 
-<section class="strip" aria-label="Comparison metrics">
+<section class="strip" data-view="comparison" aria-label="Comparison metrics">
   <div class="cell">
     <span class="cell-label">Average trip</span>
     <span class="cell-values">
@@ -88,7 +93,7 @@
   </p>
 </section>
 
-<section class="legend" aria-label="Map legend">
+<section class="legend" data-view="comparison" aria-label="Map legend">
   <span class="legend-item"><i class="swatch swatch-free"></i>free flow</span>
   <span class="legend-item"><i class="swatch swatch-busy"></i>cost &ge; 1.1&times; free flow</span>
   <span class="legend-item"><i class="swatch swatch-severe"></i>cost &ge; 1.5&times; free flow</span>
@@ -104,7 +109,7 @@
   </span>
 </section>
 
-<main class="panels">
+<main class="panels" data-view="comparison">
   <section class="panel" aria-labelledby="panel-baseline">
     <header class="panel-head">
       <h2 id="panel-baseline">Baseline</h2>
@@ -123,6 +128,56 @@
       <canvas id="canvas-fleetflow" class="map" role="img" aria-label="FleetFlow road network">The road network is drawn here; this browser cannot render a canvas.</canvas>
     </div>
   </section>
+</main>
+
+<main class="fleet" hidden>
+
+  <section class="pane" aria-labelledby="pane-vehicles">
+    <header class="pane-head">
+      <h2 id="pane-vehicles">Vehicles</h2>
+      <button class="btn btn-secondary btn-small" type="button" data-refresh="vehicles">Refresh</button>
+    </header>
+
+    <div class="pane-body">
+      <table class="records" id="vehicles-table">
+        <caption>Every vehicle on record.</caption>
+        <thead>
+          <tr>
+            <th scope="col">Id</th>
+            <th scope="col">Name</th>
+            <th scope="col">Type</th>
+            <th scope="col">Status</th>
+          </tr>
+        </thead>
+        <tbody id="vehicles-rows"></tbody>
+      </table>
+      <p class="pane-note" id="vehicles-note" role="status" data-kind="idle">&gt;_ Not read yet</p>
+    </div>
+  </section>
+
+  <section class="pane" aria-labelledby="pane-drivers">
+    <header class="pane-head">
+      <h2 id="pane-drivers">Drivers</h2>
+      <button class="btn btn-secondary btn-small" type="button" data-refresh="drivers">Refresh</button>
+    </header>
+
+    <div class="pane-body">
+      <table class="records" id="drivers-table">
+        <caption>Every driver on record, with the vehicle they hold.</caption>
+        <thead>
+          <tr>
+            <th scope="col">Id</th>
+            <th scope="col">Name</th>
+            <th scope="col">Contact</th>
+            <th scope="col">Vehicle</th>
+          </tr>
+        </thead>
+        <tbody id="drivers-rows"></tbody>
+      </table>
+      <p class="pane-note" id="drivers-note" role="status" data-kind="idle">&gt;_ Not read yet</p>
+    </div>
+  </section>
+
 </main>
 
 <script src="/static/app.js"></script>
