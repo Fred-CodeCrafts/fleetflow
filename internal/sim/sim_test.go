@@ -109,7 +109,7 @@ func TestStep_CarriesLeftoverTimeOntoTheNextEdge(t *testing.T) {
 
 	s.Step()
 
-	if got := v.currentEdge(); got != 1 {
+	if got := v.CurrentEdge(); got != 1 {
 		t.Fatalf("currentEdge() = %d, want 1", got)
 	}
 	// e_BC is 50 m and 4 of its 5 seconds are done.

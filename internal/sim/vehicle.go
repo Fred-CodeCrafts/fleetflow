@@ -106,9 +106,11 @@ func (v *Vehicle) TripDuration() (float64, bool) {
 	return v.arriveS - v.departS, true
 }
 
-// currentEdge returns the edge index the vehicle is driving, or -1 when it is not
-// on the network.
-func (v *Vehicle) currentEdge() int {
+// CurrentEdge returns the index in the graph's edge slice of the edge the
+// vehicle is driving, or -1 when it is not on the network. The API needs it to
+// place the vehicle: a vehicle is somewhere along an edge, and where that edge
+// runs is the graph's business, not the simulator's.
+func (v *Vehicle) CurrentEdge() int {
 	if v.state != VehicleRunning || v.leg >= len(v.route) {
 		return -1
 	}

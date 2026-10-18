@@ -21,7 +21,7 @@ func TestNewVehicle_StartsPending(t *testing.T) {
 	if v.Progress(100) != 0 || v.RouteChanges() != 0 {
 		t.Errorf("expected zeroed progress and route changes, got %f and %d", v.Progress(100), v.RouteChanges())
 	}
-	if got := v.currentEdge(); got != -1 {
+	if got := v.CurrentEdge(); got != -1 {
 		t.Errorf("currentEdge() = %d, want -1 while pending", got)
 	}
 	if _, ok := v.TripDuration(); ok {
@@ -34,17 +34,17 @@ func TestVehicle_CurrentEdgeFollowsTheLeg(t *testing.T) {
 	v.route = []int{4, 9}
 	v.state = VehicleRunning
 
-	if got := v.currentEdge(); got != 4 {
+	if got := v.CurrentEdge(); got != 4 {
 		t.Errorf("currentEdge() = %d, want 4", got)
 	}
 
 	v.leg = 1
-	if got := v.currentEdge(); got != 9 {
+	if got := v.CurrentEdge(); got != 9 {
 		t.Errorf("currentEdge() = %d, want 9", got)
 	}
 
 	v.leg = 2 // past the end of the route
-	if got := v.currentEdge(); got != -1 {
+	if got := v.CurrentEdge(); got != -1 {
 		t.Errorf("currentEdge() = %d, want -1 past the route", got)
 	}
 }

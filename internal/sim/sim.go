@@ -308,7 +308,7 @@ func (s *Sim) rerouteFleet() {
 // on the same snapshot and the comparison means what it says. Pricing them with
 // two calls could straddle a customization and read one cost against the other.
 func (s *Sim) reroute(v *Vehicle) {
-	edgeIndex := v.currentEdge()
+	edgeIndex := v.CurrentEdge()
 	if edgeIndex < 0 {
 		return
 	}
@@ -356,7 +356,7 @@ func (s *Sim) reportSpeeds() {
 		if !v.IsFleet() || v.state != VehicleRunning {
 			continue
 		}
-		edgeIndex := v.currentEdge()
+		edgeIndex := v.CurrentEdge()
 		if edgeIndex < 0 {
 			continue
 		}
