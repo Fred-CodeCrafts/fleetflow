@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -61,6 +62,27 @@ func TestIngest_BadBodiesAreRefusedWithACode(t *testing.T) {
 				})
 			}
 		})
+	}
+}
+
+// TestIngest_RefusalNamesNoGoType pins what a refusal is allowed to say. A
+// client that sends the wrong shape should learn that, not the name of the Go
+// type that was waiting for it: decodeError's whole point is to keep decoder
+// internals out of a public error body.
+func TestIngest_RefusalNamesNoGoType(t *testing.T) {
+	s := simServer(t)
+
+	rec := postJSON(t, s, "/api/route", `[]`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", rec.Code, rec.Body)
+	}
+
+	message, ok := decodeBody(t, rec)["message"].(string)
+	if !ok {
+		t.Fatalf("message is missing from the refusal: %s", rec.Body)
+	}
+	if strings.Contains(message, "api.") || strings.Contains(message, "fleetflow/") {
+		t.Errorf("message = %q, want no Go type or package name in a public error", message)
 	}
 }
 
