@@ -16,7 +16,12 @@
   <span class="chip" id="stream-chip" data-state="idle">Stream idle</span>
 </header>
 
-<section class="controls" aria-label="Simulation controls">
+<nav class="views" aria-label="Dashboard views">
+  <button id="view-comparison" class="view-btn" type="button" aria-pressed="true">Comparison</button>
+  <button id="view-fleet" class="view-btn" type="button" aria-pressed="false">Fleet</button>
+</nav>
+
+<section class="controls" data-view="comparison" aria-label="Simulation controls">
   <label class="field">
     <span class="field-label">Seed</span>
     <span class="input-shell"><i>&gt;_</i><input id="seed" type="number" step="1" value="1" inputmode="numeric"></span>
@@ -31,6 +36,7 @@
   </label>
   <button id="start" class="btn btn-primary" type="button">Start</button>
   <button id="reset" class="btn btn-secondary" type="button">Reset</button>
+  <button id="save-run" class="btn btn-secondary" type="button">Save this run</button>
   <output id="control-result" class="result" role="status" data-kind="idle">&gt;_ Idle</output>
   <p class="stream-note">
     A run advances only while this page is connected to the event stream &mdash; opening the
@@ -38,7 +44,7 @@
   </p>
 </section>
 
-<section class="strip" aria-label="Comparison metrics">
+<section class="strip" data-view="comparison" aria-label="Comparison metrics">
   <div class="cell">
     <span class="cell-label">Average trip</span>
     <span class="cell-values">
@@ -88,7 +94,7 @@
   </p>
 </section>
 
-<section class="legend" aria-label="Map legend">
+<section class="legend" data-view="comparison" aria-label="Map legend">
   <span class="legend-item"><i class="swatch swatch-free"></i>free flow</span>
   <span class="legend-item"><i class="swatch swatch-busy"></i>cost &ge; 1.1&times; free flow</span>
   <span class="legend-item"><i class="swatch swatch-severe"></i>cost &ge; 1.5&times; free flow</span>
@@ -104,7 +110,7 @@
   </span>
 </section>
 
-<main class="panels">
+<main class="panels" data-view="comparison">
   <section class="panel" aria-labelledby="panel-baseline">
     <header class="panel-head">
       <h2 id="panel-baseline">Baseline</h2>
@@ -123,6 +129,178 @@
       <canvas id="canvas-fleetflow" class="map" role="img" aria-label="FleetFlow road network">The road network is drawn here; this browser cannot render a canvas.</canvas>
     </div>
   </section>
+</main>
+
+<main class="fleet" data-view="fleet" hidden>
+
+  <section class="pane" aria-labelledby="pane-vehicles">
+    <header class="pane-head">
+      <h2 id="pane-vehicles">Vehicles</h2>
+      <button class="btn btn-secondary btn-small" type="button" data-refresh="vehicles">Refresh</button>
+    </header>
+
+    <div class="pane-body">
+      <table class="records" id="vehicles-table">
+        <caption>Every vehicle on record, with the driver holding it.</caption>
+        <thead>
+          <tr>
+            <th scope="col">Id</th>
+            <th scope="col">Name</th>
+            <th scope="col">Type</th>
+            <th scope="col">Status</th>
+            <th scope="col">Driver</th>
+            <th scope="col">Assign</th>
+          </tr>
+        </thead>
+        <tbody id="vehicles-rows"></tbody>
+      </table>
+      <p class="pane-note" id="vehicles-note" role="status" data-kind="idle">&gt;_ Not read yet</p>
+
+      <form class="record-form" id="vehicle-form">
+        <h3 class="form-title">Add a vehicle</h3>
+        <label class="field">
+          <span class="field-label">Name</span>
+          <span class="input-shell"><i>&gt;_</i><input id="vehicle-name" name="name" type="text" required autocomplete="off"></span>
+        </label>
+        <label class="field">
+          <span class="field-label">Type</span>
+          <span class="input-shell"><i>&gt;_</i><input id="vehicle-type" name="type" type="text" placeholder="van" autocomplete="off"></span>
+        </label>
+        <label class="field">
+          <span class="field-label">Status</span>
+          <span class="input-shell">
+            <select id="vehicle-status" name="status">
+              <option value="available" selected>available</option>
+              <option value="on_trip">on_trip</option>
+              <option value="offline">offline</option>
+            </select>
+          </span>
+        </label>
+        <button class="btn btn-primary" type="submit">Create vehicle</button>
+      </form>
+    </div>
+  </section>
+
+  <section class="pane" aria-labelledby="pane-drivers">
+    <header class="pane-head">
+      <h2 id="pane-drivers">Drivers</h2>
+      <button class="btn btn-secondary btn-small" type="button" data-refresh="drivers">Refresh</button>
+    </header>
+
+    <div class="pane-body">
+      <table class="records" id="drivers-table">
+        <caption>Every driver on record, with the vehicle they hold.</caption>
+        <thead>
+          <tr>
+            <th scope="col">Id</th>
+            <th scope="col">Name</th>
+            <th scope="col">Contact</th>
+            <th scope="col">Vehicle</th>
+          </tr>
+        </thead>
+        <tbody id="drivers-rows"></tbody>
+      </table>
+      <p class="pane-note" id="drivers-note" role="status" data-kind="idle">&gt;_ Not read yet</p>
+
+      <form class="record-form" id="driver-form">
+        <h3 class="form-title">Add a driver</h3>
+        <label class="field">
+          <span class="field-label">Name</span>
+          <span class="input-shell"><i>&gt;_</i><input id="driver-name" name="name" type="text" required autocomplete="off"></span>
+        </label>
+        <label class="field">
+          <span class="field-label">Contact</span>
+          <span class="input-shell"><i>&gt;_</i><input id="driver-contact" name="contact" type="text" placeholder="ana@example.com" autocomplete="off"></span>
+        </label>
+        <button class="btn btn-primary" type="submit">Create driver</button>
+      </form>
+    </div>
+  </section>
+
+  <section class="pane" aria-labelledby="pane-trips">
+    <header class="pane-head">
+      <h2 id="pane-trips">Trips</h2>
+      <button class="btn btn-secondary btn-small" type="button" data-refresh="trips">Refresh</button>
+    </header>
+
+    <div class="pane-body">
+      <table class="records" id="trips-table">
+        <caption>Every trip on record, with the vehicle carrying it and the next step in its life.</caption>
+        <thead>
+          <tr>
+            <th scope="col">Id</th>
+            <th scope="col">Origin</th>
+            <th scope="col">Destination</th>
+            <th scope="col">Vehicle</th>
+            <th scope="col">Status</th>
+            <th scope="col">Advance</th>
+          </tr>
+        </thead>
+        <tbody id="trips-rows"></tbody>
+      </table>
+      <p class="pane-note" id="trips-note" role="status" data-kind="idle">&gt;_ Not read yet</p>
+
+      <form class="record-form" id="trip-form">
+        <h3 class="form-title">Add a trip</h3>
+        <label class="field">
+          <span class="field-label">Origin</span>
+          <span class="input-shell"><i>&gt;_</i><input id="trip-origin" name="origin" type="text" required autocomplete="off"></span>
+        </label>
+        <label class="field">
+          <span class="field-label">Destination</span>
+          <span class="input-shell"><i>&gt;_</i><input id="trip-destination" name="destination" type="text" required autocomplete="off"></span>
+        </label>
+        <label class="field">
+          <span class="field-label">Vehicle</span>
+          <span class="input-shell">
+            <select id="trip-vehicle" name="vehicle_id">
+              <option value="">none</option>
+            </select>
+          </span>
+        </label>
+        <button class="btn btn-primary" type="submit">Create trip</button>
+      </form>
+    </div>
+  </section>
+
+  <section class="pane" aria-labelledby="pane-history">
+    <header class="pane-head">
+      <h2 id="pane-history">History</h2>
+      <button class="btn btn-secondary btn-small" type="button" data-refresh="history">Refresh</button>
+    </header>
+
+    <div class="pane-body">
+      <h3 class="form-title">Completed trips</h3>
+      <table class="records" id="history-trips-table">
+        <caption>Trips that have finished.</caption>
+        <thead>
+          <tr>
+            <th scope="col">Id</th>
+            <th scope="col">Origin</th>
+            <th scope="col">Destination</th>
+            <th scope="col">Vehicle</th>
+          </tr>
+        </thead>
+        <tbody id="history-trips-rows"></tbody>
+      </table>
+
+      <h3 class="form-title">Saved runs</h3>
+      <table class="records" id="history-runs-table">
+        <caption>Runs saved from the comparison, most recent first.</caption>
+        <thead>
+          <tr>
+            <th scope="col">Id</th>
+            <th scope="col">Seed</th>
+            <th scope="col">Saved</th>
+            <th scope="col">Average trip (B / F)</th>
+          </tr>
+        </thead>
+        <tbody id="history-runs-rows"></tbody>
+      </table>
+      <p class="pane-note" id="history-note" role="status" data-kind="idle">&gt;_ Not read yet</p>
+    </div>
+  </section>
+
 </main>
 
 <script src="/static/app.js"></script>

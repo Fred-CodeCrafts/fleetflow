@@ -265,17 +265,12 @@ function drawVehicles(ctx, state) {
 
 /* ---------- run controls ---------- */
 
-// postJSON sends one request and returns what the server answered: status and
-// body both. Nothing is swallowed, because a rejected value has to be visible on
-// the page and the API's error codes are what name the value that was rejected.
-async function postJSON(path, body) {
-  const options = { method: 'POST', headers: { Accept: 'application/json' } };
-  if (body !== undefined) {
-    options.headers['Content-Type'] = 'application/json';
-    options.body = JSON.stringify(body);
-  }
-
-  const res = await fetch(path, options);
+// readAnswer turns one response into what the caller needs: the status, and the
+// body when it carries one. Nothing is swallowed, because a rejected value has to
+// be visible on the page and the API's error codes are what name the value that
+// was rejected. A body that does not parse becomes null rather than a throw: a
+// refusal from anything in front of the API is still an answer with a status.
+async function readAnswer(res) {
   const text = await res.text();
 
   let parsed = null;
@@ -289,11 +284,37 @@ async function postJSON(path, body) {
   return { status: res.status, body: parsed };
 }
 
-function showResult(text, kind) {
-  const out = document.getElementById('control-result');
+// getJSON reads one endpoint. Every fleet pane reads a list this way (T48), so a
+// refused read is reported the same way wherever it happens.
+async function getJSON(path) {
+  const res = await fetch(path, { headers: { Accept: 'application/json' } });
+  return readAnswer(res);
+}
+
+// postJSON sends one request and returns what the server answered.
+async function postJSON(path, body) {
+  const options = { method: 'POST', headers: { Accept: 'application/json' } };
+  if (body !== undefined) {
+    options.headers['Content-Type'] = 'application/json';
+    options.body = JSON.stringify(body);
+  }
+
+  return readAnswer(await fetch(path, options));
+}
+
+// setNote writes one line of progress or refusal into a status line. Every
+// request the page makes reports itself this way — the run controls into the one
+// line below them, each fleet pane into its own (T48) — so a reader reads the
+// same shape wherever they looked.
+function setNote(id, text, kind) {
+  const out = document.getElementById(id);
   if (!out) return;
   out.textContent = `>_ ${text}`;
   out.dataset.kind = kind;
+}
+
+function showResult(text, kind) {
+  setNote('control-result', text, kind);
 }
 
 function setRunChip(text, state) {
@@ -365,12 +386,664 @@ async function resetRun() {
   }
 }
 
+// saveRun stores the comparison run that is going (T48). The endpoint takes no
+// body at all: the record is captured from the server, so what is saved is what
+// ran rather than what a client says ran. A save with no run going answers 409
+// no_run, and that message is what the page shows — a button that looked like it
+// had worked would be a promise of a record that does not exist.
+async function saveRun() {
+  showResult('POST /api/runs \u2026', 'idle');
+  try {
+    const res = await postJSON('/api/runs');
+    if (res.status !== 201) {
+      showResult(describeError(res), 'error');
+      return;
+    }
+    const saved = res.body;
+    showResult(`201 saved run ${saved.id} \u2014 seed ${saved.seed}`, 'ok');
+    // The run is history now, so the pane that lists saved runs is stale.
+    await refreshHistory();
+  } catch (err) {
+    showResult(`request failed: ${err.message}`, 'error');
+  }
+}
+
 function wireControls() {
   const start = document.getElementById('start');
   if (start) start.addEventListener('click', startRun);
 
   const reset = document.getElementById('reset');
   if (reset) reset.addEventListener('click', resetRun);
+
+  const save = document.getElementById('save-run');
+  if (save) save.addEventListener('click', saveRun);
+}
+
+/* ---------- view switcher (T48) ---------- */
+
+// The dashboard has two views. Comparison is what it has always shown, so it is
+// the one the page opens on and nothing about it changes; Fleet is the
+// dispatcher's records. Only one view is in the document's flow at a time, so a
+// hidden canvas has no size to measure — which is why returning to the
+// comparison view lays the panels out again rather than trusting what the last
+// paint left (T49).
+const VIEWS = ['comparison', 'fleet'];
+
+function showView(name) {
+  if (!VIEWS.includes(name)) return;
+
+  for (const section of document.querySelectorAll('[data-view]')) {
+    section.hidden = section.dataset.view !== name;
+  }
+  for (const view of VIEWS) {
+    const button = document.getElementById('view-' + view);
+    if (button) button.setAttribute('aria-pressed', view === name ? 'true' : 'false');
+  }
+
+  if (name === 'fleet') {
+    refreshFleet();
+    return;
+  }
+
+  // A canvas inside a display:none subtree reports no size, so returning to the
+  // comparison view is a layout and a paint, exactly as a resize is (T49).
+  for (const panel of panels) {
+    layout(panel);
+    redrawPanel(panel);
+  }
+}
+
+function wireViews() {
+  for (const view of VIEWS) {
+    const button = document.getElementById('view-' + view);
+    if (button) button.addEventListener('click', () => showView(view));
+  }
+}
+
+/* ---------- fleet records (T48) ---------- */
+
+// Every pane reads one list endpoint and writes through the endpoint that owns
+// the change: a create, an assignment and a status move are each a request
+// followed by a re-read, so the table shows what the server stored rather than
+// what the page hoped it stored. Nothing here keeps a rule the API already
+// applies -- forward-only trip statuses, one driver per vehicle -- because a
+// second copy of a rule is a second thing to get wrong.
+const fleetState = {
+  vehicles: [],
+  drivers: [],
+  trips: [],
+  runs: [],
+  // errors holds the last failure per pane. A pane that could not be read says
+  // why: an empty table must not read as "no records" when the answer was 503
+  // fleet_unavailable (T48).
+  errors: {},
+};
+
+// el builds one element with an optional class and text, so a render function
+// reads as the row it draws rather than as a wall of createElement calls.
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined && text !== null) node.textContent = text;
+  return node;
+}
+
+// textOf renders a value the API left out as an em dash rather than as a blank
+// cell, so "unassigned" is visible and not an empty slot.
+function textOf(value) {
+  return value === undefined || value === null || value === '' ? '\u2014' : String(value);
+}
+
+// emptyRow fills a table body with the one line that says why it has no records:
+// nothing yet, or the failure the endpoint answered with.
+function emptyRow(tbody, columns, text) {
+  tbody.replaceChildren();
+  const cell = el('td', 'empty', text);
+  cell.colSpan = columns;
+  const row = el('tr');
+  row.appendChild(cell);
+  tbody.appendChild(row);
+}
+
+// readList reads one list endpoint. A list is only a list when the body carries
+// the array the contract names; anything else is thrown, so the pane reports the
+// server's own message instead of drawing an empty table.
+async function readList(path, key) {
+  const res = await getJSON(path);
+  if (res.status !== 200 || !res.body || !Array.isArray(res.body[key])) {
+    throw new Error(describeError(res));
+  }
+  return res.body[key];
+}
+
+function setPaneNote(pane, text, kind) {
+  setNote(pane + '-note', text, kind);
+}
+
+// noteCount is the one line a pane shows once it has read its endpoint: how many
+// records it got, or that there are none yet.
+function noteCount(pane, count, singular) {
+  if (count === 0) {
+    setPaneNote(pane, `nothing yet \u2014 no ${singular}s on record`, 'idle');
+    return;
+  }
+  setPaneNote(pane, `${count} ${singular}${count === 1 ? '' : 's'}`, 'ok');
+}
+
+// failPane reports a failed read in the pane that asked for it, in the API's own
+// words, and leaves that pane's table saying the same thing.
+function failPane(pane, err) {
+  fleetState.errors[pane] = err.message;
+  setPaneNote(pane, err.message, 'error');
+}
+
+// refreshFleet reads every pane. It is what the Fleet view does when it is
+// opened, so the tables are the server's answer at the moment they are looked
+// at rather than whatever the last visit left behind.
+function refreshFleet() {
+  return Promise.all([refreshVehicles(), refreshDrivers(), refreshTrips(), refreshHistory()]);
+}
+
+async function refreshVehicles() {
+  setPaneNote('vehicles', 'GET /api/vehicles \u2026', 'idle');
+  try {
+    // The drivers are read with the vehicles because each row shows the driver
+    // holding it: the assignment is visible from both tables, so neither is a
+    // list of ids a reader has to join by hand.
+    const [vehicles, drivers] = await Promise.all([
+      readList('/api/vehicles', 'vehicles'),
+      readList('/api/drivers', 'drivers'),
+    ]);
+    delete fleetState.errors.vehicles;
+    fleetState.vehicles = vehicles;
+    fleetState.drivers = drivers;
+    renderVehicles();
+    renderVehicleOptions();
+    noteCount('vehicles', vehicles.length, 'vehicle');
+  } catch (err) {
+    failPane('vehicles', err);
+    renderVehicles();
+  }
+}
+
+// driverOnVehicle names the driver holding a vehicle, or null. The API answers
+// the assignment from the vehicle too, but a reloaded table reads every driver
+// at once, so the join is made here rather than with a request per row.
+function driverOnVehicle(vehicleID) {
+  return fleetState.drivers.find((driver) => driver.vehicle_id === vehicleID) || null;
+}
+
+function renderVehicles() {
+  const tbody = document.getElementById('vehicles-rows');
+  if (!tbody) return;
+
+  if (fleetState.errors.vehicles) {
+    emptyRow(tbody, 6, fleetState.errors.vehicles);
+    return;
+  }
+  if (fleetState.vehicles.length === 0) {
+    emptyRow(tbody, 6, 'No vehicles yet.');
+    return;
+  }
+
+  tbody.replaceChildren();
+  for (const vehicle of fleetState.vehicles) {
+    const assigned = driverOnVehicle(vehicle.id);
+    const row = el('tr');
+
+    row.appendChild(el('td', 'mono', vehicle.id));
+    row.appendChild(el('td', null, vehicle.name));
+    row.appendChild(el('td', null, textOf(vehicle.type)));
+    row.appendChild(el('td', 'mono', vehicle.status));
+    row.appendChild(el('td', null, assigned ? assigned.name : '\u2014'));
+
+    // The assignment is made from the vehicle's own row: the endpoint is
+    // addressed by vehicle, so this is the table the change belongs to.
+    const cell = el('td', 'assign');
+    const select = el('select');
+    select.setAttribute('aria-label', `Driver for ${vehicle.name}`);
+    const placeholder = el('option', null, 'select a driver');
+    placeholder.value = '';
+    select.appendChild(placeholder);
+    for (const driver of fleetState.drivers) {
+      const option = el('option', null, driver.name);
+      option.value = driver.id;
+      if (assigned && assigned.id === driver.id) option.selected = true;
+      select.appendChild(option);
+    }
+
+    const assign = el('button', 'btn btn-secondary btn-small', 'Assign');
+    assign.type = 'button';
+    assign.addEventListener('click', () => assignDriver(vehicle.id, select.value));
+
+    // Unassign is disabled when there is nobody on the vehicle: a button that
+    // can only be answered with "already unassigned" is better shown as spent.
+    const unassign = el('button', 'btn btn-secondary btn-small', 'Unassign');
+    unassign.type = 'button';
+    unassign.disabled = !assigned;
+    unassign.addEventListener('click', () => assignDriver(vehicle.id, ''));
+
+    cell.append(select, assign, unassign);
+    row.appendChild(cell);
+    tbody.appendChild(row);
+  }
+}
+
+async function refreshDrivers() {
+  setPaneNote('drivers', 'GET /api/drivers \u2026', 'idle');
+  try {
+    const drivers = await readList('/api/drivers', 'drivers');
+    delete fleetState.errors.drivers;
+    fleetState.drivers = drivers;
+    renderDrivers();
+    // The vehicles table names every driver in each row's assignment select, so
+    // the driver list is not a private matter of the drivers pane.
+    renderVehicles();
+    noteCount('drivers', drivers.length, 'driver');
+  } catch (err) {
+    failPane('drivers', err);
+    renderDrivers();
+  }
+}
+
+function renderDrivers() {
+  const tbody = document.getElementById('drivers-rows');
+  if (!tbody) return;
+
+  if (fleetState.errors.drivers) {
+    emptyRow(tbody, 4, fleetState.errors.drivers);
+    return;
+  }
+  if (fleetState.drivers.length === 0) {
+    emptyRow(tbody, 4, 'No drivers yet.');
+    return;
+  }
+
+  tbody.replaceChildren();
+  for (const driver of fleetState.drivers) {
+    const row = el('tr');
+    row.appendChild(el('td', 'mono', driver.id));
+    row.appendChild(el('td', null, driver.name));
+    row.appendChild(el('td', null, textOf(driver.contact)));
+    // The vehicle the driver holds travels back from the API, so an assignment
+    // is visible from the driver's side of it and not only the vehicle's.
+    row.appendChild(el('td', 'mono', textOf(driver.vehicle_id)));
+    tbody.appendChild(row);
+  }
+}
+
+// nextTripStatus is the one status a trip can move to from where it is:
+// planned, then in progress, then completed. A finished trip is a record of what
+// happened, so it offers no move.
+const nextTripStatus = { planned: 'in_progress', in_progress: 'completed' };
+
+async function refreshTrips() {
+  setPaneNote('trips', 'GET /api/trips \u2026', 'idle');
+  try {
+    // The vehicles are read with the trips because the create form offers them
+    // and each row names the one carrying the trip.
+    const [trips, vehicles] = await Promise.all([
+      readList('/api/trips', 'trips'),
+      readList('/api/vehicles', 'vehicles'),
+    ]);
+    delete fleetState.errors.trips;
+    fleetState.trips = trips;
+    fleetState.vehicles = vehicles;
+    renderTrips();
+    renderVehicleOptions();
+    noteCount('trips', trips.length, 'trip');
+  } catch (err) {
+    failPane('trips', err);
+    renderTrips();
+  }
+}
+
+function renderTrips() {
+  const tbody = document.getElementById('trips-rows');
+  if (!tbody) return;
+
+  if (fleetState.errors.trips) {
+    emptyRow(tbody, 6, fleetState.errors.trips);
+    return;
+  }
+  if (fleetState.trips.length === 0) {
+    emptyRow(tbody, 6, 'No trips yet.');
+    return;
+  }
+
+  tbody.replaceChildren();
+  for (const trip of fleetState.trips) {
+    const row = el('tr');
+    row.appendChild(el('td', 'mono', trip.id));
+    row.appendChild(el('td', null, trip.origin));
+    row.appendChild(el('td', null, trip.destination));
+    row.appendChild(el('td', 'mono', textOf(trip.vehicle_id)));
+    row.appendChild(el('td', 'mono', trip.status));
+
+    const cell = el('td', 'assign');
+    const next = nextTripStatus[trip.status];
+    if (next) {
+      // The button names the status it moves the trip to, so what it does is
+      // read from the button itself rather than inferred from its position.
+      const advance = el('button', 'btn btn-secondary btn-small', `\u2192 ${next}`);
+      advance.type = 'button';
+      advance.setAttribute('aria-label', `Move trip ${trip.id} to ${next}`);
+      advance.addEventListener('click', () => moveTrip(trip.id, next));
+      cell.appendChild(advance);
+    } else {
+      // A completed trip is a record of what happened; there is no move back, so
+      // the cell says so rather than offering one.
+      cell.textContent = 'finished';
+    }
+    row.appendChild(cell);
+    tbody.appendChild(row);
+  }
+}
+
+// renderVehicleOptions keeps the trip form's vehicle select in step with the
+// vehicle table: a select offering a vehicle that no longer exists is a create
+// that can only fail. The status travels in the option's text because a vehicle
+// on a trip cannot take another one, and the refusal is easier to read before
+// the request than after it.
+function renderVehicleOptions() {
+  const select = document.getElementById('trip-vehicle');
+  if (!select) return;
+
+  const chosen = select.value;
+  select.replaceChildren();
+  const none = el('option', null, 'none');
+  none.value = '';
+  select.appendChild(none);
+
+  for (const vehicle of fleetState.vehicles) {
+    const option = el('option', null, `${vehicle.name} (${vehicle.status})`);
+    option.value = vehicle.id;
+    if (vehicle.id === chosen) option.selected = true;
+    select.appendChild(option);
+  }
+}
+
+// completedTrips keeps the trips that finished, in the order the API answered// them: history is a record of what happened, not a second sort of the same list.
+function completedTrips(trips) {
+  return trips.filter((trip) => trip.status === 'completed');
+}
+
+// savedRunMetric reads one figure out of a saved run's own metrics document. The
+// document is the object GET /api/metrics reports under "run", so the two
+// comparison arms are resolved by the same rule the metrics strip uses. A figure
+// the run never produced is an em dash, not a zero: zero is a measurement.
+//
+// An arm that finished no trips is exactly that case, and the count is what
+// decides it. A run saved before its first arrival reports an average trip of
+// 0 s, which is arithmetic on an empty list rather than a trip that took no time,
+// and a saved run is a record: printing "B 0.0 s" there states a result the run
+// never had, for as long as the record exists.
+function savedRunMetric(run, path) {
+  const arm = path.split('.')[0];
+  const document = { run: run.metrics };
+  if (metricAt(document, `${arm}.completed_trips`) === 0) return '\u2014';
+  return formatMetric(path, metricAt(document, path));
+}
+
+// savedAt renders a run's created_at in the reader's own clock: the API sends
+// UTC, and the person reading saved it in local time.
+function savedAt(value) {
+  const at = new Date(value);
+  if (Number.isNaN(at.getTime())) return textOf(value);
+  return at.toLocaleString();
+}
+
+async function refreshHistory() {
+  setPaneNote('history', 'GET /api/trips and GET /api/runs \u2026', 'idle');
+  try {
+    // History is two records in one pane: the trips that finished, and the runs
+    // that were saved. Both are read together because one pane shows both, and a
+    // trip that finishes is history from that moment.
+    const [trips, runs] = await Promise.all([
+      readList('/api/trips', 'trips'),
+      readList('/api/runs', 'runs'),
+    ]);
+    delete fleetState.errors.history;
+    fleetState.trips = trips;
+    fleetState.runs = runs;
+    renderHistory();
+    renderTrips();
+    const completed = completedTrips(trips).length;
+    setPaneNote(
+      'history',
+      `${completed} completed trip${completed === 1 ? '' : 's'}, ` +
+        `${runs.length} saved run${runs.length === 1 ? '' : 's'}`,
+      'ok'
+    );
+  } catch (err) {
+    failPane('history', err);
+    renderHistory();
+  }
+}
+
+function renderHistory() {
+  const tripsBody = document.getElementById('history-trips-rows');
+  const runsBody = document.getElementById('history-runs-rows');
+  if (!tripsBody || !runsBody) return;
+
+  if (fleetState.errors.history) {
+    emptyRow(tripsBody, 4, fleetState.errors.history);
+    emptyRow(runsBody, 4, fleetState.errors.history);
+    return;
+  }
+
+  const completed = completedTrips(fleetState.trips);
+  if (completed.length === 0) {
+    emptyRow(tripsBody, 4, 'No completed trips yet.');
+  } else {
+    tripsBody.replaceChildren();
+    for (const trip of completed) {
+      const row = el('tr');
+      row.appendChild(el('td', 'mono', trip.id));
+      row.appendChild(el('td', null, trip.origin));
+      row.appendChild(el('td', null, trip.destination));
+      row.appendChild(el('td', 'mono', textOf(trip.vehicle_id)));
+      tripsBody.appendChild(row);
+    }
+  }
+
+  if (fleetState.runs.length === 0) {
+    emptyRow(runsBody, 4, 'No saved runs yet \u2014 save one from the comparison controls.');
+    return;
+  }
+
+  runsBody.replaceChildren();
+  for (const run of fleetState.runs) {
+    const baseline = savedRunMetric(run, 'baseline.average_trip_s');
+    const fleetflow = savedRunMetric(run, 'fleet_flow.average_trip_s');
+    const row = el('tr');
+    row.appendChild(el('td', 'mono', run.id));
+    row.appendChild(el('td', 'mono', run.seed));
+    row.appendChild(el('td', 'mono', savedAt(run.created_at)));
+    row.appendChild(el('td', 'mono', `B ${baseline} / F ${fleetflow}`));
+    runsBody.appendChild(row);
+  }
+}
+
+/* ---------- fleet changes (T48) ---------- */
+
+// Every change below is one request and then a re-read of the panes that change
+// can move. The re-read is what keeps the tables honest: a trip that finishes
+// frees its vehicle, and only the server knows that.
+//
+// A failure is reported in the pane it came from, in the API's own words, and
+// never as a silent no-op: a create refused for a blank name, or a move refused
+// because it goes backwards, is something the dispatcher has to see.
+
+// readField returns a form field's value, trimmed. An absent field is the empty
+// string, which the API refuses in its own words rather than this page guessing.
+function readField(id) {
+  const input = document.getElementById(id);
+  return input ? input.value.trim() : '';
+}
+
+async function createVehicle(event) {
+  event.preventDefault();
+  const body = {
+    name: readField('vehicle-name'),
+    type: readField('vehicle-type'),
+    status: readField('vehicle-status'),
+  };
+
+  setPaneNote('vehicles', 'POST /api/vehicles \u2026', 'idle');
+  try {
+    const res = await postJSON('/api/vehicles', body);
+    if (res.status !== 201) {
+      setPaneNote('vehicles', describeError(res), 'error');
+      return;
+    }
+    document.getElementById('vehicle-form').reset();
+    // The trip form's vehicle select and the trips table both name vehicles, so
+    // a new one changes more than the table it was created in. The confirmation
+    // is said after the re-read, because a refresh writes its own count into the
+    // same line.
+    await refreshVehicles();
+    await refreshTrips();
+    setPaneNote('vehicles', `201 created ${res.body.name} (${res.body.id})`, 'ok');
+  } catch (err) {
+    setPaneNote('vehicles', `request failed: ${err.message}`, 'error');
+  }
+}
+
+async function createDriver(event) {
+  event.preventDefault();
+  const body = { name: readField('driver-name'), contact: readField('driver-contact') };
+
+  setPaneNote('drivers', 'POST /api/drivers \u2026', 'idle');
+  try {
+    const res = await postJSON('/api/drivers', body);
+    if (res.status !== 201) {
+      setPaneNote('drivers', describeError(res), 'error');
+      return;
+    }
+    document.getElementById('driver-form').reset();
+    await refreshDrivers();
+    setPaneNote('drivers', `201 created ${res.body.name} (${res.body.id})`, 'ok');
+  } catch (err) {
+    setPaneNote('drivers', `request failed: ${err.message}`, 'error');
+  }
+}
+
+async function createTrip(event) {
+  event.preventDefault();
+  const vehicleID = readField('trip-vehicle');
+  const body = {
+    origin: readField('trip-origin'),
+    destination: readField('trip-destination'),
+  };
+  // A blank vehicle is left out rather than sent empty: the field is optional in
+  // the contract, and a trip with no vehicle is planned but not yet assigned.
+  if (vehicleID !== '') body.vehicle_id = vehicleID;
+
+  setPaneNote('trips', 'POST /api/trips \u2026', 'idle');
+  try {
+    const res = await postJSON('/api/trips', body);
+    if (res.status !== 201) {
+      setPaneNote('trips', describeError(res), 'error');
+      return;
+    }
+    document.getElementById('trip-form').reset();
+    // Creating a trip on a vehicle moves that vehicle to on_trip, and a finished
+    // one frees it again, so the vehicle pane is read with the trips pane. The
+    // confirmation is said after the re-read, because a refresh writes its own
+    // count into the same line.
+    await refreshTrips();
+    await refreshVehicles();
+    setPaneNote(
+      'trips',
+      `201 created ${res.body.origin} \u2192 ${res.body.destination} (${res.body.status})`,
+      'ok'
+    );
+  } catch (err) {
+    setPaneNote('trips', `request failed: ${err.message}`, 'error');
+  }
+}
+
+// assignDriver puts driverID on vehicleID, or takes the vehicle's driver off when
+// driverID is blank: the endpoint is addressed by vehicle, so "whichever driver
+// is there" is exactly what a blank id says.
+async function assignDriver(vehicleID, driverID) {
+  setPaneNote('vehicles', `POST /api/vehicles/${vehicleID}/driver \u2026`, 'idle');
+  try {
+    const res = await postJSON(`/api/vehicles/${encodeURIComponent(vehicleID)}/driver`, {
+      driver_id: driverID,
+    });
+    if (res.status !== 200) {
+      setPaneNote('vehicles', describeError(res), 'error');
+      return;
+    }
+    const who = res.body && res.body.driver ? res.body.driver.name : 'nobody';
+    // An assignment shows on both sides of it: the vehicle's row and the
+    // driver's, so both are read again. The confirmation is said after the
+    // re-read, because a refresh writes its own count into the same line.
+    await refreshVehicles();
+    await refreshDrivers();
+    setPaneNote('vehicles', `200 ${res.body.vehicle_id} now holds ${who}`, 'ok');
+  } catch (err) {
+    setPaneNote('vehicles', `request failed: ${err.message}`, 'error');
+  }
+}
+
+// moveTrip asks the server to apply one status. Which status comes next is the
+// only rule this page holds, and it is the shape of the button; whether the move
+// is allowed is the domain's, and its refusal is what the pane shows.
+async function moveTrip(tripID, status) {
+  setPaneNote('trips', `POST /api/trips/${tripID}/status \u2026`, 'idle');
+  try {
+    const res = await postJSON(`/api/trips/${encodeURIComponent(tripID)}/status`, { status });
+    if (res.status !== 200) {
+      setPaneNote('trips', describeError(res), 'error');
+      return;
+    }
+    // A move carries the vehicle with it: starting a trip puts the vehicle on
+    // the trip and finishing it frees the vehicle again, and a finished trip
+    // belongs in history. All three panes are read again for that reason.
+    await refreshTrips();
+    await refreshVehicles();
+    await refreshHistory();
+    setPaneNote('trips', `200 ${res.body.id} is ${res.body.status}`, 'ok');
+  } catch (err) {
+    setPaneNote('trips', `request failed: ${err.message}`, 'error');
+  }
+}
+
+function wireFleetForms() {
+  const forms = [
+    ['vehicle-form', createVehicle],
+    ['driver-form', createDriver],
+    ['trip-form', createTrip],
+  ];
+  for (const [id, submit] of forms) {
+    const form = document.getElementById(id);
+    if (form) form.addEventListener('submit', submit);
+  }
+
+  for (const button of document.querySelectorAll('[data-refresh]')) {
+    button.addEventListener('click', () => refreshPane(button.dataset.refresh));
+  }
+}
+
+// refreshPane re-reads one pane by name, which is what its Refresh button asks
+// for. One button per pane rather than one for the view: a dispatcher watching
+// trips does not need the history re-read to see the next status.
+function refreshPane(name) {
+  switch (name) {
+    case 'vehicles':
+      return refreshVehicles();
+    case 'drivers':
+      return refreshDrivers();
+    case 'trips':
+      return refreshTrips();
+    case 'history':
+      return refreshHistory();
+    default:
+      return undefined;
+  }
 }
 
 /* ---------- startup ---------- */
@@ -392,6 +1065,8 @@ async function init() {
   // The controls are wired before the graph is fetched, so a dashboard that
   // cannot draw the network can still start and reset a run.
   wireControls();
+  wireViews();
+  wireFleetForms();
 
   // The stream is opened before the graph is fetched, and independently of it:
   // the metrics strip and the run chip do not need the road network, and the
