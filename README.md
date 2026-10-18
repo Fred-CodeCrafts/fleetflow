@@ -115,6 +115,37 @@ nothing else: no report reaches the weights, and no route is computed. The fleet
 record endpoints (`/api/vehicles`, `/api/drivers`, `/api/trips`) and the
 simulation controls stay open, because they belong to the dashboard.
 
+#### The report format
+
+A report says how fast one vehicle is going on one edge. Every field is checked
+before anything is written, and every refusal names what it refused:
+
+| field | type | required | accepted |
+|---|---|---|---|
+| `vehicle_id` | string | yes | non-empty; it is also the vehicle the dashboard shows as live |
+| `edge_id` | string | yes | an edge from `GET /api/graph` |
+| `speed_mps` | number | yes | greater than 0 and at most 90 (324 km/h, inclusive) |
+| `ts` | integer | no | Unix milliseconds, positive, at most 5 minutes ahead of this server's clock. Omit it to mean "now" |
+
+A field the payload does not define is refused rather than ignored, so a
+misspelled key is an error instead of a report that looks accepted and changes
+nothing — and the same goes for a second JSON object after the first.
+
+| status | code | meaning |
+|---|---|---|
+| `401` | `unauthenticated` | missing, malformed or unknown key; nothing is read and nothing is written |
+| `400` | `vehicle_id_required`, `edge_id_required` | a required field was empty |
+| `400` | `speed_out_of_range` | zero, negative, not a number, or above 90 m/s |
+| `400` | `ts_invalid`, `ts_in_future` | not a positive Unix-millisecond time, or dated in the future |
+| `400` | `empty_body`, `malformed_json`, `unknown_field`, `bad_field_type`, `trailing_data` | the body is not one JSON object of the shape above |
+| `404` | `edge_not_found` | `edge_id` is not in the graph |
+| `413` | `body_too_large` | over 64 KiB |
+| `503` | `engine_unavailable` | this process is running without an engine |
+
+The future bound is not pedantry. A report's timestamp is kept on the edge, and
+decay only resumes once the hold time has passed since it, so a single report
+dated next year would hold that road at its last congestion until next year.
+
 ### Simulation runs
 
 `POST /api/sim/start` drives one seeded demand through both engines at once — the
