@@ -210,13 +210,13 @@ A comment frame every 15 seconds keeps an idle connection from being closed by a
 **Simulated or live.** A simulated vehicle belongs to a run and names the panel it is drawn in. A live vehicle is one that has reported through `POST /api/reports` in the last minute, placed on the edge it reported on. The report carries a speed, not a coordinate, so a live vehicle is drawn along its edge rather than at a point; real GPS traces are a later feature, and drawing a position the API never received would be worse than drawing the edge it did. A report describing a moment older than that minute still moves the weights, but does not put a vehicle on the road that is not there.
 
 ### 3.6 Dashboard (`web/`)
-- Static HTML, CSS and vanilla JavaScript embedded into the binary with `go:embed`.
-- Draws the road graph on a `<canvas>` from node coordinates, so it needs no map tiles or outside services.
-- Fleet management views: vehicle list with status, driver list with vehicle assignment, trip creation (origin/destination picker from map or known places) with assignment and status display, trip history and saved comparison runs.
-- Two panels side by side (Baseline and FleetFlow) with vehicles as dots and edges colored by congestion.
-- Live fleet map: vehicle markers move as positions arrive over SSE with auto-reconnect; each vehicle is labeled simulated or live.
-- Metrics strip: average trip time, 95th percentile trip time, saturated roads (%), route changes, route query latency, fleet vs. background trip times, with the capacity derivation stated so the saturation figure is not a black box.
-- Controls: start, reset, seed, number of vehicles, fleet share.
+- Static HTML, CSS and vanilla JavaScript embedded into the binary with `go:embed`: no build step, no framework and no downloaded asset, so it runs on a host with no network and a changed page means a new binary.
+- Mounted as the exact path `GET /{$}`, with its assets under `GET /static/`, rather than as a catch-all `GET /`. A catch-all would also match `GET /api/reports`, which answers 405 today because only POST is registered there, and would quietly turn a wrong method on a real endpoint into a page.
+- Draws the road graph on a `<canvas>` from the node coordinates `GET /api/graph` serves. One scale serves both axes, so the network keeps its true shape, and the bitmap follows the display's pixel ratio so a hairline road stays a hairline on a dense screen. No map tiles and no projection library.
+- Controls: start, reset, seed, number of vehicles, fleet share, against the endpoints in 3.5. What the server answered is shown on the page, error code included, rather than only in the browser console.
+- Still owed, and each of these needs the stream: vehicles drawn as dots and moved as positions arrive, edges coloured by congestion, the two panels showing their own arm instead of the same static network, the metrics strip filled from `GET /api/metrics`, and each vehicle labelled simulated or live.
+- Fleet management views are still owed: vehicle list with status, driver list with vehicle assignment, trip creation with a picker from the map, trip history and saved comparison runs.
+- Metrics strip, once fed: average trip time, 95th percentile trip time, saturated roads (%), route changes, route query latency, fleet vs. background trip times, with the capacity derivation stated so the saturation figure is not a black box.
 
 ### 3.7 Persistence (`internal/<entity>/` service + repository, `internal/store`)
 - PostgreSQL for vehicles, drivers, trips, saved runs, and hashed API keys. Live congestion state stays in memory (see `internal/weights`).
