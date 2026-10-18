@@ -274,11 +274,19 @@ history. What stays below is what is still owed.
   documented in `internal/store/storetest`, which is not where somebody running the
   suite will look. Remedy: hold a shared advisory lock for the length of a test, or
   make CI the only place these run.
-- **The default grid shows no difference between the arms.** At the demo defaults on
-  `data/graph.json`, both arms are identical over ten seeds: zero route changes,
-  every metric tied. That is an honest result but a thin one, and it owes T60: either
-  find the traffic level where congestion makes the route matter, or record plainly
-  that on this graph it does not. T62's sweep repeats the same nothing until then.
+- **The comparison has nothing to compare: this graph cannot congest.** Both arms come
+  out identical at every density, and the cause is arithmetic, not routing. Capacity is
+  `lanes x length_m / 7.5`, so a 450 m two-lane edge holds 120 vehicles and the whole
+  120-edge graph holds 16,800. Even at the API's maximum of 5,000 vehicles -- ten times
+  the demo default -- a run peaks near 1,000 vehicles on the network at once, so the
+  busiest edges sit under 1% of that. `EdgeSpeed` is BPR with a fourth power, so nothing
+  moves until occupancy approaches capacity: measured mid-run at 5,000 vehicles,
+  `cost_s / free_flow_s` is exactly 1 on every edge, `route_changes` is 0 for both arms,
+  and time lost is 0.00066 s per trip. So T60 has a real choice to record and T62's
+  sweep repeats the same nothing until it is made: report the tie and this arithmetic as
+  the result, or scale the demo network until congestion is reachable (shorter blocks
+  and one lane per edge cut capacity by the order of magnitude needed). Raising the BPR
+  coefficient instead would make the demo look good for the wrong reason.
 - **T39b (saved runs) is not started.** It is a should-have and squarely in the cut
   order, so it waits behind the dashboard rather than competing for the same wiring
   file. Recorded here so "we meant to" and "we ran out of time" are not confused.
