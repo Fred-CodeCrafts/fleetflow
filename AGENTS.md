@@ -82,6 +82,18 @@ Tests go in the same commit as the code they cover, or in the commit immediately
   - Do **not** copy files or code from `../sumo-routing/` (thesis prototype) or `../fleetbase/`.
   - Do **not** paste thesis text into the repo.
   - Reading them for ideas is fine. Write the implementation fresh.
+  - **Studying a reference implementation is allowed and encouraged.** Read
+    `../fleetbase/` and `../sumo-routing/` to learn their information architecture,
+    page layout, interaction patterns, naming and feature set, then write this
+    repo's version yourself. Matching a screen's structure and behaviour is fine;
+    copying its source, templates, styles or assets is not.
+  - **Why the line sits there:** Fleetbase is AGPL-3.0 and this repo is Apache-2.0,
+    so copied front-end code would attach AGPL obligations to the whole console
+    and break the license. Reproducing a layout from observation is not a
+    derivative work; pasting a component is.
+  - When a screen is modelled on one of theirs, say so in the commit body and, where
+    the dependency is real, in `NOTICE`. Credit is cheap and it keeps the history
+    honest.
 - **Third-party code and data:** only add dependencies with licenses compatible with this repo's license. Record attribution in `README.md` or `NOTICE` (for example OpenStreetMap data, ODbL).
 - **No history rewriting:** do not use `git rebase`, `git commit --amend` on pushed commits, `git push --force`, or `git filter-branch`. Do not backdate commits or change author dates. The history must be an honest record. If you made a mistake, fix it in a new commit.
 - **No secrets:** never commit API keys, tokens, credentials, or `.env` files. Use environment variables and keep `.env.example` with placeholders.
