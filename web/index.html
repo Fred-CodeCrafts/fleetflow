@@ -198,6 +198,19 @@
         <tbody id="drivers-rows"></tbody>
       </table>
       <p class="pane-note" id="drivers-note" role="status" data-kind="idle">&gt;_ Not read yet</p>
+
+      <form class="record-form" id="driver-form">
+        <h3 class="form-title">Add a driver</h3>
+        <label class="field">
+          <span class="field-label">Name</span>
+          <span class="input-shell"><i>&gt;_</i><input id="driver-name" name="name" type="text" required autocomplete="off"></span>
+        </label>
+        <label class="field">
+          <span class="field-label">Contact</span>
+          <span class="input-shell"><i>&gt;_</i><input id="driver-contact" name="contact" type="text" placeholder="ana@example.com" autocomplete="off"></span>
+        </label>
+        <button class="btn btn-primary" type="submit">Create driver</button>
+      </form>
     </div>
   </section>
 

@@ -792,9 +792,34 @@ async function createVehicle(event) {
   }
 }
 
+async function createDriver(event) {
+  event.preventDefault();
+  const body = { name: readField('driver-name'), contact: readField('driver-contact') };
+
+  setPaneNote('drivers', 'POST /api/drivers \u2026', 'idle');
+  try {
+    const res = await postJSON('/api/drivers', body);
+    if (res.status !== 201) {
+      setPaneNote('drivers', describeError(res), 'error');
+      return;
+    }
+    document.getElementById('driver-form').reset();
+    setPaneNote('drivers', `201 created ${res.body.name} (${res.body.id})`, 'ok');
+    await refreshDrivers();
+  } catch (err) {
+    setPaneNote('drivers', `request failed: ${err.message}`, 'error');
+  }
+}
+
 function wireFleetForms() {
-  const form = document.getElementById('vehicle-form');
-  if (form) form.addEventListener('submit', createVehicle);
+  const forms = [
+    ['vehicle-form', createVehicle],
+    ['driver-form', createDriver],
+  ];
+  for (const [id, submit] of forms) {
+    const form = document.getElementById(id);
+    if (form) form.addEventListener('submit', submit);
+  }
 
   for (const button of document.querySelectorAll('[data-refresh]')) {
     button.addEventListener('click', () => refreshPane(button.dataset.refresh));
