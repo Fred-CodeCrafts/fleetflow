@@ -475,7 +475,12 @@ function metricUnit(path) {
 // dash when the run has not produced it.
 function formatMetric(path, value) {
   if (typeof value !== 'number' || !isFinite(value)) return '\u2014';
-  return value.toFixed(1) + metricUnit(path);
+
+  // A figure with no unit is a count -- route changes, today -- and a count read
+  // as "0.0" invites the question of what the fraction was. Anything with a unit
+  // keeps its decimal, because the differences being compared are small ones.
+  const unit = metricUnit(path);
+  return value.toFixed(unit === '' ? 0 : 1) + unit;
 }
 
 // applyMetrics fills the strip from one metrics frame. The frame is exactly the
