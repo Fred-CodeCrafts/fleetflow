@@ -253,6 +253,10 @@ func (s *Server) routes() {
 	// read by a browser, and it discloses no more than the panels already show.
 	s.mux.Handle("GET /api/metrics", s.public(s.handleMetrics))
 
+	// The road network the dashboard draws. It never changes while the server
+	// runs, so it is served once and cached by the browser.
+	s.mux.Handle("GET /api/graph", s.public(s.handleGraph))
+
 	// The event stream. It takes the rate limit but not the request deadline: a
 	// response that is meant to stay open cannot be given one (T43).
 	s.mux.Handle("GET /api/stream", s.stream(s.handleStream))
