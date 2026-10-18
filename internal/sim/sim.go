@@ -200,8 +200,16 @@ func (s *Sim) Occupancy() *Occupancy { return s.occ }
 // observed.
 func (s *Sim) Step() {
 	dt := s.cfg.StepS
-	s.nowS += dt
+
+	// Vehicles due to leave are placed at this step's clock time and then move
+	// over the step that follows it, so a trip's elapsed time covers exactly the
+	// travel it was charged for. Departing after the clock had already moved gave
+	// every vehicle a step of travel its departure stamp did not cover, and every
+	// trip came out one step shorter than the free-flow time of the route it drove
+	// -- which is the number the fairness check reads as time lost (T34a).
 	s.departDue()
+	s.nowS += dt
+
 	s.refreshWeights()
 	s.advanceVehicles(dt)
 	s.rerouteFleet()
