@@ -136,7 +136,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 - [x] 🔴 **T39a** Drive trip and vehicle status from the run (planned to in progress to completed)
   `feat(fleet): update trip and vehicle status from the simulation`
   Done when: assigning a trip marks the vehicle on trip, finishing it frees the vehicle, and the trip list shows both transitions.
-- [ ] 🟡 **T39b** Save and list finished comparison runs (US-9)
+- [x] 🟡 **T39b** Save and list finished comparison runs (US-9)
   `feat(fleet): save and list comparison runs`
   Done when: a finished run is stored with its seed and metrics and is still viewable after a server restart.
 - [x] 🔴 **T40** Add API key auth on `POST /api/reports` and `POST /api/route` (`internal/auth`)
@@ -314,14 +314,14 @@ history. What stays below is what is still owed.
   map a viewer is looking at. Streaming each arm's occupancy would put it there, at the
   cost of a contract change (DESIGN 3.5, `docs/results.md`). Worth deciding when the
   dashboard is next opened in a browser rather than reasoned about.
-- **T39b (saved runs) has its store but not its endpoint.** `internal/run`, its memory and
-  Postgres repositories and `db/migration/V3__runs.sql` are merged, and the integration
-  tests pass against the real database. Nothing serves them yet: `GET /api/runs` and
-  `POST /api/runs` still need the handler and the two route lines, which belong to the
-  wiring file the parallel workers were kept out of. Until that lands the package is
-  additive and unimported, which is cheap now and expensive to leave. When it does, note
-  that `jsonb` canonicalizes: what the endpoint returns is the stored form, not the bytes
-  that were posted.
+- **A saved run can be partial, and nothing in the record says so.** The save captures the
+  run as it stands, so a run saved mid-flight stores the metrics of the trips finished so
+  far. The figures count those trips, so a partial record does not read as a complete one,
+  but a reader comparing two saved runs cannot tell whether they cover the same amount of
+  the run. Refusing to save an unfinished run instead would tie the endpoint to a clock
+  that parks while nobody is watching (T44), which is exactly when a run is unfinished and
+  worth keeping. The dashboard's save button (T48) should say which it is; a field in the
+  stored metrics would say it for every reader.
 - **The dashboard's JavaScript is verified by hand, not by a test in the repo.** The
   page is exercised against the running binary (all three event kinds arrive, both arms
   are labelled, 120 edges per congestion frame) and its drawing decisions were checked
