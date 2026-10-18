@@ -142,9 +142,37 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 - [x] 🔴 **T40** Add API key auth on `POST /api/reports` and `POST /api/route` (`internal/auth`)
   `feat(auth): require api key on reports and route`
   Done when: missing or wrong key returns 401 and does nothing, keys are stored hashed and never logged, and the README shows an example request for each endpoint.
-- [x] 🔴 **T40a** Send simulated reports and route requests through the public API (US-7)
+- [ ] 🔴 **T40a** Send simulated reports and route requests through the public API (US-7)
   `feat(sim): report through the public api`
-  Done when: the simulator's fleet service is an HTTP client against `/api/reports` and `/api/route`, so simulated traffic takes the same validated path as an external client, and a seeded run stays deterministic (reports are sent synchronously). Needs T37 and T40.
+  Done when:
+  - FleetFlow-arm fleet vehicles use an HTTP client against `/api/reports`
+    and `/api/route`; baseline-arm fleet vehicles and background traffic use
+    the in-process static engine (same router code, same free-flow metric).
+  - `POST /api/route` accepts optional `current_edges`; the server prices it on
+    the same metric snapshot as the new route and returns
+    `{edges, cost_s, current_cost_s, metric_version}`. Invalid or
+    non-contiguous `current_edges` returns 400 and changes nothing.
+  - `FleetService` has one route method taking the held path; `PathCost` is gone.
+  - The simulator authenticates with an ephemeral in-memory key minted at
+    startup (hashed, never logged, never persisted), through the real
+    middleware. No auth bypass.
+  - The run resets engine weight state at start; a second concurrent start
+    returns 409; run mode is behind `-demo`.
+  - Simulated time advances in ticks; each tick blocks until its HTTP calls
+    return. An HTTP error fails the run loudly, with no silent fallback.
+  - Tests: same seed twice gives identical demand and identical baseline
+    results; baseline arm equals a FleetFlow engine with weights disabled;
+    both costs in one response carry the same `metric_version`.
+  Needs T37 and T40.
+
+  Already shipped, so rebuild none of it: `internal/sim/httpfleet.go` (the client,
+  attached by `WithFleetService`), `current_edges` / `current_cost_s` /
+  `metric_version` on the route response, the held-path route method with
+  `PathCost` gone, synchronous reports, and a test that simulated traffic meets the
+  API policy. Still owed above: the ephemeral key (today `SIM_API_KEY`, a persisted
+  config secret, plus a rate-limit exemption in `WithInternalKey` — still
+  authenticated, so a secret rather than a hole), the 409 (a second start swaps the
+  running one out), the weight reset (deliberately not done), and `-demo`.
 - [x] 🔴 **T41** Add `POST /api/sim/start` and `POST /api/sim/reset`
   `feat(api): add simulation control endpoints`
 - [x] 🔴 **T42** Add `GET /api/metrics`
