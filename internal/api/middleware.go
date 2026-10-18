@@ -86,6 +86,12 @@ func (r *statusRecorder) Status() int {
 	return r.status
 }
 
+// Unwrap returns the writer this one wraps. It is what lets
+// http.ResponseController reach capabilities the wrapper does not expose itself —
+// flushing, above all, which the event stream needs and which a wrapper that
+// embedded http.ResponseWriter would otherwise hide from it.
+func (r *statusRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
+
 // clientIP returns the address a request is attributed to. Behind Cloud Run or Fly
 // the socket peer is the platform's proxy, so the first X-Forwarded-For entry is
 // the real client. That header is trivially spoofable, which is acceptable

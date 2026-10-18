@@ -119,6 +119,7 @@ type simStatus struct {
 // so a reader never waits on the simulation's own work.
 type run struct {
 	cfg sim.Config
+	g   *graph.Graph
 
 	baseline  *sim.Sim
 	fleetflow *sim.Sim
@@ -127,8 +128,11 @@ type run struct {
 	done     chan struct{}
 	stopOnce sync.Once
 
+	// mu guards latest, which the clock publishes after every step. Readers take
+	// a whole snapshot, so they never wait on the simulation's own work, and they
+	// never touch a vehicle while the clock is moving it.
 	mu     sync.Mutex
-	latest sim.Comparison
+	latest runSnapshot
 	steps  int
 }
 
@@ -148,19 +152,18 @@ func newRun(g *graph.Graph, cfg sim.Config, baseline *engine.Engine, fleet sim.F
 	baselineArm.SetFleetService(sim.NewEngineFleet(baseline))
 	fleetArm.SetFleetService(fleet)
 
-	return &run{
+	live := &run{
 		cfg:       cfg,
+		g:         g,
 		baseline:  baselineArm,
 		fleetflow: fleetArm,
 		stop:      make(chan struct{}),
 		done:      make(chan struct{}),
-		// A run reports its demand from the moment it starts, so a dashboard that
-		// asks before the first tick sees the run it started rather than zeros.
-		latest: sim.Comparison{
-			Baseline:  baselineArm.Collect(),
-			FleetFlow: fleetArm.Collect(),
-		},
-	}, nil
+	}
+	// A run reports its demand from the moment it starts, so a dashboard that
+	// asks before the first tick sees the run it started rather than zeros.
+	live.latest = live.picture()
+	return live, nil
 }
 
 // start sets the clock going and returns at once.
@@ -194,13 +197,13 @@ func (r *run) advance() {
 	r.fleetflow.Step()
 	r.steps++
 
-	snapshot := sim.Comparison{
-		Baseline:  r.baseline.Collect(),
-		FleetFlow: r.fleetflow.Collect(),
-	}
+	// Built while this goroutine still owns the simulators, then handed over
+	// whole: a reader can take the picture at any time without ever sharing a
+	// vehicle with the clock.
+	picture := r.picture()
 
 	r.mu.Lock()
-	r.latest = snapshot
+	r.latest = picture
 	r.mu.Unlock()
 }
 
@@ -220,8 +223,9 @@ func armSettled(s *sim.Sim) bool {
 	return true
 }
 
-// snapshot returns the metrics of the last completed step.
-func (r *run) snapshot() sim.Comparison {
+// snapshot returns the picture of the run its clock last published: both arms'
+// metrics and every vehicle's position.
+func (r *run) snapshot() runSnapshot {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.latest
@@ -237,8 +241,8 @@ func (r *run) metrics() *runMetrics {
 		FleetShare: r.cfg.FleetShare,
 		StepS:      r.cfg.StepS,
 		WindowS:    r.cfg.WindowS,
-		Baseline:   metricsOf(snapshot.Baseline),
-		FleetFlow:  metricsOf(snapshot.FleetFlow),
+		Baseline:   metricsOf(snapshot.Metrics.Baseline),
+		FleetFlow:  metricsOf(snapshot.Metrics.FleetFlow),
 	}
 }
 

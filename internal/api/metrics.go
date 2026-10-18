@@ -129,8 +129,16 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	writeJSON(w, http.StatusOK, s.metricsResponse())
+}
+
+// metricsResponse builds the body of GET /api/metrics. The event stream sends the
+// same object as its metrics event, so a client parses one shape whether it asks
+// once or watches.
+func (s *Server) metricsResponse() metricsResponse {
 	now := time.Now()
 	latency := s.eng.QueryLatency()
+
 	body := metricsResponse{
 		Engine: engineMetrics{
 			MetricVersion: s.eng.ActiveMetric().Version(),
@@ -146,8 +154,7 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	if live := s.currentRun(); live != nil {
 		body.Run = live.metrics()
 	}
-
-	writeJSON(w, http.StatusOK, body)
+	return body
 }
 
 // msOf converts a duration to milliseconds. Durations are recorded to the

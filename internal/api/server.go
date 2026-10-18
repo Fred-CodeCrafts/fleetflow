@@ -107,7 +107,10 @@ type Server struct {
 	// live is where real vehicles are last seen, so the dashboard can show them
 	// beside simulated ones. It is always present; an empty register is a valid
 	// state, not a missing dependency.
-	live     *liveVehicles
+	live *liveVehicles
+	// streams counts the clients holding the event stream open, so a run can be
+	// tied to somebody watching it (T44).
+	streams  streamClients
 	dbCheck  func(context.Context) error
 	stoppers []StopFunc
 }
@@ -248,6 +251,10 @@ func (s *Server) routes() {
 	// The metrics the dashboard's strip reads. Public for the same reason: it is
 	// read by a browser, and it discloses no more than the panels already show.
 	s.mux.Handle("GET /api/metrics", s.public(s.handleMetrics))
+
+	// The event stream. It takes the rate limit but not the request deadline: a
+	// response that is meant to stay open cannot be given one (T43).
+	s.mux.Handle("GET /api/stream", s.stream(s.handleStream))
 
 	// Fleet records (DESIGN 3.5). These are the endpoints that touch PostgreSQL;
 	// the two above never do.

@@ -212,15 +212,15 @@ func TestRun_StepsBothArmsFromOneDemand(t *testing.T) {
 	}
 
 	snapshot := live.snapshot()
-	if snapshot.Baseline.CompletedTrips == 0 {
+	if snapshot.Metrics.Baseline.CompletedTrips == 0 {
 		t.Error("the baseline arm completed no trips")
 	}
-	if snapshot.FleetFlow.CompletedTrips == 0 {
+	if snapshot.Metrics.FleetFlow.CompletedTrips == 0 {
 		t.Error("the fleetflow arm completed no trips")
 	}
-	if snapshot.Baseline.TotalVehicles != snapshot.FleetFlow.TotalVehicles {
+	if snapshot.Metrics.Baseline.TotalVehicles != snapshot.Metrics.FleetFlow.TotalVehicles {
 		t.Errorf("the arms ran different demand: %d vs %d vehicles",
-			snapshot.Baseline.TotalVehicles, snapshot.FleetFlow.TotalVehicles)
+			snapshot.Metrics.Baseline.TotalVehicles, snapshot.Metrics.FleetFlow.TotalVehicles)
 	}
 	if !live.settled() {
 		t.Error("both arms completed trips but the run did not settle")
@@ -276,7 +276,7 @@ func TestSimStart_AdvancesOnItsOwnClock(t *testing.T) {
 		if live == nil {
 			t.Fatal("the run vanished while it was going")
 		}
-		if live.snapshot().FleetFlow.CompletedTrips > 0 {
+		if live.snapshot().Metrics.FleetFlow.CompletedTrips > 0 {
 			return
 		}
 		time.Sleep(25 * time.Millisecond)
