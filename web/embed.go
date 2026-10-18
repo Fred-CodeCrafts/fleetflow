@@ -15,7 +15,7 @@ import (
 
 // content is the embedded dashboard.
 //
-//go:embed index.html style.css
+//go:embed index.html style.css app.js
 var content embed.FS
 
 // asset is one URL the dashboard answers with: the file behind it, and the type
@@ -37,6 +37,7 @@ type asset struct {
 var served = []asset{
 	{path: "/", file: "index.html", ctype: "text/html; charset=utf-8"},
 	{path: "/static/style.css", file: "style.css", ctype: "text/css; charset=utf-8"},
+	{path: "/static/app.js", file: "app.js", ctype: "text/javascript; charset=utf-8"},
 }
 
 // Handler returns the dashboard: the page at the root, and each asset at its own

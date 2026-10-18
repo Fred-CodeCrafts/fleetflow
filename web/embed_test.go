@@ -63,9 +63,27 @@ func TestHandlerServesAssets(t *testing.T) {
 // for every path cannot pass unnoticed.
 func TestUnknownPathIsNotFound(t *testing.T) {
 	rec := httptest.NewRecorder()
-	Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/not-a-real-asset.js", nil))
+	Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/static/not-a-real-asset.js", nil))
 
 	if rec.Code != http.StatusNotFound {
-		t.Errorf("GET /not-a-real-asset.js answered %d, want 404", rec.Code)
+		t.Errorf("GET /static/not-a-real-asset.js answered %d, want 404", rec.Code)
+	}
+}
+
+// TestPageReferencesItsAssets keeps the page and the table in step. A renamed
+// asset would otherwise 404 at the browser, where nothing in Go notices.
+func TestPageReferencesItsAssets(t *testing.T) {
+	body, err := content.ReadFile("index.html")
+	if err != nil {
+		t.Fatalf("reading the page: %v", err)
+	}
+
+	for _, a := range served {
+		if a.file == "index.html" {
+			continue // the page does not link to itself
+		}
+		if !strings.Contains(string(body), a.path) {
+			t.Errorf("index.html does not reference %s", a.path)
+		}
 	}
 }
