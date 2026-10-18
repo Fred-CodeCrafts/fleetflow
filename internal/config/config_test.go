@@ -42,16 +42,6 @@ func TestLoad(t *testing.T) {
 			},
 		},
 		{
-			name: "simulation key",
-			env:  map[string]string{"SIM_API_KEY": "  flf_simulator_key  "},
-			want: Config{
-				Addr:      ":8080",
-				Env:       EnvDevelopment,
-				GraphPath: DefaultGraphPath,
-				SimAPIKey: "flf_simulator_key",
-			},
-		},
-		{
 			name:    "port is not a number",
 			env:     map[string]string{"PORT": "http"},
 			wantErr: "PORT",

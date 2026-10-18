@@ -181,16 +181,18 @@ including the seeds where FleetFlow does not win.
 
 A run's fleet vehicles reach the routing engine over the public API, so simulated
 traffic is validated, authenticated and measured like an external client. That
-needs a key the process can present as its own: issue one, name it in
-`SIM_API_KEY`, and the server sends the run over loopback to itself.
+needs a credential the process can present as its own, and it mints one at startup:
+a random key, kept hashed in memory, never written to the database, the environment
+or a log. There is nothing to issue and nothing to configure.
 
 ```sh
-go run ./cmd/fleetflow -issue-key simulator   # prints the key once
-SIM_API_KEY=flf_... go run ./cmd/fleetflow
+go run ./cmd/fleetflow -demo
 ```
 
-Without `SIM_API_KEY` a run still works; its fleet vehicles just call the engine
-in-process, so nothing crosses the wire.
+`-demo` is what serves `/api/sim/start` and `/api/sim/reset`; without it those routes
+are 404. A run takes the engine's weights — it clears them at start and then feeds
+them — so the flag is an assertion that nothing live is reporting to this process.
+The deployed demo passes it; a real deployment does not.
 
 ### Saving a run
 

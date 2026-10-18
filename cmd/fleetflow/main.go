@@ -83,18 +83,29 @@ func issueAPIKey(dsn, name string) {
 }
 
 // seedKey registers a key the operator named in the environment in a memory
-// store. Only the development configuration without a database needs this: a
-// database store is filled by -issue-key, and without it the key the environment
-// names would authenticate nowhere.
-func seedKey(ctx context.Context, repo *authmemory.Repository, plaintext string) error {
-	_, err := repo.Create(ctx, auth.Key{
+// ephemeralKey mints the key the process's own simulator authenticates with, and
+// returns the plaintext alongside the record an Overlay holds.
+//
+// It is never written anywhere: not to the database, not to the environment, not to
+// a log. The plaintext exists in this process's memory for the length of the run
+// and is gone at exit, so there is nothing to rotate, nothing to leak in a dump and
+// nothing left behind after a restart. A key that had to be configured would be a
+// secret with a lifetime longer than the reason for it.
+func ephemeralKey() (string, auth.Key, error) {
+	plaintext, err := auth.Generate()
+	if err != nil {
+		return "", auth.Key{}, err
+	}
+	// The digest is what an Overlay indexes, exactly as the store would index it.
+	// The id is fixed rather than random because it identifies a key that is not
+	// stored and never outlives the process.
+	return plaintext, auth.Key{
 		ID:        "simulator",
 		Name:      "simulator",
 		Prefix:    auth.DisplayPrefix(plaintext),
 		Hash:      auth.Hash(plaintext),
 		CreatedAt: time.Now().UTC(),
-	})
-	return err
+	}, nil
 }
 
 // selfBaseURL is where the process reaches its own HTTP server. The server listens
@@ -152,6 +163,19 @@ func main() {
 		}),
 	}
 
+	// The process's own simulator needs a credential, and under -demo it is minted
+	// here: hashed into an in-memory overlay and never written down. Without -demo
+	// no run is served, so there is no key to mint.
+	var simKey string
+	var overlayKeys []auth.Key
+	if *demo {
+		plaintext, record, err := ephemeralKey()
+		if err != nil {
+			log.Fatalf("could not mint the simulator's key: %v", err)
+		}
+		simKey, overlayKeys = plaintext, []auth.Key{record}
+	}
+
 	if cfg.DatabaseDSN != "" {
 		// A database that is configured but unreachable stops the process: a
 		// wrong host or credential is a deployment mistake, and starting anyway
@@ -163,16 +187,10 @@ func main() {
 		}
 		defer pool.Close()
 
-		keys := auth.NewService(authpostgres.New(pool))
-
-		// A key the operator named must be a key this database knows. Otherwise
-		// every route query a run makes is refused and the whole fleet comes out
-		// unroutable, which is a confusing way to learn about a typo.
-		if cfg.SimAPIKey != "" {
-			if _, err := keys.Authenticate(ctx, cfg.SimAPIKey); err != nil {
-				log.Fatalf("SIM_API_KEY is not a key this database knows: %v", err)
-			}
-		}
+		// The overlay carries the simulator's key in memory; every other key is the
+		// database's. The simulator's own request is authenticated like any other,
+		// which is why it goes through this service rather than around it.
+		keys := auth.NewService(auth.NewOverlay(authpostgres.New(pool), overlayKeys...))
 
 		// The record endpoints read and write through these. The pool is shared,
 		// so the process still owns exactly one.
@@ -191,40 +209,33 @@ func main() {
 		// out loud: nothing here survives a restart, and the deployed
 		// configuration always has a database.
 		keys := authmemory.New()
-		if cfg.SimAPIKey != "" {
-			// The store starts empty, so the key named in the environment is put
-			// in it: an operator who set SIM_API_KEY asked for that key to work,
-			// and there is nothing else to make it real.
-			if err := seedKey(ctx, keys, cfg.SimAPIKey); err != nil {
-				log.Fatalf("could not register the simulation key: %v", err)
-			}
-		}
 		opts = append(opts,
 			api.WithVehicles(vehicle.NewService(vehiclememory.New())),
 			api.WithDrivers(driver.NewService(drivermemory.New())),
 			api.WithTrips(trip.NewService(tripmemory.New())),
 			api.WithRuns(run.NewService(runmemory.New())),
-			api.WithAPIKeys(auth.NewService(keys)),
+			// The same overlay, over an empty store: a database-free run still has a
+			// working simulator and still cannot mint keys through the API.
+			api.WithAPIKeys(auth.NewService(auth.NewOverlay(keys, overlayKeys...))),
 		)
 		log.Print("no database configured: fleet records and api keys are in memory and will be lost on restart")
 	}
 
-	// With a key the simulation's fleet vehicles reach the routing engine over the
-	// public API, so a run is validated, authenticated and measured like an
-	// external client (PRD US-7). The key is also the one client exempt from the
-	// public rate limit: a run compresses time and would otherwise throttle itself.
-	if cfg.SimAPIKey != "" {
+	// With a minted key the simulation's fleet vehicles reach the routing engine
+	// over the public API, so a run is validated, authenticated and measured like
+	// an external client (PRD US-7). That key is also the one client exempt from
+	// the public rate limit: a run compresses time, so it reports far faster than
+	// any real fleet while staying a single trusted caller.
+	if simKey != "" {
 		base := selfBaseURL(cfg.Addr)
 		client := &http.Client{Timeout: simHTTPTimeout}
 		opts = append(opts,
 			api.WithFleetService(func(eng *engine.Engine) sim.FleetService {
-				return sim.NewHTTPFleet(base, cfg.SimAPIKey, g, client)
+				return sim.NewHTTPFleet(base, simKey, g, client)
 			}),
-			api.WithInternalKey(cfg.SimAPIKey),
+			api.WithInternalKey(simKey),
 		)
 		log.Printf("a simulation run's fleet traffic goes through the public api at %s", base)
-	} else {
-		log.Print("SIM_API_KEY is not set: a simulation run's fleet traffic stays in-process; issue a key with -issue-key and set it to send the run through the public api")
 	}
 
 	log.Printf("listening on %s (%s)", cfg.Addr, cfg.Env)
