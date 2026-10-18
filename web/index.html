@@ -89,12 +89,18 @@
 </section>
 
 <section class="legend" aria-label="Map legend">
+  <span class="legend-item"><i class="swatch swatch-free"></i>free flow</span>
+  <span class="legend-item"><i class="swatch swatch-busy"></i>cost &ge; 1.1&times; free flow</span>
+  <span class="legend-item"><i class="swatch swatch-severe"></i>cost &ge; 1.5&times; free flow</span>
   <span class="legend-item"><i class="swatch swatch-fleet"></i>fleet vehicle</span>
   <span class="legend-item"><i class="swatch swatch-background"></i>background traffic</span>
   <span class="legend-item"><i class="swatch swatch-live"></i>live vehicle (both panels)</span>
   <span class="legend-item legend-note">
-    Each panel shows its own arm over the same roads. A live vehicle belongs to neither arm, so it is
-    drawn on both and labelled <code>live</code>.
+    Congestion is <code>cost_s &divide; free_flow_s</code> from the stream, and the FleetFlow panel
+    is the only one drawn with it: the baseline arm&rsquo;s weights are fixed at free flow and never
+    move, so its panel is drawn at free flow rather than shown congestion its router never sees.
+    Each panel shows its own arm over the same roads; a live vehicle belongs to neither arm, so it
+    is drawn on both and labelled <code>live</code>.
   </span>
 </section>
 

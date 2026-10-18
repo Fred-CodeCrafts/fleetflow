@@ -395,6 +395,21 @@ body {
   border: 2px solid var(--glitch);
 }
 
+.swatch-free {
+  background: var(--secondary);
+  border-color: var(--secondary);
+}
+
+.swatch-busy {
+  background: var(--tertiary);
+  border-color: var(--tertiary);
+}
+
+.swatch-severe {
+  background: var(--error);
+  border-color: var(--error);
+}
+
 /* ---------- comparison panels ---------- */
 
 .panels {

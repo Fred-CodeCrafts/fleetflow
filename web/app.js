@@ -16,10 +16,19 @@
 
 /* ---------- map constants ---------- */
 
-// Roads carry no congestion yet, so they are drawn in the palette's structural
-// outline. When the stream arrives, this becomes a function of cost_s over
-// free_flow_s rather than a constant.
-const ROAD_COLOR = '#3a494b';
+// Roads are coloured by congestion: cost_s over free_flow_s, the ratio the stream
+// carries. The ramp is the palette's own meaning — phosphor green for free flow,
+// radar amber for a road carrying more than it was built for, and the error tone
+// for one past saturation. The baseline panel is drawn at free flow by
+// definition (DESIGN 3.5): its weights are fixed and never move, so it never
+// sees the congestion the FleetFlow metric reports.
+const ROAD_FREE = '#00ff88';
+const ROAD_BUSY = '#ffaa00';
+const ROAD_SEVERE = '#ffb4ab';
+// ROAD_CONGESTED and ROAD_SATURATED are the ratios the colour changes at.
+const ROAD_CONGESTED = 1.1;
+const ROAD_SATURATED = 1.5;
+
 const ROAD_MIN_WIDTH = 1;
 const ROAD_LANE_WIDTH = 0.7;
 const ROAD_MAX_WIDTH = 4;
@@ -139,7 +148,7 @@ function redrawPanel(panel) {
 
   ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
   ctx.clearRect(0, 0, state.width, state.height);
-  drawRoads(ctx, state);
+  drawRoads(ctx, state, panel.arm);
   drawVehicles(ctx, state);
 }
 
@@ -150,13 +159,31 @@ function roadWidth(edge) {
   return Math.min(ROAD_MAX_WIDTH, ROAD_MIN_WIDTH + ROAD_LANE_WIDTH * (lanes - 1));
 }
 
+// roadColour is the congestion colour of one edge for one panel.
+//
+// The FleetFlow panel reads cost_s / free_flow_s from the stream's edge metric.
+// The baseline arm's weights are fixed at free flow and never move, so its panel
+// is drawn at free flow: colouring it with the FleetFlow metric would show
+// congestion the baseline arm never sees, which is the one thing this comparison
+// must not do (DESIGN 3.5, "One congestion frame, two panels").
+function roadColour(state, arm, edge) {
+  if (arm !== 'fleetflow' || !state.congestion) return ROAD_FREE;
+
+  const measured = state.congestion.get(edge.id);
+  if (!measured || !(measured.free_flow_s > 0)) return ROAD_FREE;
+
+  const ratio = measured.cost_s / measured.free_flow_s;
+  if (ratio >= ROAD_SATURATED) return ROAD_SEVERE;
+  if (ratio >= ROAD_CONGESTED) return ROAD_BUSY;
+  return ROAD_FREE;
+}
+
 // drawRoads draws every edge from the graph's own coordinates, at its free-flow
-// width and colour. Congestion colouring and vehicle markers draw after this
-// call, from the same state.
-function drawRoads(ctx, state) {
+// width, coloured by congestion. Vehicle markers draw after this call, from the
+// same state.
+function drawRoads(ctx, state, arm) {
   const { toX, toY } = state.projection;
 
-  ctx.strokeStyle = ROAD_COLOR;
   // Round caps meet cleanly where several edges share a node.
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
@@ -167,6 +194,7 @@ function drawRoads(ctx, state) {
     // A missing endpoint is a fault in the graph, not a drawing decision.
     if (!from || !to) continue;
 
+    ctx.strokeStyle = roadColour(state, arm, edge);
     ctx.lineWidth = roadWidth(edge);
     ctx.beginPath();
     ctx.moveTo(toX(from.lon), toY(from.lat));
@@ -518,8 +546,29 @@ function openStream() {
     setStreamChip('Stream live', 'running');
   });
   stream.addEventListener('metrics', (event) => onStreamMessage(event, applyMetrics));
+  stream.addEventListener('edges', (event) => onStreamMessage(event, applyEdges));
   stream.addEventListener('vehicles', (event) => onStreamMessage(event, applyVehicles));
   stream.addEventListener('error', reconnectStream);
+}
+
+// applyEdges stores one congestion frame, keyed by edge id, on the panel that
+// reads it. The frame carries every edge, so one event paints the whole map.
+// Both numbers are kept rather than reduced to a ratio: the pair is what makes
+// the colour explicable. The baseline panel is not given the map at all — its
+// weights are fixed at free flow, so it has no congestion to read (T51).
+function applyEdges(frame) {
+  const congestion = new Map();
+  if (frame && Array.isArray(frame.edges)) {
+    for (const edge of frame.edges) {
+      congestion.set(edge.edge_id, edge);
+    }
+  }
+
+  for (const panel of panels) {
+    if (!panel.state) continue;
+    if (panel.arm === 'fleetflow') panel.state.congestion = congestion;
+    redrawPanel(panel);
+  }
 }
 
 // applyVehicles distributes one positions frame across the panels (T50, T52).
