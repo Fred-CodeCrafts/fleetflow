@@ -42,8 +42,8 @@ type Engine struct {
 	lastCustomizeNanos atomic.Int64 // unix nanos of the last publish
 	customizeNanos     atomic.Int64 // duration of the last customization pass
 
-	// Query latency, read lock-free by the metrics endpoint next to the
-	// customization time.
+	// Query latency, recorded by every route query and read lock-free by the
+	// metrics endpoint next to the customization time.
 	latency queryLatencyHistogram
 }
 
@@ -120,7 +120,8 @@ func (e *Engine) Report(edgeID string, speedMPS float64, now time.Time) error {
 
 // Route answers a route query from the currently published snapshot. The pointer
 // is loaded exactly once, so the whole query runs on one immutable metric even if
-// a new snapshot is published mid-query.
+// a new snapshot is published mid-query. The query is timed once, in
+// RouteWithHeld, which this delegates to.
 func (e *Engine) Route(fromID, toID string) (*Path, error) {
 	path, _, err := e.RouteWithVersion(fromID, toID)
 	return path, err
@@ -150,7 +151,8 @@ type RouteAnswer struct {
 // be active by the time a caller writes its response.
 //
 // A caller that quotes the version it used needs this: the API returns
-// metric_version so a client can tell whether a route predates a refresh.
+// metric_version so a client can tell whether a route predates a refresh. The
+// query is timed once, in RouteWithHeld, which this delegates to.
 func (e *Engine) RouteWithVersion(fromID, toID string) (*Path, uint64, error) {
 	answer, err := e.RouteWithHeld(fromID, toID, nil)
 	if err != nil {
@@ -166,7 +168,16 @@ func (e *Engine) RouteWithVersion(fromID, toID string) (*Path, uint64, error) {
 //
 // The active pointer is loaded exactly once, so the path, the held cost and the
 // version all belong to one immutable metric even if a refresh lands mid-query.
+//
+// This is the one funnel every route query passes through — Route and
+// RouteWithVersion both call it — so the query is timed and recorded here, once
+// per call, and no caller can forget to measure. Recording is a pair of atomic
+// adds, so it neither blocks the query nor allocates, and a failed query is
+// still recorded because it still cost the caller time.
 func (e *Engine) RouteWithHeld(fromID, toID string, held []int) (RouteAnswer, error) {
+	start := time.Now()
+	defer func() { e.latency.record(time.Since(start)) }()
+
 	m := e.active.Load()
 	if m == nil {
 		return RouteAnswer{}, ErrNoMetric
