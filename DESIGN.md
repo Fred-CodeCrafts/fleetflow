@@ -97,6 +97,7 @@ Honest status, not the target: this is what is in the repository today versus wh
   - `free_flow_s = length_m / speed_limit_mps`
   - `capacity = lanes * length_m / 7.5` (vehicle length plus gap, an assumption; documented and tunable)
 - **Data source:** a small Jakarta area extract from OpenStreetMap (attribution required, ODbL), produced by a one-time script in `scripts/`. Fallback: a generated grid city with arterial roads, so the demo never depends on the extract.
+- **The demo network.** The generated grid is committed as `data/graph.json` and reproduced exactly with `go run ./scripts/generate_grid.go -spacing-m 150 -lanes 1`: 150 m blocks, one lane per street and two on the central arterials, which is 20 to 40 vehicles of capacity per edge and 3,200 across the graph. Its size is not decoration. Capacity comes from the network while demand comes from the fleet, and when the second is tiny beside the first no edge ever approaches its limit, every weight stays at free flow, and static and dynamic routing make identical choices. That is what happened at the 450 m, two-to-three lane size this grid was first generated at (16,800 vehicles of capacity), which is why the demo was scaled down to a network a peak-hour run can actually fill. `docs/results.md` has the measurement.
 
 ### 3.2 Weight store (`internal/weights`)
 Per-edge mutable state, one lock per edge:
@@ -286,6 +287,10 @@ Each comparison run uses the same seed and demand for both modes.
 - Engineering: route query latency (p50, p99), customization time, metric age
 
 **Method:** repeat each configuration over several seeds and report the mean and spread. The dashboard shows a single live run, and a script or the metrics endpoint records the multi-seed results for the write-up.
+
+**Result, losses included.** `docs/results.md` records what the demo scenario produces over ten seeds, what the fleet-share sweep produces, and every configuration measured where FleetFlow ties or loses — including the wider network where it makes no difference at all. The short version: at the demo defaults the mean trip is 20.2 s shorter and the 95th percentile 175.8 s shorter over ten seeds, nine seeds better and one worse, and at a fleet share of zero the two arms are identical to the digit on all ten. That last row is the control, and it is the reason to believe the others: everything the arms share cannot be producing the difference, so the routing is.
+
+**What this is not.** A simulator with a synthetic network, uniform demand and a baseline that has no traffic information at all. It demonstrates that the mechanism works and under what conditions; it does not measure what a real fleet would save.
 
 ---
 
