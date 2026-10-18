@@ -87,7 +87,8 @@ go run ./cmd/fleetflow -issue-key "dispatch integration"
 ```
 
 Only the SHA-256 digest is stored, so the key cannot be read back afterwards, and it
-is never written to a log. Present it as a bearer token:
+is never written to a log. If you lose it, issue another one: there is nothing to
+recover, and nothing to look up. Present it as a bearer token:
 
 ```sh
 # submit a vehicle report
