@@ -528,6 +528,126 @@ body {
   outline-offset: -3px;
 }
 
+/* ---------- fleet panes (T48) ---------- */
+
+/* The fleet view is a stack of panes rather than a grid of panels: each pane is
+   its own table and its own form, and a dispatcher reads one of them at a time.
+   The 1px gaps are the same structural line the comparison panels are built
+   from, so the two views look like one page. */
+.fleet {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--border);
+}
+
+.pane {
+  background: var(--void);
+}
+
+.pane-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.pane-head h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+}
+
+.pane-body {
+  padding: 0.75rem;
+}
+
+/* A table is the record: a long id stays readable rather than being squeezed
+   into a column narrower than the value it holds. */
+.records {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.records caption {
+  padding-bottom: 0.5rem;
+  color: var(--on-surface-dim);
+  font-family: var(--font-mono);
+  font-size: var(--label-size);
+  letter-spacing: var(--label-tracking);
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.records th,
+.records td {
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.records th {
+  color: var(--on-surface-dim);
+  font-family: var(--font-mono);
+  font-size: var(--label-size);
+  font-weight: 700;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+}
+
+.records .mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+/* The one line a table says when it has nothing to show: the same voice as a
+   status line, so "nothing yet" and a refusal look like answers, not gaps. */
+.records .empty {
+  padding: 0.75rem 0.6rem;
+  color: var(--outline-variant);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* The assignment cell holds a select and its buttons on one line. */
+.records .assign {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.pane-note {
+  margin: 0.6rem 0 0;
+  padding: 0.3rem 0.6rem;
+  border-left: 2px solid var(--border);
+  color: var(--on-surface-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.pane-note[data-kind='ok'] {
+  border-left-color: var(--secondary);
+  color: var(--secondary);
+}
+
+.pane-note[data-kind='error'] {
+  border-left-color: var(--error);
+  color: var(--error);
+}
+
 /* ---------- narrow viewports ---------- */
 
 @media (max-width: 760px) {
