@@ -290,6 +290,14 @@ history. What stays below is what is still owed.
 - **T39b (saved runs) is not started.** It is a should-have and squarely in the cut
   order, so it waits behind the dashboard rather than competing for the same wiring
   file. Recorded here so "we meant to" and "we ran out of time" are not confused.
+- **The dashboard's JavaScript is verified by hand, not by a test in the repo.** The
+  page is exercised against the running binary (all three event kinds arrive, both arms
+  are labelled, 120 edges per congestion frame) and its drawing decisions were checked
+  outside the repo with a stub DOM: each panel receives its own arm plus live traffic,
+  the FleetFlow panel colours all three bands its legend names, and the baseline panel
+  never leaves free flow. What no check covers is how it looks. Adding a JS test runner
+  for one page would cost more than it protects, so this stays a manual step and is
+  recorded as one rather than described as covered.
 
 ---
 
