@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -24,6 +25,7 @@ import (
 	driverpostgres "fleetflow/internal/driver/postgres"
 	"fleetflow/internal/engine"
 	"fleetflow/internal/graph"
+	"fleetflow/internal/sim"
 	"fleetflow/internal/store"
 	"fleetflow/internal/trip"
 	tripmemory "fleetflow/internal/trip/memory"
@@ -37,6 +39,11 @@ import (
 // issueKeyTimeout bounds the database work behind -issue-key, so an operator
 // command that cannot reach the database fails rather than hangs.
 const issueKeyTimeout = 10 * time.Second
+
+// simHTTPTimeout bounds one call a simulation run makes to the public API. A run
+// sends thousands of them and shutdown waits for the one in flight, so a stalled
+// call must fail rather than hold the run.
+const simHTTPTimeout = 5 * time.Second
 
 // issueAPIKey stores a new API key and prints it once, then returns so the process
 // exits without serving.
@@ -70,6 +77,28 @@ func issueAPIKey(dsn, name string) {
 
 	fmt.Println(plaintext)
 	log.Printf("issued api key %q (prefix %s, id %s)", record.Name, record.Prefix, record.ID)
+}
+
+// seedKey registers a key the operator named in the environment in a memory
+// store. Only the development configuration without a database needs this: a
+// database store is filled by -issue-key, and without it the key the environment
+// names would authenticate nowhere.
+func seedKey(ctx context.Context, repo *authmemory.Repository, plaintext string) error {
+	_, err := repo.Create(ctx, auth.Key{
+		ID:        "simulator",
+		Name:      "simulator",
+		Prefix:    auth.DisplayPrefix(plaintext),
+		Hash:      auth.Hash(plaintext),
+		CreatedAt: time.Now().UTC(),
+	})
+	return err
+}
+
+// selfBaseURL is where the process reaches its own HTTP server. The server listens
+// on every interface and the simulator runs in this same process, so loopback is
+// the shortest way there and the one that needs no inbound address.
+func selfBaseURL(addr string) string {
+	return "http://127.0.0.1" + addr
 }
 
 func main() {
@@ -129,6 +158,17 @@ func main() {
 		}
 		defer pool.Close()
 
+		keys := auth.NewService(authpostgres.New(pool))
+
+		// A key the operator named must be a key this database knows. Otherwise
+		// every route query a run makes is refused and the whole fleet comes out
+		// unroutable, which is a confusing way to learn about a typo.
+		if cfg.SimAPIKey != "" {
+			if _, err := keys.Authenticate(ctx, cfg.SimAPIKey); err != nil {
+				log.Fatalf("SIM_API_KEY is not a key this database knows: %v", err)
+			}
+		}
+
 		// The record endpoints read and write through these. The pool is shared,
 		// so the process still owns exactly one.
 		opts = append(opts,
@@ -136,7 +176,7 @@ func main() {
 			api.WithVehicles(vehicle.NewService(vehiclepostgres.New(pool))),
 			api.WithDrivers(driver.NewService(driverpostgres.New(pool))),
 			api.WithTrips(trip.NewService(trippostgres.New(pool))),
-			api.WithAPIKeys(auth.NewService(authpostgres.New(pool))),
+			api.WithAPIKeys(keys),
 		)
 		log.Printf("fleet records and api keys in postgres at %s", cfg.DatabaseAddr)
 	} else {
@@ -144,13 +184,40 @@ func main() {
 		// is what lets the service run locally without Postgres, and it is said
 		// out loud: nothing here survives a restart, and the deployed
 		// configuration always has a database.
+		keys := authmemory.New()
+		if cfg.SimAPIKey != "" {
+			// The store starts empty, so the key named in the environment is put
+			// in it: an operator who set SIM_API_KEY asked for that key to work,
+			// and there is nothing else to make it real.
+			if err := seedKey(ctx, keys, cfg.SimAPIKey); err != nil {
+				log.Fatalf("could not register the simulation key: %v", err)
+			}
+		}
 		opts = append(opts,
 			api.WithVehicles(vehicle.NewService(vehiclememory.New())),
 			api.WithDrivers(driver.NewService(drivermemory.New())),
 			api.WithTrips(trip.NewService(tripmemory.New())),
-			api.WithAPIKeys(auth.NewService(authmemory.New())),
+			api.WithAPIKeys(auth.NewService(keys)),
 		)
 		log.Print("no database configured: fleet records and api keys are in memory and will be lost on restart")
+	}
+
+	// With a key the simulation's fleet vehicles reach the routing engine over the
+	// public API, so a run is validated, authenticated and measured like an
+	// external client (PRD US-7). The key is also the one client exempt from the
+	// public rate limit: a run compresses time and would otherwise throttle itself.
+	if cfg.SimAPIKey != "" {
+		base := selfBaseURL(cfg.Addr)
+		client := &http.Client{Timeout: simHTTPTimeout}
+		opts = append(opts,
+			api.WithFleetService(func(eng *engine.Engine) sim.FleetService {
+				return sim.NewHTTPFleet(base, cfg.SimAPIKey, g, client)
+			}),
+			api.WithInternalKey(cfg.SimAPIKey),
+		)
+		log.Printf("a simulation run's fleet traffic goes through the public api at %s", base)
+	} else {
+		log.Print("SIM_API_KEY is not set: a simulation run's fleet traffic stays in-process; issue a key with -issue-key and set it to send the run through the public api")
 	}
 
 	log.Printf("listening on %s (%s)", cfg.Addr, cfg.Env)
