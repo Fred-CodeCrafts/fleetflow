@@ -89,13 +89,24 @@ type Config struct {
 	RerouteThreshold float64
 }
 
-// DefaultConfig returns a demo-sized starting point.
+// DefaultConfig returns the demo scenario: a peak, not a trickle.
+//
+// The window matters more than the vehicle count. What congests a road is how
+// many trips are on it at once, and with a wide departure window the same fleet
+// spreads out so thinly that no edge ever approaches capacity -- at which point
+// static and dynamic routing make identical choices and the comparison says
+// nothing. Concentrating the departures into a short window is what a morning
+// peak does, and it is what gives the dynamic router something to do.
+//
+// The numbers are measured, not chosen for effect: see DESIGN, "The comparison
+// result", for what this configuration produces and for what the uniform
+// version of it does not.
 func DefaultConfig() Config {
 	return Config{
 		Seed:             1,
-		Vehicles:         200,
+		Vehicles:         2000,
 		FleetShare:       0.5,
-		WindowS:          600,
+		WindowS:          30,
 		StepS:            1,
 		RerouteEveryS:    30,
 		RerouteThreshold: 0.10,
