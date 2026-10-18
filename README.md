@@ -153,11 +153,12 @@ static baseline and the dynamic one — and answers `202` with the run that is n
 going; `POST /api/sim/reset` stops it and clears it.
 
 ```sh
-# 20 vehicles, half of them FleetFlow, one simulated second per step
+# start the demo scenario: a 30 second morning peak of 2,000 vehicles, half of
+# them on FleetFlow
 curl -sS -X POST http://localhost:8080/api/sim/start \
   -H "Content-Type: application/json" \
-  -d '{"seed":7,"vehicles":20,"fleet_share":0.5}'
-# {"seed":7,"vehicles":20,"fleet_share":0.5,"step_s":1,"window_s":600,"running":true}
+  -d '{"seed":1}'
+# {"seed":1,"vehicles":2000,"fleet_share":0.5,"step_s":1,"window_s":30,"running":true}
 
 curl -sS -X POST http://localhost:8080/api/sim/reset
 ```
@@ -166,6 +167,12 @@ Every field is optional and defaults to the demo configuration
 (`seed`, `vehicles`, `fleet_share`, `step_s`, `window_s`, `reroute_every_s`,
 `reroute_threshold`); a value out of range comes back as `400` with a named code
 and changes nothing. Starting a run replaces the one that was going.
+
+The departure window is the field worth knowing about: 2,000 vehicles spread over
+ten minutes barely meet each other, and a network nobody fills is one where static
+and dynamic routing make identical choices. The 30 s default is a peak, and it is
+what gives the comparison something to measure. `docs/results.md` has the numbers,
+including the seeds where FleetFlow does not win.
 
 A run's fleet vehicles reach the routing engine over the public API, so simulated
 traffic is validated, authenticated and measured like an external client. That
