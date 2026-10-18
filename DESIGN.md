@@ -179,7 +179,7 @@ Plain `net/http`. JSON in and out. `POST /api/reports` and `POST /api/route` req
 | Method and path | Purpose |
 |---|---|
 | `POST /api/reports` | Submit `{vehicle_id, edge_id, speed_mps, ts}`; documented format, invalid or out-of-range values rejected with a clear error |
-| `POST /api/route` | `{from_node, to_node}` returns `{edges, cost_s, metric_version}` |
+| `POST /api/route` | `{from_node, to_node}` returns `{edges, cost_s, metric_version}`. An optional `current_edges` list names the path the caller already holds from `from_node` on; the response then also carries `current_cost_s`, priced on the same snapshot, so a vehicle can compare the route it is driving against the plan and decide whether to switch |
 | `GET /api/metrics` | Current counters and comparison metrics |
 | `GET /api/stream` | Server-Sent Events: vehicle positions, edge congestion, metrics (each vehicle labeled simulated or live) |
 | `POST /api/sim/start` | Start a run with `{seed, vehicles, fleet_share, delta, params...}` |

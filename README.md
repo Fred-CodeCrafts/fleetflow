@@ -97,7 +97,18 @@ curl -sS -X POST http://localhost:8080/api/route \
   -H "Authorization: Bearer $FLEETFLOW_KEY" \
   -H "Content-Type: application/json" \
   -d '{"from_node":"A","to_node":"D"}'
+
+# ask for a route and price the path already being driven, so the two costs
+# come from one snapshot and can be compared
+curl -sS -X POST http://localhost:8080/api/route \
+  -H "Authorization: Bearer $FLEETFLOW_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"from_node":"A","to_node":"D","current_edges":["e_AB","e_BD"]}'
+# {"edges":["e_AC","e_CD"],"cost_s":46.1,"metric_version":3,"current_cost_s":72.0}
 ```
+
+`current_edges` must be a chain that starts at `from_node`; anything else returns
+`400` and computes nothing.
 
 A missing or wrong key returns `401` with `{"code":"unauthenticated"}` and does
 nothing else: no report reaches the weights, and no route is computed. The fleet
