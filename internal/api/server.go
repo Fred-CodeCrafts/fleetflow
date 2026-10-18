@@ -19,6 +19,9 @@ import (
 	"fleetflow/internal/driver"
 	"fleetflow/internal/engine"
 	"fleetflow/internal/graph"
+	// runstore is aliased because this package already calls its live
+	// comparison "run"; the type and the import would collide in this scope.
+	runstore "fleetflow/internal/run"
 	"fleetflow/internal/sim"
 	"fleetflow/internal/trip"
 	"fleetflow/internal/vehicle"
@@ -64,6 +67,11 @@ var errNoFleet = domain.Unavailable("fleet_unavailable", "fleet records are not 
 // to act on.
 var errNoAuth = domain.Unavailable("auth_unavailable", "API keys are not configured")
 
+// errNoRuns is reported by a saved-run endpoint that is reachable without its
+// service behind it, which is the case for a server built without WithRuns. The
+// endpoint exists but cannot serve.
+var errNoRuns = domain.Unavailable("runs_unavailable", "saved runs are not configured")
+
 // Server holds the API handlers and everything they need. It is an
 // http.Handler, so it can be mounted anywhere.
 type Server struct {
@@ -81,6 +89,9 @@ type Server struct {
 	drivers *driver.Service
 	// trips backs the trip endpoints. Nil when built without WithTrips.
 	trips *trip.Service
+	// runs backs the saved comparison runs. Nil when built without WithRuns,
+	// which leaves those endpoints answering 503.
+	runs *runstore.Service
 	// keys authenticates the API key the ingest endpoints require. Nil when the
 	// server is built without WithAPIKeys; those endpoints then refuse every
 	// request, because an ingest endpoint that cannot check its key must not
@@ -145,6 +156,12 @@ func WithDrivers(svc *driver.Service) Option {
 // answer 503.
 func WithTrips(svc *trip.Service) Option {
 	return func(s *Server) { s.trips = svc }
+}
+
+// WithRuns gives the server the saved-run service. Without it the run endpoints
+// answer 503.
+func WithRuns(svc *runstore.Service) Option {
+	return func(s *Server) { s.runs = svc }
 }
 
 // WithAPIKeys gives the server the key service the ingest endpoints authenticate
@@ -274,6 +291,11 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/trips", s.public(s.handleListTrips))
 	s.mux.Handle("POST /api/trips", s.public(s.handleCreateTrip))
 	s.mux.Handle("POST /api/trips/{id}/status", s.public(s.handleSetTripStatus))
+
+	// Saved comparison runs (DESIGN 3.5, PRD US-9). They are the operator's own
+	// record, like the fleet records above, so they are open for the same reason.
+	s.mux.Handle("GET /api/runs", s.public(s.handleListRuns))
+	s.mux.Handle("POST /api/runs", s.public(s.handleSaveRun))
 
 	// The dashboard itself: the page, and its assets under one prefix. It is
 	// public for the same reason the endpoints it reads are — it is what a

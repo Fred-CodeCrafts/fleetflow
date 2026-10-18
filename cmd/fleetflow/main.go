@@ -25,6 +25,9 @@ import (
 	driverpostgres "fleetflow/internal/driver/postgres"
 	"fleetflow/internal/engine"
 	"fleetflow/internal/graph"
+	"fleetflow/internal/run"
+	runmemory "fleetflow/internal/run/memory"
+	runpostgres "fleetflow/internal/run/postgres"
 	"fleetflow/internal/sim"
 	"fleetflow/internal/store"
 	"fleetflow/internal/trip"
@@ -176,6 +179,7 @@ func main() {
 			api.WithVehicles(vehicle.NewService(vehiclepostgres.New(pool))),
 			api.WithDrivers(driver.NewService(driverpostgres.New(pool))),
 			api.WithTrips(trip.NewService(trippostgres.New(pool))),
+			api.WithRuns(run.NewService(runpostgres.New(pool))),
 			api.WithAPIKeys(keys),
 		)
 		log.Printf("fleet records and api keys in postgres at %s", cfg.DatabaseAddr)
@@ -197,6 +201,7 @@ func main() {
 			api.WithVehicles(vehicle.NewService(vehiclememory.New())),
 			api.WithDrivers(driver.NewService(drivermemory.New())),
 			api.WithTrips(trip.NewService(tripmemory.New())),
+			api.WithRuns(run.NewService(runmemory.New())),
 			api.WithAPIKeys(auth.NewService(keys)),
 		)
 		log.Print("no database configured: fleet records and api keys are in memory and will be lost on restart")
