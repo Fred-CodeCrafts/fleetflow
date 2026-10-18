@@ -152,7 +152,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 - [x] 🔴 **T42a** Measure and report route query latency (p50, p99) (US-6)
   `feat(engine): measure route query latency`
   Done when: a query records its duration without taking a lock or blocking, and the metrics endpoint reports p50 and p99 next to the customization time.
-- [ ] 🔴 **T43** Add `GET /api/stream` (Server-Sent Events) for positions, congestion and metrics
+- [x] 🔴 **T43** Add `GET /api/stream` (Server-Sent Events) for positions, congestion and metrics
   `feat(api): stream simulation state over sse`
   Done when: each vehicle is labeled simulated or live.
 - [ ] 🔴 **T44** Run simulation only while a stream client is connected
@@ -203,7 +203,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 - [ ] 🔴 **T60** Tune parameters (alpha, beta, gamma, lambda, delta, hold, threshold) until the demo scenario shows a clear, honest difference
   `chore(weights): tune default parameters from experiments`
   Done when: results are recorded in `docs/results.md` with seeds, including any cases where FleetFlow does not win.
-- [ ] 🟡 **T61** Add multi-seed batch script that prints mean and spread
+- [x] 🟡 **T61** Add multi-seed batch script that prints mean and spread
   `feat(scripts): add multi-seed comparison script`
 - [ ] 🟡 **T62** Test several fleet shares (for example 25%, 50%, 100%)
   `docs: record results across fleet shares`

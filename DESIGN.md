@@ -197,7 +197,17 @@ Every entity follows handler → service → repository, including vehicles, dri
 
 Fleet records (vehicles, drivers, trips, completed-trip history, saved comparison runs) live in PostgreSQL and survive a server restart; schema changes go through versioned migrations. API keys are stored hashed, never in plain text, and never written to logs. Live congestion state stays in memory on the single instance. `GET /api/metrics` reports trip and congestion metrics plus the engineering numbers: route query latency (p50, p99, reported as the lower bound of the bucket each falls in, so accurate to within a factor of two and never overstated), customization time and metric age. The fairness check (time lost against free flow, and fleet versus background trip times) is reported per arm beside the headline figures, not folded into them.
 
-Server-Sent Events are used instead of WebSockets because they are one-way, simpler, and work through both Cloud Run and Fly.
+Server-Sent Events are used instead of WebSockets because they are one-way, simpler, and work through both Cloud Run and Fly. `GET /api/stream` carries three kinds of event on one connection, each at the cadence its contents change at, and opens with one of each so a page can paint as soon as it connects:
+
+| Event | Cadence | Body |
+|---|---|---|
+| `vehicles` | 5/s | `{now_s, running, vehicles: [...]}`, one entry per vehicle that is on the road or waiting to leave: `{id, kind, arm, fleet, state, edge_id, lat, lon, speed_mps, age_s}`. `kind` is `simulated` or `live`. `arm` is `baseline` or `fleetflow`, and is absent for a live vehicle, which belongs to neither panel. A vehicle that has not left yet sits at its origin. |
+| `edges` | 1/s | `{metric_version, edges: [{edge_id, cost_s, free_flow_s}]}`. Every edge is sent, so one frame paints the whole map and a client that joins late needs no history; congestion reads as `cost_s / free_flow_s`. This project's graph has 120 edges, so a full frame is a few kilobytes — a country-sized graph would need deltas instead. |
+| `metrics` | 1/s | Exactly the body of `GET /api/metrics`, so a client parses one shape whether it asks once or watches. |
+
+A comment frame every 15 seconds keeps an idle connection from being closed by a proxy. The stream holds no lock that a run could wait on: positions come from the same snapshot the run clock publishes for `GET /api/metrics`, congestion comes from the engine's active metric, and live vehicles come from their own register, so a slow client cannot slow a run down.
+
+**Simulated or live.** A simulated vehicle belongs to a run and names the panel it is drawn in. A live vehicle is one that has reported through `POST /api/reports` in the last minute, placed on the edge it reported on. The report carries a speed, not a coordinate, so a live vehicle is drawn along its edge rather than at a point; real GPS traces are a later feature, and drawing a position the API never received would be worse than drawing the edge it did. A report describing a moment older than that minute still moves the weights, but does not put a vehicle on the road that is not there.
 
 ### 3.6 Dashboard (`web/`)
 - Static HTML, CSS and vanilla JavaScript embedded into the binary with `go:embed`.

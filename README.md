@@ -149,6 +149,32 @@ SIM_API_KEY=flf_... go run ./cmd/fleetflow
 Without `SIM_API_KEY` a run still works; its fleet vehicles just call the engine
 in-process, so nothing crosses the wire.
 
+### Watching a run
+
+`GET /api/stream` is one Server-Sent Events connection carrying three kinds of
+event, each at the cadence its contents change at: `vehicles` five times a second,
+`edges` and `metrics` once a second. The body of `metrics` is exactly what
+`GET /api/metrics` answers, so the same shape is parsed whether you ask once or
+watch.
+
+```sh
+# watch a run: -N keeps curl from buffering the stream
+curl -sS -N http://localhost:8080/api/stream
+# event: metrics
+# data: {"engine":{"metric_version":3,...},"run":{...}}
+# event: edges
+# data: {"metric_version":3,"edges":[{"edge_id":"e_AB","cost_s":10.2,"free_flow_s":10}]}
+# event: vehicles
+# data: {"now_s":42,"running":true,"vehicles":[{"id":"v0007","kind":"simulated",...}]}
+```
+
+Every vehicle is labelled with where its position came from. A simulated vehicle
+names the panel it belongs to (`arm`: `baseline` or `fleetflow`); a vehicle that has
+reported through `POST /api/reports` in the last minute appears as `live`, drawn on
+the edge it reported on. The report carries a speed rather than a coordinate, so
+that is the edge rather than a point — drawing a position the API never received
+would be worse than drawing the edge it did.
+
 ## Deployment
 
 FleetFlow is containerized with a multi-stage Dockerfile and deployed to **Google Cloud Run** with `max-instances=1` and `min-instances=1`.
