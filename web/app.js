@@ -416,11 +416,12 @@ function showView(name) {
   }
 
   if (name === 'fleet') {
-    // The panes read their endpoints when the view is opened, in the commit
-    // that adds them.
+    refreshFleet();
     return;
   }
 
+  // A canvas inside a display:none subtree reports no size, so returning to the
+  // comparison view is a layout and a paint, exactly as a resize is (T49).
   for (const panel of panels) {
     layout(panel);
     redrawPanel(panel);
@@ -431,6 +432,142 @@ function wireViews() {
   for (const view of VIEWS) {
     const button = document.getElementById('view-' + view);
     if (button) button.addEventListener('click', () => showView(view));
+  }
+}
+
+/* ---------- fleet records (T48) ---------- */
+
+// Every pane reads one list endpoint and writes through the endpoint that owns
+// the change: a create, an assignment and a status move are each a request
+// followed by a re-read, so the table shows what the server stored rather than
+// what the page hoped it stored. Nothing here keeps a rule the API already
+// applies -- forward-only trip statuses, one driver per vehicle -- because a
+// second copy of a rule is a second thing to get wrong.
+const fleetState = {
+  vehicles: [],
+  drivers: [],
+  trips: [],
+  runs: [],
+  // errors holds the last failure per pane. A pane that could not be read says
+  // why: an empty table must not read as "no records" when the answer was 503
+  // fleet_unavailable (T48).
+  errors: {},
+};
+
+// el builds one element with an optional class and text, so a render function
+// reads as the row it draws rather than as a wall of createElement calls.
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined && text !== null) node.textContent = text;
+  return node;
+}
+
+// textOf renders a value the API left out as an em dash rather than as a blank
+// cell, so "unassigned" is visible and not an empty slot.
+function textOf(value) {
+  return value === undefined || value === null || value === '' ? '\u2014' : String(value);
+}
+
+// emptyRow fills a table body with the one line that says why it has no records:
+// nothing yet, or the failure the endpoint answered with.
+function emptyRow(tbody, columns, text) {
+  tbody.replaceChildren();
+  const cell = el('td', 'empty', text);
+  cell.colSpan = columns;
+  const row = el('tr');
+  row.appendChild(cell);
+  tbody.appendChild(row);
+}
+
+// readList reads one list endpoint. A list is only a list when the body carries
+// the array the contract names; anything else is thrown, so the pane reports the
+// server's own message instead of drawing an empty table.
+async function readList(path, key) {
+  const res = await getJSON(path);
+  if (res.status !== 200 || !res.body || !Array.isArray(res.body[key])) {
+    throw new Error(describeError(res));
+  }
+  return res.body[key];
+}
+
+function setPaneNote(pane, text, kind) {
+  setNote(pane + '-note', text, kind);
+}
+
+// noteCount is the one line a pane shows once it has read its endpoint: how many
+// records it got, or that there are none yet.
+function noteCount(pane, count, singular) {
+  if (count === 0) {
+    setPaneNote(pane, `nothing yet \u2014 no ${singular}s on record`, 'idle');
+    return;
+  }
+  setPaneNote(pane, `${count} ${singular}${count === 1 ? '' : 's'}`, 'ok');
+}
+
+// failPane reports a failed read in the pane that asked for it, in the API's own
+// words, and leaves that pane's table saying the same thing.
+function failPane(pane, err) {
+  fleetState.errors[pane] = err.message;
+  setPaneNote(pane, err.message, 'error');
+}
+
+// refreshFleet reads every pane. It is what the Fleet view does when it is
+// opened, so the tables are the server's answer at the moment they are looked
+// at rather than whatever the last visit left behind.
+function refreshFleet() {
+  return Promise.all([refreshVehicles()]);
+}
+
+async function refreshVehicles() {
+  setPaneNote('vehicles', 'GET /api/vehicles \u2026', 'idle');
+  try {
+    // The drivers are read with the vehicles because each row shows the driver
+    // holding it: the assignment is visible from both tables, so neither is a
+    // list of ids a reader has to join by hand.
+    const [vehicles, drivers] = await Promise.all([
+      readList('/api/vehicles', 'vehicles'),
+      readList('/api/drivers', 'drivers'),
+    ]);
+    delete fleetState.errors.vehicles;
+    fleetState.vehicles = vehicles;
+    fleetState.drivers = drivers;
+    renderVehicles();
+    noteCount('vehicles', vehicles.length, 'vehicle');
+  } catch (err) {
+    failPane('vehicles', err);
+    renderVehicles();
+  }
+}
+
+// driverOnVehicle names the driver holding a vehicle, or null. The API answers
+// the assignment from the vehicle too, but a reloaded table reads every driver
+// at once, so the join is made here rather than with a request per row.
+function driverOnVehicle(vehicleID) {
+  return fleetState.drivers.find((driver) => driver.vehicle_id === vehicleID) || null;
+}
+
+function renderVehicles() {
+  const tbody = document.getElementById('vehicles-rows');
+  if (!tbody) return;
+
+  if (fleetState.errors.vehicles) {
+    emptyRow(tbody, 4, fleetState.errors.vehicles);
+    return;
+  }
+  if (fleetState.vehicles.length === 0) {
+    emptyRow(tbody, 4, 'No vehicles yet.');
+    return;
+  }
+
+  tbody.replaceChildren();
+  for (const vehicle of fleetState.vehicles) {
+    const row = el('tr');
+    row.appendChild(el('td', 'mono', vehicle.id));
+    row.appendChild(el('td', null, vehicle.name));
+    row.appendChild(el('td', null, textOf(vehicle.type)));
+    row.appendChild(el('td', 'mono', vehicle.status));
+    tbody.appendChild(row);
   }
 }
 
