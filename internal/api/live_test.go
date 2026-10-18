@@ -103,6 +103,31 @@ func TestLiveVehicles_FollowsReportsOnTheWire(t *testing.T) {
 	}
 }
 
+// A simulated vehicle's report travels the same endpoint as a real one (T40a), so
+// the live register has to know which is which. With SIM_API_KEY set, every
+// simulated vehicle reports with the process's own key; without this distinction a
+// run would fill the map with vehicles labelled live, evict the real ones from a
+// bounded register, and make the dashboard's one claim about where a position came
+// from false (T43).
+func TestLiveVehicles_IgnoresTheSimulatorsOwnTraffic(t *testing.T) {
+	const report = `{"vehicle_id":"v0007","edge_id":"e_AB","speed_mps":8.5}`
+
+	// The key the process presents for its own simulated traffic is the only key
+	// here, so this report is the simulator's by definition.
+	s := testServer(t,
+		WithEngine(newEngine(t, testGraph(t))),
+		WithInternalKey(testAPIKey),
+	)
+
+	if code := postJSON(t, s, "/api/reports", report).Code; code != http.StatusAccepted {
+		t.Fatalf("the simulator's own report was refused: %d", code)
+	}
+
+	if seen := s.live.snapshot(time.Now()); len(seen) != 0 {
+		t.Errorf("snapshot() = %+v, want nothing: this process's own traffic is simulated, not live", seen)
+	}
+}
+
 // A report the API refuses must not put a vehicle on the live view: nothing else
 // about a refused request is allowed to happen either.
 func TestLiveVehicles_IgnoresARejectedReport(t *testing.T) {

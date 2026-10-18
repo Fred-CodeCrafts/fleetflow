@@ -292,6 +292,24 @@ func (s *Server) authed(h http.HandlerFunc) http.Handler {
 	return s.rateLimited(withTimeout(requestTimeout, s.requireAPIKey(h)))
 }
 
+// isInternalKey reports whether a request carries this process's own simulator
+// key. It is an exact, constant-time match, and the only caller that gets it is
+// the simulator, which runs here and compresses time (DESIGN 3.4).
+//
+// Two things hang off it, and they are different questions. The rate limit treats
+// that caller as this process rather than as a client, because a limit sized for a
+// real fleet would make the server throttle itself. The live-vehicle register
+// treats its reports as simulated rather than live, because they are this server's
+// own run: the speeds belong in the weights, but nothing about them is a real
+// vehicle on the road (T43, T40a).
+func (s *Server) isInternalKey(r *http.Request) bool {
+	if s.internalKey == "" {
+		return false
+	}
+	presented, ok := bearerKey(r)
+	return ok && subtle.ConstantTimeCompare([]byte(presented), []byte(s.internalKey)) == 1
+}
+
 // rateLimited applies the public per-client limit to a handler, with one
 // exception: a request bearing this process's own key. That client is the
 // simulator, which runs here and compresses time, so the limit — sized to keep a
@@ -304,10 +322,8 @@ func (s *Server) rateLimited(next http.Handler) http.Handler {
 		return limited
 	}
 
-	internal := []byte(s.internalKey)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if presented, ok := bearerKey(r); ok &&
-			subtle.ConstantTimeCompare([]byte(presented), internal) == 1 {
+		if s.isInternalKey(r) {
 			next.ServeHTTP(w, r)
 			return
 		}

@@ -66,7 +66,14 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	// A real vehicle that has just reported is on the road now. The weights have
 	// already taken the speed; this is what lets the dashboard show live traffic
 	// beside simulated traffic and label which is which (T43).
-	s.live.observe(req.VehicleID, req.EdgeID, req.SpeedMPS, observedAt)
+	//
+	// The simulator's own reports are not real traffic, however they arrive. With
+	// SIM_API_KEY set they come through this very endpoint, and registering them
+	// would draw simulated vehicles as live and evict real ones from a bounded
+	// register.
+	if !s.isInternalKey(r) {
+		s.live.observe(req.VehicleID, req.EdgeID, req.SpeedMPS, observedAt)
+	}
 
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})
 }
