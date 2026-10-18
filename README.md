@@ -22,6 +22,16 @@ Traditional navigation systems and static shortest-path routers direct vehicles 
 - **Target Deployment:** Google Cloud Run (single instance, in-memory state)
 - **License:** Apache License 2.0
 
+This is a **production-shaped architecture with an MVP feature set**, not a
+production-ready service. Layered code, versioned migrations, hashed API keys, typed
+errors, health and readiness endpoints, graceful shutdown, validated config and tests
+in CI are in place. Backups, API key rotation, tenant separation, persisted congestion
+state, multi-instance support and a security review are not, and the results are
+simulation only.
+
+It is also **not yet deployed and not yet containerized**: there is no `Dockerfile`
+and no Cloud Run URL yet (TASKS T57, T58). Running it today means `go run`.
+
 ## Background & Originality Notice
 
 FleetFlow builds conceptually on academic research and an earlier thesis prototype (`sumo-routing`). However:
@@ -55,22 +65,33 @@ FleetFlow is designed as a single, self-contained Go binary:
 git clone https://github.com/Fred-CodeCrafts/fleetflow.git
 cd fleetflow
 
-# Run the service
-go run ./cmd/fleetflow
+# Run the service with the demo scenario enabled
+go run ./cmd/fleetflow -demo
 ```
 
-Once running, open `http://localhost:8080` in your browser to view the operator dashboard.
+Once running, open `http://localhost:8080` in your browser and press Start.
+
+`-demo` is what serves `POST /api/sim/start` and `POST /api/sim/reset`. Without it
+those two routes answer `404` and the dashboard's start button cannot begin a run,
+because it is the flag that asserts no live vehicles report to this process — which
+is what makes it safe for a run to clear the engine's weights when it starts.
 
 ## API Endpoints
 
-- `GET /healthz` - Health check and liveness probe
+Every endpoint below is registered today. The two simulation controls are the only
+conditional ones: they exist only under `-demo`.
+
+- `GET /healthz` - Liveness probe
+- `GET /readyz` - Readiness probe: graph loaded, database reachable when configured
 - `POST /api/reports` - Ingest vehicle speed reports (requires an API key)
-- `POST /api/route` - Query route between origin and destination (requires an API key)
-- `POST /api/sim/start` - Start simulation run with specified seed & parameters
-- `POST /api/sim/reset` - Stop and reset simulation
-- `GET /api/stream` - Server-Sent Events (SSE) telemetry stream for the dashboard
-- `GET /api/metrics` - Real-time metrics and comparative statistics
+- `POST /api/route` - Query a route between origin and destination (requires an API key)
+- `POST /api/sim/start` - Start a comparison run (`-demo` only; `409` while one is going)
+- `POST /api/sim/reset` - Stop and clear the run (`-demo` only)
+- `GET /api/stream` - Server-Sent Events telemetry stream for the dashboard
+- `GET /api/metrics` - Live metrics, including the comparison arms and query latency
+- `GET /api/graph` - The road network, for the dashboard's canvas
 - `GET /api/vehicles`, `POST /api/vehicles` - Fleet vehicle records
+- `POST /api/vehicles/{id}/driver` - Assign or unassign a vehicle's driver
 - `GET /api/drivers`, `POST /api/drivers` - Driver records
 - `GET /api/trips`, `POST /api/trips` - Trip records, with `POST /api/trips/{id}/status` to advance one
 - `GET /api/runs`, `POST /api/runs` - Saved comparison runs
@@ -270,7 +291,15 @@ every vehicle of every tick; the totals are in the finish line.
 
 ## Deployment
 
-FleetFlow is containerized with a multi-stage Dockerfile and deployed to **Google Cloud Run** with `max-instances=1` and `min-instances=1`.
+FleetFlow targets **Google Cloud Run** with `max-instances=1` and `min-instances=1`, as
+a multi-stage Docker image listening on `$PORT`.
+
+That is the target, not the current state: **the `Dockerfile` does not exist yet and
+nothing is deployed** (TASKS T57 and T58). When it does, `max-instances=1` is not a
+tuning choice — live congestion state is in memory, so a second instance would hold a
+different view of the same network. `min-instances=1` keeps demo day free of a cold
+start, and the simulation only advances while a client holds `/api/stream` open, which
+is what lets it run on Cloud Run's default CPU allocation.
 
 ## License
 
