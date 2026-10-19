@@ -260,7 +260,7 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 
 - [x] 🔴 **T57** Add multi-stage `Dockerfile` that listens on `$PORT`
   `build: add dockerfile`
-  Done when: `docker run -p 8080:8080` serves the dashboard locally.
+  Done when: `docker run -p 8080:8080` serves the console locally.
   Verified by building `fleetflow:local` and loading the embedded console and
   `/healthz` from the running image on a local port.
 - [ ] 🔴 **T58** Deploy to **Cloud Run** (`max-instances=1`, `min-instances=1`) with PostgreSQL connected
@@ -281,11 +281,14 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
 
 ## Day 8 (Sat 24 Oct): Ship
 
-- [ ] 🔴 **T64** Final README: what it is, screenshot or GIF, run locally, deploy, limitations, license, attribution, API key example requests
+- [x] 🔴 **T64** Final README: what it is, screenshot or GIF, run locally, deploy, limitations, license, attribution, API key example requests
   `docs: finalize readme`
   Done when: the README calls the project "production-shaped architecture, MVP feature set" and never claims it is production-ready (US-8).
-- [ ] 🔴 **T65** Verify a fresh clone builds and runs from the README steps only
+- [x] 🔴 **T65** Verify a fresh clone builds and runs from the README steps only
   `docs: fix setup steps found during clean-clone check`
+  Verified: a local clean clone ran the README `go run ./cmd/fleetflow -demo`
+  command; `/healthz` and `/settings/network` both returned 200 with embedded
+  console HTML, without Node.
 - [x] 🔴 **T66** Run `go vet`, `gofmt`, `go test -race ./...` and fix findings
   `chore: fix lint and race findings`
   Verified: `go vet ./...` passed, `gofmt -l` reported no files, and

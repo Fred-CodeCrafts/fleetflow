@@ -14,6 +14,13 @@ Traditional navigation systems and static shortest-path routers direct vehicles 
 4. **Publishing immutable metric snapshots** via atomic pointer swaps so route queries (Dijkstra) never block on weight updates.
 5. **Evaluating side by side** against a static baseline router using a deterministic mesoscopic simulator and an embedded React console.
 
+## Console
+
+The operations console includes a live network map, trip and fleet records,
+comparison runs, emissions estimates, and separate pages for each settings group.
+
+![FleetFlow live map console](docs/console.png)
+
 ## Status
 
 **MVP in active development** for the **Road To DevFest Jakarta 2026** competition.
