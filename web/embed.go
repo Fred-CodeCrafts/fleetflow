@@ -1,73 +1,77 @@
-// Package web serves the FleetFlow dashboard: one page of static HTML and CSS,
-// embedded into the binary so a deployment ships no asset directory and no build
-// step stands between editing a file and seeing it in a browser (DESIGN 3.6).
-//
-// The package lives beside its assets because go:embed cannot name a file
-// outside its own directory. Everything here is standard library: no framework,
-// no bundler, no downloaded font, so the dashboard works offline and on a host
-// with no network at all.
+// Package web serves the production console built by Vite and embedded in the
+// FleetFlow binary.
 package web
 
 import (
 	"embed"
+	"errors"
+	"io/fs"
 	"net/http"
+	"path"
+	"strings"
 )
 
-// content is the embedded dashboard.
+// content is the Vite output. Rebuild console/ before compiling after a UI change.
 //
-//go:embed index.html style.css app.js
+//go:embed dist
 var content embed.FS
 
-// asset is one URL the dashboard answers with: the file behind it, and the type
-// to serve it as.
-type asset struct {
-	path  string
-	file  string
-	ctype string
-}
-
-// served lists the whole dashboard. The content type is named here rather than
-// guessed from the extension: three files are few enough to be explicit about,
-// and a guess would depend on the mime database of whatever host is running,
-// which a Windows development machine and a scratch container disagree on.
-//
-// The assets sit under one prefix and the page is matched exactly, which is what
-// lets the server mount the dashboard without a catch-all pattern: see the note
-// at the route in internal/api/server.go.
-var served = []asset{
-	{path: "/", file: "index.html", ctype: "text/html; charset=utf-8"},
-	{path: "/static/style.css", file: "style.css", ctype: "text/css; charset=utf-8"},
-	{path: "/static/app.js", file: "app.js", ctype: "text/javascript; charset=utf-8"},
-}
-
-// Handler returns the dashboard: the page at the root, and each asset at its own
-// path. Anything else is a 404, so a mistyped asset is visible in the browser
-// rather than quietly answered with the page.
+// Handler serves the embedded console and its fingerprinted assets.
 func Handler() http.Handler { return http.HandlerFunc(serve) }
 
-// serve writes one asset, or a 404 for a path the dashboard does not have.
 func serve(w http.ResponseWriter, r *http.Request) {
-	for _, a := range served {
-		if a.path != r.URL.Path {
-			continue
-		}
-
-		body, err := content.ReadFile(a.file)
-		if err != nil {
-			// Unreachable while the embed directive and this table agree;
-			// embed_test.go is what keeps them agreeing.
-			http.Error(w, "dashboard asset missing", http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", a.ctype)
-		// The assets are compiled in, so a changed page means a new binary.
-		// Asking the browser to revalidate costs one small request and removes
-		// the case where a cached page is shown against a newer API.
-		w.Header().Set("Cache-Control", "no-cache")
-		_, _ = w.Write(body)
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	http.NotFound(w, r)
+	requestPath := strings.TrimPrefix(path.Clean("/"+strings.TrimPrefix(r.URL.Path, "/")), "/")
+	if requestPath == "" || requestPath == "." {
+		requestPath = "index.html"
+	}
+
+	file := "dist/" + requestPath
+	info, err := fs.Stat(content, file)
+	if err == nil && !info.IsDir() {
+		writeAsset(w, requestPath, file)
+		return
+	}
+
+	// Missing fingerprinted assets and paths with extensions are real 404s.
+	// Other paths are client-side routes and need the SPA entry document.
+	if strings.HasPrefix(requestPath, "assets/") || path.Ext(requestPath) != "" ||
+		(err != nil && !errors.Is(err, fs.ErrNotExist)) {
+		http.NotFound(w, r)
+		return
+	}
+	writeAsset(w, "index.html", "dist/index.html")
+}
+
+func writeAsset(w http.ResponseWriter, name, file string) {
+	body, err := content.ReadFile(file)
+	if err != nil {
+		http.Error(w, "console asset unavailable", http.StatusInternalServerError)
+		return
+	}
+
+	switch path.Ext(name) {
+	case ".html":
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	case ".js", ".mjs":
+		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+	case ".css":
+		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+	case ".svg":
+		w.Header().Set("Content-Type", "image/svg+xml")
+	default:
+		w.Header().Set("Content-Type", "application/octet-stream")
+	}
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	if name == "index.html" {
+		w.Header().Set("Cache-Control", "no-cache")
+	} else {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	}
+	_, _ = w.Write(body)
 }
