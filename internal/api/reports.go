@@ -50,7 +50,8 @@ type reportRequest struct {
 // back. It writes to the weight store only and never touches PostgreSQL
 // (DESIGN 3.5).
 func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
-	if s.eng == nil {
+	_, eng := s.networkSnapshot()
+	if eng == nil {
 		writeError(w, r, errNoEngine)
 		return
 	}
@@ -67,7 +68,7 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.eng.Report(req.EdgeID, req.SpeedMPS, observedAt); err != nil {
+	if err := eng.Report(req.EdgeID, req.SpeedMPS, observedAt); err != nil {
 		writeError(w, r, err)
 		return
 	}

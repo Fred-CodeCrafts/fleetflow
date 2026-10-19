@@ -113,12 +113,17 @@ func DefaultConfig() Config {
 	}
 }
 
-// completedTrip is one finished trip as the fairness check needs it: how long it
-// took, what free flow would have cost on the route actually driven, and which
-// population the vehicle belonged to.
+// completedTrip is one finished trip as the fairness check and the emissions
+// estimate need it: how long it took, what free flow would have cost on the
+// route actually driven, how far that route was, and which population the
+// vehicle belonged to.
 type completedTrip struct {
 	durationS float64
 	freeFlowS float64
+	// distanceM is the length of the route actually driven, accumulated edge by
+	// edge. Emissions are a function of distance and mean speed, and a detour
+	// caused by congestion must count at its real length.
+	distanceM float64
 	fleet     bool
 }
 
@@ -446,8 +451,15 @@ func (s *Sim) advanceVehicle(v *Vehicle, dt float64) {
 // against the trip as the edge is entered, so the fairness baseline is the route
 // the vehicle actually drove: edges dropped by a reroute are never charged, and
 // an edge taken twice is charged twice.
+//
+// It also charges the edge's length, which is what makes the trip's distance the
+// distance it really covered rather than the distance between its endpoints. A
+// reroute that detours must show the longer distance, or the emissions figure
+// derived from it would understate the detour.
 func (s *Sim) enterEdge(v *Vehicle, edgeIndex int) {
-	v.freeFlowS += s.g.Edges[edgeIndex].FreeFlowS
+	edge := s.g.Edges[edgeIndex]
+	v.freeFlowS += edge.FreeFlowS
+	v.distanceM += edge.LengthM
 	s.occ.Enter(edgeIndex)
 }
 
@@ -457,6 +469,7 @@ func (s *Sim) completeTrip(v *Vehicle) {
 	s.completed = append(s.completed, completedTrip{
 		durationS: v.arriveS - v.departS,
 		freeFlowS: v.freeFlowS,
+		distanceM: v.distanceM,
 		fleet:     v.IsFleet(),
 	})
 }
@@ -465,6 +478,7 @@ func (s *Sim) completeTrip(v *Vehicle) {
 // at atS. An empty route means the vehicle is already at its destination.
 func (s *Sim) placeOnRoute(v *Vehicle, route []int, atS float64) {
 	v.freeFlowS = 0 // each placement is a fresh trip
+	v.distanceM = 0
 
 	if len(route) == 0 {
 		v.state = VehicleArrived

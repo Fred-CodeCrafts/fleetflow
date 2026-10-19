@@ -7,11 +7,11 @@ import (
 	"testing"
 )
 
-// TestDashboardIsPublic checks GET / serves the dashboard page to a caller who
+// TestConsoleIsPublic checks GET / serves the console page to a caller who
 // presents no API key. The page is not an ingest endpoint: it is what a browser
-// opens before any key exists, so requiring one would mean a judge could not
-// reach the dashboard the deployment exists to show.
-func TestDashboardIsPublic(t *testing.T) {
+// opens before any key exists, so requiring one would prevent users from
+// reaching the console.
+func TestConsoleIsPublic(t *testing.T) {
 	srv := testServer(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -24,8 +24,8 @@ func TestDashboardIsPublic(t *testing.T) {
 	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
 		t.Errorf("GET / answered Content-Type %q, want text/html", ct)
 	}
-	if body := rec.Body.String(); !strings.Contains(body, "<canvas") {
-		t.Error("GET / body has no canvas: the root is served but is not the dashboard")
+	if body := rec.Body.String(); !strings.Contains(body, `id="root"`) {
+		t.Error("GET / body has no React root: the root is served but is not the console")
 	}
 }
 

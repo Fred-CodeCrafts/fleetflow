@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -144,7 +145,7 @@ func main() {
 		return
 	}
 
-	g, err := graph.LoadFromFile(cfg.GraphPath)
+	g, err := loadGraph(cfg.GraphPath)
 	if err != nil {
 		fatal(logger, "failed to load graph",
 			slog.String("path", cfg.GraphPath), slog.String("error", err.Error()))
@@ -176,12 +177,10 @@ func main() {
 
 	opts := []api.Option{
 		api.WithEngine(eng),
+		api.WithNetworkName(cfg.GraphPath, "config"),
+		api.WithCustomizerStopper(stopCustomizer),
 		api.WithDemo(*demo),
 		api.WithLogger(logger),
-		api.WithStopFunc(func(context.Context) error {
-			stopCustomizer()
-			return nil
-		}),
 	}
 
 	// The process's own simulator needs a credential, and under -demo it is minted
@@ -252,8 +251,8 @@ func main() {
 		base := selfBaseURL(cfg.Addr)
 		client := &http.Client{Timeout: simHTTPTimeout}
 		opts = append(opts,
-			api.WithFleetService(func(eng *engine.Engine) sim.FleetService {
-				return sim.NewHTTPFleet(base, simKey, g, client)
+			api.WithFleetService(func(network *graph.Graph, eng *engine.Engine) sim.FleetService {
+				return sim.NewHTTPFleet(base, simKey, network, client)
 			}),
 			api.WithInternalKey(simKey),
 		)
@@ -266,6 +265,26 @@ func main() {
 	if err := api.NewServer(g, opts...).Run(ctx, cfg.Addr); err != nil {
 		fatal(logger, "server stopped", slog.String("error", err.Error()))
 	}
+}
+
+func loadGraph(path string) (*graph.Graph, error) {
+	if !strings.HasSuffix(strings.ToLower(path), ".xml") {
+		return graph.LoadFromFile(path)
+	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	g, importErr := graph.ImportSUMONetwork(file, graph.ImportOptions{MinLengthM: 1})
+	closeErr := file.Close()
+	if importErr != nil {
+		return nil, importErr
+	}
+	if closeErr != nil {
+		return nil, closeErr
+	}
+	return g, nil
 }
 
 // fatal logs at error level and exits non-zero.

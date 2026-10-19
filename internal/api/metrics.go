@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"time"
 
+	"fleetflow/internal/emissions"
+	"fleetflow/internal/engine"
 	"fleetflow/internal/sim"
 )
 
@@ -83,6 +85,26 @@ type armMetrics struct {
 	UtilizationStdDev float64 `json:"utilization_std_dev"`
 
 	Fairness fairnessMetrics `json:"fairness"`
+
+	// Emissions is the estimated exhaust output of this arm's finished trips, and
+	// DistanceKM is how far they drove. Both are what makes the environmental
+	// comparison possible: the same demand routed two ways produces two distances
+	// and two sets of grams.
+	Emissions  emissionsMetrics `json:"emissions"`
+	DistanceKM float64          `json:"distance_km"`
+}
+
+// emissionsMetrics is one arm's estimated exhaust output in grams. It carries the
+// method string alongside the numbers so a client cannot present them as a
+// measurement, and so a stored run explains itself later.
+type emissionsMetrics struct {
+	CO2G       float64 `json:"co2_g"`
+	NOXG       float64 `json:"nox_g"`
+	COG        float64 `json:"co_g"`
+	HCG        float64 `json:"hc_g"`
+	PMG        float64 `json:"pm_g"`
+	FuelLitres float64 `json:"fuel_litres"`
+	Method     string  `json:"method"`
 }
 
 // fairnessMetrics is the US-6 fairness check. It sits beside the headline figures
@@ -123,6 +145,16 @@ func metricsOf(m sim.Metrics) armMetrics {
 			BackgroundTrips:     m.Fairness.BackgroundTrips,
 			MeanBackgroundTripS: m.Fairness.MeanBackgroundTripS,
 		},
+		Emissions: emissionsMetrics{
+			CO2G:       m.Emissions.CO2G,
+			NOXG:       m.Emissions.NOXG,
+			COG:        m.Emissions.COG,
+			HCG:        m.Emissions.HCG,
+			PMG:        m.Emissions.PMG,
+			FuelLitres: m.Emissions.FuelLitres,
+			Method:     emissions.Method,
+		},
+		DistanceKM: m.DistanceKM,
 	}
 }
 
@@ -130,26 +162,27 @@ func metricsOf(m sim.Metrics) armMetrics {
 // of it. It reads snapshots only: the engine's active metric and the run's last
 // published one, so the request never waits on a query or on a simulation step.
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
-	if s.eng == nil {
+	_, eng, live := s.networkRunSnapshot()
+	if eng == nil {
 		writeError(w, r, errNoEngine)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, s.metricsResponse())
+	writeJSON(w, http.StatusOK, s.metricsResponse(eng, live))
 }
 
 // metricsResponse builds the body of GET /api/metrics. The event stream sends the
 // same object as its metrics event, so a client parses one shape whether it asks
 // once or watches.
-func (s *Server) metricsResponse() metricsResponse {
+func (s *Server) metricsResponse(eng *engine.Engine, live *run) metricsResponse {
 	now := time.Now()
-	latency := s.eng.QueryLatency()
+	latency := eng.QueryLatency()
 
 	body := metricsResponse{
 		Engine: engineMetrics{
-			MetricVersion: s.eng.ActiveMetric().Version(),
-			MetricAgeS:    s.eng.MetricAge(now).Seconds(),
-			CustomizeMS:   msOf(s.eng.CustomizeDuration()),
+			MetricVersion: eng.ActiveMetric().Version(),
+			MetricAgeS:    eng.MetricAge(now).Seconds(),
+			CustomizeMS:   msOf(eng.CustomizeDuration()),
 			QueryLatencyMS: queryLatencyMetrics{
 				P50:     msOf(latency.P50),
 				P99:     msOf(latency.P99),
@@ -157,7 +190,7 @@ func (s *Server) metricsResponse() metricsResponse {
 			},
 		},
 	}
-	if live := s.currentRun(); live != nil {
+	if live != nil {
 		body.Run = live.metrics()
 	}
 	return body

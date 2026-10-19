@@ -87,6 +87,7 @@ type streamEdge struct {
 	EdgeID    string  `json:"edge_id"`
 	CostS     float64 `json:"cost_s"`
 	FreeFlowS float64 `json:"free_flow_s"`
+	LoadRatio float64 `json:"load_ratio"`
 }
 
 // streamVehiclesFrame is the body of a vehicles event.
@@ -168,7 +169,8 @@ func (s *Server) watched() bool { return s.streams.count() > 0 }
 // metric, and the live register has a lock of its own, so a slow client cannot
 // slow a run down and a run cannot make a frame inconsistent.
 func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
-	if s.eng == nil {
+	_, eng := s.networkSnapshot()
+	if eng == nil {
 		writeError(w, r, errNoEngine)
 		return
 	}
@@ -269,20 +271,31 @@ func (s *Server) writeEvent(w http.ResponseWriter, controller *http.ResponseCont
 // metricsFrame is the metrics event. It is the whole body of GET /api/metrics,
 // so a client parses one shape whether it asks once or streams.
 func (s *Server) metricsFrame() metricsResponse {
-	return s.metricsResponse()
+	_, eng, live := s.networkRunSnapshot()
+	return s.metricsResponse(eng, live)
 }
 
 // edgesFrame is the congestion event, from the engine's active snapshot: the
 // costs every route query is reading, which is what the map is showing.
 func (s *Server) edgesFrame() streamEdgesFrame {
-	metric := s.eng.ActiveMetric()
-	frame := streamEdgesFrame{MetricVersion: metric.Version(), Edges: make([]streamEdge, 0, len(s.graph.Edges))}
+	g, eng, live := s.networkRunSnapshot()
+	metric := eng.ActiveMetric()
+	frame := streamEdgesFrame{MetricVersion: metric.Version(), Edges: make([]streamEdge, 0, len(g.Edges))}
+	var loads []int
+	if live != nil {
+		loads = live.snapshot().FleetFlowLoads
+	}
 
-	for i, edge := range s.graph.Edges {
+	for i, edge := range g.Edges {
+		loadRatio := 0.0
+		if i < len(loads) && edge.Capacity > 0 {
+			loadRatio = float64(loads[i]) / edge.Capacity
+		}
 		frame.Edges = append(frame.Edges, streamEdge{
 			EdgeID:    edge.ID,
 			CostS:     metric.Cost(i),
 			FreeFlowS: edge.FreeFlowS,
+			LoadRatio: loadRatio,
 		})
 	}
 	return frame
@@ -292,9 +305,10 @@ func (s *Server) edgesFrame() streamEdgesFrame {
 // every real vehicle that has reported recently, each labelled with where it came
 // from.
 func (s *Server) vehiclesFrame() streamVehiclesFrame {
+	g, _, live := s.networkRunSnapshot()
 	frame := streamVehiclesFrame{Vehicles: []streamVehicle{}}
 
-	if live := s.currentRun(); live != nil {
+	if live != nil {
 		picture := live.snapshot()
 		frame.NowS = picture.NowS
 		frame.Running = true
@@ -312,8 +326,8 @@ func (s *Server) vehiclesFrame() streamVehiclesFrame {
 			// told about, so the map shows what the model believes.
 			SpeedMPS: v.SpeedMPS,
 		}
-		if _, idx, ok := s.graph.EdgeByID(v.EdgeID); ok {
-			vehicle.Lat, vehicle.Lon = edgeMidpoint(s.graph, idx, 0.5)
+		if _, idx, ok := g.EdgeByID(v.EdgeID); ok {
+			vehicle.Lat, vehicle.Lon = edgeMidpoint(g, idx, 0.5)
 		}
 		frame.Vehicles = append(frame.Vehicles, vehicle)
 	}
@@ -327,8 +341,9 @@ func (s *Server) vehiclesFrame() streamVehiclesFrame {
 type runSnapshot struct {
 	Metrics sim.Comparison
 	// NowS is the simulated time the picture was taken at.
-	NowS     float64
-	Vehicles []streamVehicle
+	NowS           float64
+	Vehicles       []streamVehicle
+	FleetFlowLoads []int
 }
 
 // picture builds the run's current picture. It is called by the clock goroutine
@@ -339,8 +354,9 @@ func (r *run) picture() runSnapshot {
 			Baseline:  r.baseline.Collect(),
 			FleetFlow: r.fleetflow.Collect(),
 		},
-		NowS:     r.fleetflow.NowS(),
-		Vehicles: r.vehicles(),
+		NowS:           r.fleetflow.NowS(),
+		Vehicles:       r.vehicles(),
+		FleetFlowLoads: r.fleetflow.Occupancy().Snapshot(),
 	}
 }
 

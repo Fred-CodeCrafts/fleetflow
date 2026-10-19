@@ -410,7 +410,7 @@ func (r *run) stopRun(ctx context.Context) {
 // Production passes an HTTP client against the server's own public API, so
 // simulated traffic is validated, authenticated and measured like an external
 // client (PRD US-7). Without it the arm uses the engine in-process.
-func WithFleetService(fn func(*engine.Engine) sim.FleetService) Option {
+func WithFleetService(fn func(*graph.Graph, *engine.Engine) sim.FleetService) Option {
 	return func(s *Server) { s.fleetService = fn }
 }
 
@@ -436,11 +436,6 @@ func (f selfFleet) Customize() *engine.Metric { return f.eng.Customize() }
 // handleSimStart builds a fresh comparison run from the request and sets its
 // clock going, replacing whatever was running before.
 func (s *Server) handleSimStart(w http.ResponseWriter, r *http.Request) {
-	if s.eng == nil {
-		writeError(w, r, errNoEngine)
-		return
-	}
-
 	var body simRequest
 	if err := decodeJSON(w, r, &body); err != nil {
 		writeError(w, r, err)
@@ -470,23 +465,35 @@ func (s *Server) handleSimStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	baseline, err := engine.NewBaseline(s.graph, engine.NewDijkstraRouter(s.graph))
+	// Keep the installed graph/engine pair stable until this run owns the slot.
+	// Network replacement takes the write lock and refuses a claimed or running
+	// run, so its simulator and the API can never route against different graphs.
+	s.networkMu.RLock()
+	defer s.networkMu.RUnlock()
+	g, eng := s.graph, s.eng
+	if g == nil || eng == nil {
+		s.releaseRun()
+		writeError(w, r, errNoEngine)
+		return
+	}
+
+	baseline, err := engine.NewBaseline(g, engine.NewDijkstraRouter(g))
 	if err != nil {
 		s.releaseRun()
 		writeError(w, r, err)
 		return
 	}
 
-	fleet := sim.FleetService(sim.NewEngineFleet(s.eng))
+	fleet := sim.FleetService(sim.NewEngineFleet(eng))
 	wire := false
 	if s.fleetService != nil {
 		// The client speaks HTTP, so the clock's weight refresh has to be handed
 		// to the engine the server itself routes with.
-		fleet = selfFleet{FleetService: s.fleetService(s.eng), eng: s.eng}
+		fleet = selfFleet{FleetService: s.fleetService(g, eng), eng: eng}
 		wire = true
 	}
 
-	live, err := newRun(s.graph, cfg, baseline, fleet, wire, s.watched, s.streams.wake, s.logger)
+	live, err := newRun(g, cfg, baseline, fleet, wire, s.watched, s.streams.wake, s.logger)
 	if err != nil {
 		s.releaseRun()
 		writeError(w, r, err)
@@ -497,7 +504,7 @@ func (s *Server) handleSimStart(w http.ResponseWriter, r *http.Request) {
 	// the engine already held, so its numbers would depend on what ran before it.
 	// Only -demo serves this route, which is what makes that safe: no live traffic
 	// is feeding the weights it clears.
-	s.eng.Reset()
+	eng.Reset()
 
 	s.installRun(live)
 
@@ -575,10 +582,17 @@ func (s *Server) installRun(live *run) {
 func (s *Server) stopRun(ctx context.Context) {
 	s.runMu.Lock()
 	previous := s.run
+	if previous == nil {
+		s.runMu.Unlock()
+		return
+	}
 	s.run = nil
+	s.claiming = true
 	s.runMu.Unlock()
 
-	if previous != nil {
-		previous.stopRun(ctx)
-	}
+	previous.stopRun(ctx)
+
+	s.runMu.Lock()
+	s.claiming = false
+	s.runMu.Unlock()
 }

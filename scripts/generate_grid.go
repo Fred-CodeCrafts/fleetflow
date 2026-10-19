@@ -46,8 +46,8 @@ func main() {
 	outPath := flag.String("out", "data/graph.json", "Output path for the generated graph JSON")
 	rows := flag.Int("rows", 6, "Number of grid rows (North-South)")
 	cols := flag.Int("cols", 6, "Number of grid columns (East-West)")
-	spacing := flag.Float64("spacing-m", 450, "Meters between grid intersections")
-	lanes := flag.Int("lanes", 2, "Lanes on an ordinary street; the central arterials get one more")
+	spacing := flag.Float64("spacing-m", 150, "Meters between grid intersections")
+	lanes := flag.Int("lanes", 1, "Lanes on an ordinary street; the central arterials get one more")
 	flag.Parse()
 
 	if *rows < 2 || *cols < 2 {

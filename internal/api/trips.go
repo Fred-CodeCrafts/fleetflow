@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"fleetflow/internal/domain"
 	"fleetflow/internal/trip"
@@ -19,23 +20,45 @@ const codeTripIDRequired = "trip_id_required"
 
 // tripView is a trip as the API writes it. VehicleID is left out when the trip
 // has no vehicle, so "unassigned" reads the same as "absent".
+//
+// StartedAt, FinishedAt and DurationS are pointers on purpose. A trip that has
+// not started has no start time, and a trip that never recorded one has no
+// duration; reporting 0 or an epoch date would be a claim the data does not
+// support (PRD US-9). Null is the honest answer, and the console renders it as
+// "not recorded".
 type tripView struct {
-	ID          string `json:"id"`
-	Origin      string `json:"origin"`
-	Destination string `json:"destination"`
-	VehicleID   string `json:"vehicle_id,omitempty"`
-	Status      string `json:"status"`
+	ID          string   `json:"id"`
+	Origin      string   `json:"origin"`
+	Destination string   `json:"destination"`
+	VehicleID   string   `json:"vehicle_id,omitempty"`
+	Status      string   `json:"status"`
+	StartedAt   *string  `json:"started_at"`
+	FinishedAt  *string  `json:"finished_at"`
+	DurationS   *float64 `json:"duration_s"`
 }
 
 // viewOfTrip renders a stored trip for a response.
 func viewOfTrip(t trip.Trip) tripView {
-	return tripView{
+	view := tripView{
 		ID:          t.ID,
 		Origin:      t.Origin,
 		Destination: t.Destination,
 		VehicleID:   t.VehicleID,
 		Status:      t.Status.String(),
 	}
+	if !t.StartedAt.IsZero() {
+		at := t.StartedAt.UTC().Format(time.RFC3339Nano)
+		view.StartedAt = &at
+	}
+	if !t.FinishedAt.IsZero() {
+		at := t.FinishedAt.UTC().Format(time.RFC3339Nano)
+		view.FinishedAt = &at
+	}
+	if d, ok := t.Duration(); ok {
+		seconds := d.Seconds()
+		view.DurationS = &seconds
+	}
+	return view
 }
 
 // createTripRequest is the body of POST /api/trips (DESIGN 3.5).

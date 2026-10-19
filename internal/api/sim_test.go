@@ -345,7 +345,7 @@ func TestSimStart_RefreshesWeightsForAnOutOfProcessFleetService(t *testing.T) {
 	s := testServerFor(t, g,
 		WithEngine(eng),
 		WithDemo(true),
-		WithFleetService(func(e *engine.Engine) sim.FleetService {
+		WithFleetService(func(_ *graph.Graph, e *engine.Engine) sim.FleetService {
 			return plainFleet{FleetService: sim.NewEngineFleet(e)}
 		}),
 	)

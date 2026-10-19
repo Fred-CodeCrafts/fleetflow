@@ -3,6 +3,8 @@ package api
 import (
 	"net/http"
 	"sort"
+
+	"fleetflow/internal/graph"
 )
 
 // graphResponse is the body of GET /api/graph: the road network itself, so the
@@ -28,30 +30,36 @@ type graphNode struct {
 // the speed model uses, sent so that a client colouring by congestion can say
 // what it is colouring against.
 type graphEdge struct {
-	ID            string  `json:"id"`
-	From          string  `json:"from"`
-	To            string  `json:"to"`
-	LengthM       float64 `json:"length_m"`
-	Lanes         int     `json:"lanes"`
-	SpeedLimitMPS float64 `json:"speed_limit_mps"`
-	FreeFlowS     float64 `json:"free_flow_s"`
-	Capacity      float64 `json:"capacity"`
+	ID            string        `json:"id"`
+	From          string        `json:"from"`
+	To            string        `json:"to"`
+	LengthM       float64       `json:"length_m"`
+	Lanes         int           `json:"lanes"`
+	SpeedLimitMPS float64       `json:"speed_limit_mps"`
+	FreeFlowS     float64       `json:"free_flow_s"`
+	Capacity      float64       `json:"capacity"`
+	Shape         []graph.Point `json:"shape,omitempty"`
 }
 
 // handleGraph serves the road network. It is public for the same reason the
 // metrics are: the dashboard reads it, and it discloses nothing the map does not
 // already draw.
 func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) {
-	body := graphResponse{Nodes: make([]graphNode, 0, len(s.graph.Nodes)), Edges: make([]graphEdge, 0, len(s.graph.Edges))}
+	g, _ := s.networkSnapshot()
+	if g == nil {
+		writeError(w, r, errNoEngine)
+		return
+	}
+	body := graphResponse{Nodes: make([]graphNode, 0, len(g.Nodes)), Edges: make([]graphEdge, 0, len(g.Edges))}
 
-	for _, node := range s.graph.Nodes {
+	for _, node := range g.Nodes {
 		body.Nodes = append(body.Nodes, graphNode{ID: node.ID, Lat: node.Lat, Lon: node.Lon})
 	}
 	// A map iterates in no order at all, and a client that diffs two responses
 	// should not be told the graph changed.
 	sort.Slice(body.Nodes, func(i, j int) bool { return body.Nodes[i].ID < body.Nodes[j].ID })
 
-	for _, edge := range s.graph.Edges {
+	for _, edge := range g.Edges {
 		body.Edges = append(body.Edges, graphEdge{
 			ID:            edge.ID,
 			From:          edge.From,
@@ -61,6 +69,7 @@ func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) {
 			SpeedLimitMPS: edge.SpeedLimitMPS,
 			FreeFlowS:     edge.FreeFlowS,
 			Capacity:      edge.Capacity,
+			Shape:         append([]graph.Point(nil), edge.Shape...),
 		})
 	}
 

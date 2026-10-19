@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"fleetflow/internal/domain"
+	"fleetflow/internal/graph"
 )
 
 // Error codes for a route query the endpoint refuses.
@@ -47,7 +48,8 @@ type routeResponse struct {
 // loads one immutable snapshot and computes on it, so it never waits on a report
 // or a customization, and never touches PostgreSQL (DESIGN 3.5).
 func (s *Server) handleRoute(w http.ResponseWriter, r *http.Request) {
-	if s.eng == nil {
+	g, eng := s.networkSnapshot()
+	if eng == nil || g == nil {
 		writeError(w, r, errNoEngine)
 		return
 	}
@@ -68,7 +70,7 @@ func (s *Server) handleRoute(w http.ResponseWriter, r *http.Request) {
 
 	// Resolve the held path before the engine is asked for anything, so a
 	// malformed one is refused without a route being computed.
-	held, err := s.heldEdgeIndices(req.FromNode, req.CurrentEdges)
+	held, err := heldEdgeIndices(g, req.FromNode, req.CurrentEdges)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -77,14 +79,14 @@ func (s *Server) handleRoute(w http.ResponseWriter, r *http.Request) {
 	// An unknown node and an unreachable pair come back as the engine's own
 	// sentinels; statusFor and writeError turn them into a status and a body that
 	// name what went wrong.
-	answer, err := s.eng.RouteWithHeld(req.FromNode, req.ToNode, held)
+	answer, err := eng.RouteWithHeld(req.FromNode, req.ToNode, held)
 	if err != nil {
 		writeError(w, r, err)
 		return
 	}
 
 	resp := routeResponse{
-		Edges:         s.edgeIDs(answer.Path.Edges),
+		Edges:         edgeIDs(g, answer.Path.Edges),
 		CostS:         answer.Path.CostS,
 		MetricVersion: answer.Version,
 	}
@@ -104,14 +106,14 @@ func (s *Server) handleRoute(w http.ResponseWriter, r *http.Request) {
 // edge must exist, each must meet the next, and the first must start at the
 // query's origin. Anything else is the client's bad input, refused here with a
 // 400 rather than silently priced as a shorter or wrong path.
-func (s *Server) heldEdgeIndices(fromNode string, ids []string) ([]int, error) {
+func heldEdgeIndices(g *graph.Graph, fromNode string, ids []string) ([]int, error) {
 	if ids == nil {
 		return nil, nil
 	}
 
 	indices := make([]int, len(ids))
 	for i, id := range ids {
-		_, idx, ok := s.graph.EdgeByID(id)
+		_, idx, ok := g.EdgeByID(id)
 		if !ok {
 			return nil, domain.Invalid(codeCurrentEdgeUnknown,
 				"current_edges[%d] %q is not an edge of the graph", i, id)
@@ -122,12 +124,12 @@ func (s *Server) heldEdgeIndices(fromNode string, ids []string) ([]int, error) {
 		return indices, nil
 	}
 
-	if got := s.graph.Edges[indices[0]].From; got != fromNode {
+	if got := g.Edges[indices[0]].From; got != fromNode {
 		return nil, domain.Invalid(codeCurrentEdgesNotAChain,
 			"current_edges must start at from_node %q, but starts at %q", fromNode, got)
 	}
 	for i := 1; i < len(indices); i++ {
-		if s.graph.Edges[indices[i]].From != s.graph.Edges[indices[i-1]].To {
+		if g.Edges[indices[i]].From != g.Edges[indices[i-1]].To {
 			return nil, domain.Invalid(codeCurrentEdgesNotAChain,
 				"current_edges[%d] does not continue from current_edges[%d]", i, i-1)
 		}
@@ -141,10 +143,10 @@ func (s *Server) heldEdgeIndices(fromNode string, ids []string) ([]int, error) {
 //
 // The indices belong to the graph the engine was built over, which WithEngine
 // requires to be this server's graph.
-func (s *Server) edgeIDs(indices []int) []string {
+func edgeIDs(g *graph.Graph, indices []int) []string {
 	ids := make([]string, 0, len(indices))
 	for _, i := range indices {
-		ids = append(ids, s.graph.Edges[i].ID)
+		ids = append(ids, g.Edges[i].ID)
 	}
 	return ids
 }

@@ -20,6 +20,11 @@ func TestTrips_CreateDefaultsToPlanned(t *testing.T) {
 	if _, hasVehicle := created["vehicle_id"]; hasVehicle {
 		t.Errorf("a trip created with no vehicle has vehicle_id = %v", created["vehicle_id"])
 	}
+	for _, key := range []string{"started_at", "finished_at", "duration_s"} {
+		if value, exists := created[key]; !exists || value != nil {
+			t.Errorf("%s = %v (present %t), want null before the trip starts", key, value, exists)
+		}
+	}
 	if loc := rec.Header().Get("Location"); loc != "/api/trips/"+field(t, created, "id") {
 		t.Errorf("Location = %q, want the created trip", loc)
 	}
@@ -114,8 +119,17 @@ func TestTrips_AdvanceStatusThroughItsLife(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("moving to %s: status = %d: %s", want, rec.Code, rec.Body)
 		}
-		if got := field(t, decodeBody(t, rec), "status"); got != want {
+		updated := decodeBody(t, rec)
+		if got := field(t, updated, "status"); got != want {
 			t.Errorf("status = %q, want %q", got, want)
+		}
+		if updated["started_at"] == nil {
+			t.Errorf("status %s has no recorded start time", want)
+		}
+		if want == "completed" {
+			if updated["finished_at"] == nil || updated["duration_s"] == nil {
+				t.Errorf("completed trip has no finish or duration: %v", updated)
+			}
 		}
 	}
 

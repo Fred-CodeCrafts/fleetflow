@@ -90,6 +90,14 @@ func TestRuns_SaveThenList(t *testing.T) {
 			t.Errorf("metrics has no %q", key)
 		}
 	}
+	baseline := object(t, metrics, "baseline")
+	if _, ok := baseline["distance_km"]; !ok {
+		t.Error("saved baseline has no per-trip distance")
+	}
+	emissions := object(t, baseline, "emissions")
+	if method := field(t, emissions, "method"); method == "" {
+		t.Error("saved emissions have no model disclaimer")
+	}
 
 	list := listOf(t, decodeBody(t, getJSON(t, s, "/api/runs")), "runs")
 	if len(list) != 1 {
@@ -101,6 +109,11 @@ func TestRuns_SaveThenList(t *testing.T) {
 	}
 	if got := field(t, first, "created_at"); got == "" {
 		t.Error("listed run has no created_at")
+	}
+	listedMetrics := object(t, first, "metrics")
+	listedEmissions := object(t, object(t, listedMetrics, "baseline"), "emissions")
+	if _, ok := listedEmissions["co2_g"]; !ok {
+		t.Error("saved emissions did not survive the list round trip")
 	}
 }
 

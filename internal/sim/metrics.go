@@ -3,6 +3,8 @@ package sim
 import (
 	"math"
 	"sort"
+
+	"fleetflow/internal/emissions"
 )
 
 // Metrics summarises a simulation run so that two runs on the same demand can be
@@ -30,6 +32,29 @@ type Metrics struct {
 	// Fairness is the US-6 fairness check. It is reported beside the headline
 	// figures above, not as one of them: none of it says that FleetFlow wins.
 	Fairness Fairness
+
+	// Emissions is the estimated exhaust output of the trips that finished, and
+	// DistanceKM is how far they drove in total. Both cover the same population
+	// as the trip statistics, so an emissions figure can be read against the
+	// average trip time without a second denominator.
+	Emissions  Emissions
+	DistanceKM float64
+}
+
+// Emissions is a run arm's estimated exhaust output, in grams, over the trips
+// that finished.
+//
+// It is computed from each trip's own distance and mean speed, using the same
+// model for both arms, so the comparison between them is like for like. The
+// figures are estimates under a documented model rather than a measurement; see
+// internal/emissions for what it does and does not account for.
+type Emissions struct {
+	CO2G       float64
+	NOXG       float64
+	COG        float64
+	HCG        float64
+	PMG        float64
+	FuelLitres float64
 }
 
 // Fairness holds the fairness check that sits next to the headline metrics but
@@ -65,9 +90,29 @@ func (s *Sim) Collect() Metrics {
 	trips := make([]float64, 0, len(s.completed))
 	var timeLostTotal float64
 	var fleetSum, backgroundSum float64
+	var totalDistanceM float64
 	for _, t := range s.completed {
 		trips = append(trips, t.durationS)
 		timeLostTotal += t.durationS - t.freeFlowS
+		totalDistanceM += t.distanceM
+
+		// Each trip is estimated on its own distance and mean speed, then summed.
+		// Estimating the whole run from its mean speed instead would be a
+		// different, and wrong, calculation: a run with one crawling trip and one
+		// fast trip does not emit what a single trip at the average speed emits,
+		// because the emission curve is not linear in speed.
+		if t.distanceM > 0 && t.durationS > 0 {
+			meanKmh := (t.distanceM / 1000) / (t.durationS / 3600)
+			if est, err := emissions.Trip(emissions.PassengerCar, t.distanceM/1000, meanKmh); err == nil {
+				m.Emissions.CO2G += est.CO2G
+				m.Emissions.NOXG += est.NOXG
+				m.Emissions.COG += est.COG
+				m.Emissions.HCG += est.HCG
+				m.Emissions.PMG += est.PMG
+				m.Emissions.FuelLitres += est.FuelLitres
+			}
+		}
+
 		if t.fleet {
 			m.Fairness.FleetTrips++
 			fleetSum += t.durationS
@@ -76,6 +121,7 @@ func (s *Sim) Collect() Metrics {
 			backgroundSum += t.durationS
 		}
 	}
+	m.DistanceKM = totalDistanceM / 1000
 	sort.Float64s(trips)
 	m.CompletedTrips = len(trips)
 	if len(trips) > 0 {

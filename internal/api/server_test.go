@@ -97,6 +97,28 @@ func TestHealthz(t *testing.T) {
 	}
 }
 
+func TestConsoleRoutesDoNotChangeAPIErrorBehavior(t *testing.T) {
+	s := testServer(t)
+
+	clientRoute := httptest.NewRecorder()
+	s.ServeHTTP(clientRoute, httptest.NewRequest(http.MethodGet, "/operations/trips", nil))
+	if clientRoute.Code != http.StatusOK || clientRoute.Header().Get("Content-Type") != "text/html; charset=utf-8" {
+		t.Errorf("client route answered %d with %q, want the SPA document", clientRoute.Code, clientRoute.Header().Get("Content-Type"))
+	}
+
+	wrongMethod := httptest.NewRecorder()
+	s.ServeHTTP(wrongMethod, httptest.NewRequest(http.MethodGet, "/api/reports", nil))
+	if wrongMethod.Code != http.StatusMethodNotAllowed {
+		t.Errorf("GET /api/reports answered %d, want 405", wrongMethod.Code)
+	}
+
+	unknownAPI := httptest.NewRecorder()
+	s.ServeHTTP(unknownAPI, httptest.NewRequest(http.MethodGet, "/api/not-a-route", nil))
+	if unknownAPI.Code != http.StatusNotFound {
+		t.Errorf("GET /api/not-a-route answered %d, want 404", unknownAPI.Code)
+	}
+}
+
 func TestHealthz_RejectsOtherMethods(t *testing.T) {
 	s := testServer(t)
 	rec := httptest.NewRecorder()

@@ -111,7 +111,7 @@ type Server struct {
 	// fleetService builds the FleetService a run's FleetFlow arm uses. Nil means
 	// the engine in-process; production sets an HTTP client against the server's
 	// own public API.
-	fleetService func(*engine.Engine) sim.FleetService
+	fleetService func(*graph.Graph, *engine.Engine) sim.FleetService
 	// demo serves the simulation control routes. False means they are not
 	// registered, so a run cannot be started at all.
 	demo bool
@@ -133,6 +133,17 @@ type Server struct {
 	streams  *streamClients
 	dbCheck  func(context.Context) error
 	stoppers []StopFunc
+
+	// networkMu guards the graph, the engine built on it, and the labels that say
+	// where the graph came from. They are swapped together when a different
+	// network is loaded, so a reader can never see a new graph with an engine
+	// built on the old one.
+	networkMu     sync.RWMutex
+	networkName   string
+	networkSource string
+	// stopCustomizer stops the running customizer goroutine when the engine it
+	// belongs to is replaced.
+	stopCustomizer func()
 }
 
 // Option customises a Server at construction time.
@@ -146,6 +157,28 @@ type Option func(*Server)
 // edge indices into that graph, and the server translates them with its own.
 func WithEngine(e *engine.Engine) Option {
 	return func(s *Server) { s.eng = e }
+}
+
+// WithNetworkName labels the graph the server was built with, so the Network
+// screen can say which map is loaded and where it came from. It is a label only;
+// the graph itself is the one passed to NewServer.
+func WithNetworkName(name, source string) Option {
+	return func(s *Server) {
+		if name != "" {
+			s.networkName = name
+		}
+		if source != "" {
+			s.networkSource = source
+		}
+	}
+}
+
+// WithCustomizerStopper gives the server a way to stop the customizer goroutine
+// that belongs to the engine it was built with. It is called when a different
+// network is loaded, because the replacement engine gets its own customizer and
+// the old one must not keep writing to a metric nothing publishes any more.
+func WithCustomizerStopper(stop func()) Option {
+	return func(s *Server) { s.stopCustomizer = stop }
 }
 
 // WithVehicles gives the server the vehicle service the record endpoints read
@@ -248,10 +281,23 @@ func NewServer(g *graph.Graph, opts ...Option) *Server {
 		limiter: newRateLimiter(ratePerSecond, rateBurst),
 		live:    newLiveVehicles(liveVehicleTTL, maxLiveVehicles),
 		streams: newStreamClients(),
+		// Until something replaces it, the network is the one the process was
+		// configured with. The name is filled in by WithNetworkName at startup.
+		networkName:   "configured network",
+		networkSource: "config",
 	}
 	for _, opt := range opts {
 		opt(s)
 	}
+	s.stoppers = append(s.stoppers, func(context.Context) error {
+		s.networkMu.RLock()
+		stop := s.stopCustomizer
+		s.networkMu.RUnlock()
+		if stop != nil {
+			stop()
+		}
+		return nil
+	})
 	s.routes()
 
 	// A live simulation is a background component like the customizer, so it
@@ -302,6 +348,16 @@ func (s *Server) routes() {
 	// runs, so it is served once and cached by the browser.
 	s.mux.Handle("GET /api/graph", s.public(s.handleGraph))
 
+	// The network itself: what is loaded, where it came from, and how to replace
+	// it with an imported SUMO extract. Importing is a write, so it is not part of
+	// the read-only graph endpoint.
+	s.mux.Handle("GET /api/network", s.public(s.handleNetwork))
+	s.mux.Handle("POST /api/network", s.public(s.handleImportNetwork))
+
+	// Estimated exhaust emissions: the live run's two arms, and a single trip on
+	// request. Read-only and derived from data the server already holds.
+	s.mux.Handle("GET /api/emissions", s.public(s.handleEmissions))
+
 	// The event stream. It takes the rate limit but not the request deadline: a
 	// response that is meant to stay open cannot be given one (T43).
 	s.mux.Handle("GET /api/stream", s.stream(s.handleStream))
@@ -324,17 +380,20 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/runs", s.public(s.handleListRuns))
 	s.mux.Handle("POST /api/runs", s.public(s.handleSaveRun))
 
-	// The dashboard itself: the page, and its assets under one prefix. It is
-	// public for the same reason the endpoints it reads are — it is what a
-	// person opens, and everything it shows is already served to anyone who
-	// asks for it.
-	//
-	// The page pattern is exact and the assets sit under a subtree rather than
-	// using a catch-all "GET /", because a catch-all would also match
-	// GET /api/reports, which answers 405 today (only POST is registered there).
-	// The page must not turn a wrong method on a real endpoint into a 404.
-	s.mux.Handle("GET /{$}", s.public(web.Handler().ServeHTTP))
-	s.mux.Handle("GET /static/", s.public(web.Handler().ServeHTTP))
+	// The embedded React console. Register its route prefixes explicitly instead
+	// of using "GET /": a root catch-all would swallow API method errors and turn
+	// missing /api paths into a successful HTML response.
+	console := s.public(web.Handler().ServeHTTP)
+	s.mux.Handle("GET /{$}", console)
+	s.mux.Handle("GET /assets/", console)
+	s.mux.Handle("GET /operations", console)
+	s.mux.Handle("GET /operations/", console)
+	s.mux.Handle("GET /resources", console)
+	s.mux.Handle("GET /resources/", console)
+	s.mux.Handle("GET /analytics", console)
+	s.mux.Handle("GET /analytics/", console)
+	s.mux.Handle("GET /settings", console)
+	s.mux.Handle("GET /settings/", console)
 }
 
 // public wraps a handler with what every public endpoint shares: the per-client
@@ -466,8 +525,9 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 // loaded and, when a database is configured, it is reachable. It answers 503
 // when either check fails, so a load balancer stops sending traffic.
 func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
-	body := map[string]any{"graph_loaded": s.graph != nil}
-	ready := s.graph != nil
+	g, _ := s.networkSnapshot()
+	body := map[string]any{"graph_loaded": g != nil}
+	ready := g != nil
 
 	if s.dbCheck == nil {
 		body["database"] = "not_configured"
