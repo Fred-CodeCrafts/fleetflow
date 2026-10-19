@@ -27,3 +27,7 @@ coverage.txt
 # Operating System files
 .DS_Store
 Thumbs.db
+
+# Project-local OpenCode config: carries the dev database credential so the
+# toolbox-postgres MCP can start, so it is generated from .env and never committed.
+opencode.json

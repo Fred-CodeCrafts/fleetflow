@@ -10,6 +10,7 @@ package trip
 
 import (
 	"strings"
+	"time"
 
 	"fleetflow/internal/domain"
 )
@@ -80,12 +81,40 @@ func ParseStatus(name string) (Status, error) {
 // Trip is one journey in the fleet: it moves from an origin to a destination
 // using a vehicle. Origin and Destination are free-form human text, so the
 // service only checks that they are not blank.
+//
+// StartedAt and FinishedAt are set by the transitions that cause them, not by
+// the client: a trip is started when its status first reaches in_progress and
+// finished when it first reaches completed. A zero value means "has not
+// happened yet", which is what makes the duration computable rather than
+// guessed. PRD US-9 asks a completed trip to be listed with start, end and
+// duration, and a created_at timestamp alone cannot answer that.
 type Trip struct {
 	ID          string
 	Origin      string
 	Destination string
 	VehicleID   string
 	Status      Status
+	StartedAt   time.Time
+	FinishedAt  time.Time
+}
+
+// Duration returns how long the trip took, and false when it has not finished.
+//
+// A trip that finished without a start recorded (a row written before this
+// field existed, or one moved straight from planned to completed) reports
+// false rather than zero: "we do not know" and "it took no time" are different
+// answers and the console shows them differently.
+func (t Trip) Duration() (time.Duration, bool) {
+	if t.StartedAt.IsZero() || t.FinishedAt.IsZero() {
+		return 0, false
+	}
+	d := t.FinishedAt.Sub(t.StartedAt)
+	if d < 0 {
+		// Clock skew between a client and the database can produce this. A
+		// negative duration is not a measurement, so it is not reported.
+		return 0, false
+	}
+	return d, true
 }
 
 // New validates the client-supplied fields and returns a Trip. The id is left

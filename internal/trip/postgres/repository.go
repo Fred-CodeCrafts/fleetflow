@@ -10,6 +10,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -173,7 +174,7 @@ func setVehicleStatus(ctx context.Context, db execer, vehicleID string, status v
 // them, so the two directions cannot drift. A NULL vehicle_id becomes the empty
 // string the domain type uses for "no vehicle".
 func (r *Repository) List(ctx context.Context) ([]trip.Trip, error) {
-	const q = `select id, origin, destination, vehicle_id, status
+	const q = `select id, origin, destination, vehicle_id, status, started_at, finished_at
 		from trips
 		order by created_at, id`
 
@@ -188,8 +189,9 @@ func (r *Repository) List(ctx context.Context) ([]trip.Trip, error) {
 		var (
 			id, origin, destination, statusName string
 			vehicleID                           *string
+			startedAt, finishedAt               *time.Time
 		)
-		if err := rows.Scan(&id, &origin, &destination, &vehicleID, &statusName); err != nil {
+		if err := rows.Scan(&id, &origin, &destination, &vehicleID, &statusName, &startedAt, &finishedAt); err != nil {
 			return nil, err
 		}
 		st, err := trip.ParseStatus(statusName)
@@ -199,6 +201,15 @@ func (r *Repository) List(ctx context.Context) ([]trip.Trip, error) {
 		t := trip.Trip{ID: id, Origin: origin, Destination: destination, Status: st}
 		if vehicleID != nil {
 			t.VehicleID = *vehicleID
+		}
+		// A null timestamp stays the zero value, which is how the domain says
+		// "not recorded". Scanning it into a time.Time would fail, and defaulting
+		// it to now would invent a duration.
+		if startedAt != nil {
+			t.StartedAt = *startedAt
+		}
+		if finishedAt != nil {
+			t.FinishedAt = *finishedAt
 		}
 		found = append(found, t)
 	}
@@ -332,7 +343,19 @@ func (r *Repository) SetStatus(ctx context.Context, tripID string, status trip.S
 			"trip %s is %s and cannot go back to %s", tripID, from, status)
 	}
 
-	if _, err := tx.Exec(ctx, `update trips set status = $2 where id = $1`, tripID, status.String()); err != nil {
+	// The timestamps belong to the transition, not the request. A trip records
+	// its start the first time it reaches in_progress and its finish the first
+	// time it reaches completed; a repeated request finds them already set and
+	// leaves them alone, so history is not rewritten by a double click.
+	//
+	// `coalesce` is what makes that one statement: on the first start started_at
+	// is null so now() is stored, and on a repeat the existing value wins.
+	if _, err := tx.Exec(ctx, `
+		update trips set
+			status      = $2,
+			started_at  = case when $2 = 'in_progress' then coalesce(started_at, now()) else started_at end,
+			finished_at = case when $2 = 'completed'   then coalesce(finished_at, now()) else finished_at end
+		where id = $1`, tripID, status.String()); err != nil {
 		return trip.Trip{}, classify(tripID, err)
 	}
 	// Finishing is what frees the vehicle: from the moment the trip is completed
