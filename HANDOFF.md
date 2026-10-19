@@ -20,16 +20,21 @@ Read all four before your first commit.
 
 **Non-negotiable product claims.** The results are simulation only. The README
 must say "production-shaped architecture, MVP feature set" and never
-"production-ready". The service is not deployed and not containerized yet.
+"production-ready". The service is containerized but has not been deployed.
 
 ---
 
-## 2. Current state (verified 2026-10-19, not from memory)
+## 2. Current state (verified 2026-10-19)
 
 Branch: **`feat/console`** (branched from `main` at `f2b1025`).
-Working tree has uncommitted work — see §5.
+Working tree is clean. The console, backend integration, container workflow, and
+documentation are committed in these changes:
 
 ```
+59a4231 docs: finalize console setup guidance
+f68834e build(deploy): add local container workflow
+2cb4ce0 feat(api): expand runtime data APIs
+b3c47c2 feat(web): replace legacy dashboard with React console
 f3fcacb feat(trip): record when a trip started and finished
 7d6907a feat(emissions): estimate a trip's exhaust emissions from speed
 dd8f7f6 feat(graph): import a SUMO .net.xml network
@@ -38,7 +43,10 @@ d36d283 docs: remove the attribution rule agpl does not ask for
 03df3b6 docs: correct the README where it described a different program
 ```
 
-`go build ./...` passes. `go test ./...` passes across all 28 packages.
+`go build ./...`, `go test ./...`, `go vet ./...`, formatting checks, and the
+WSL race suite pass. The console build and four tests pass. A clean local clone
+serves the embedded console without Node. The local Docker image also serves the
+console and `/healthz`.
 
 ### Environment facts you will need
 
@@ -169,7 +177,7 @@ completed keeps a null start and reports no duration — never a fabricated one.
 V5 migration adds both columns (nullable), a `finished_at >= started_at` check,
 and a partial index on completed trips.
 
-### Uncommitted work in the tree (needs review, then commit)
+### Integrated implementation (committed)
 
 | file | what it does |
 |---|---|
@@ -180,74 +188,29 @@ and a partial index on completed trips.
 | `internal/api/network.go` | `GET /api/network` (description: name, source, nodes, edges, shaped_edges, capacity, length_km, bounds) and `POST /api/network` (raw `.net.xml` body, `MaxBytesReader` 200 MiB, refused with `409 network_busy` while a run is going). `installGraph` swaps graph+engine+labels under `networkMu`, starts the new customizer, stops the old one after the swap. |
 | `internal/api/engine_build.go` | `newEngineFor(g)` and the `engineForBuilds` seam. |
 | `internal/api/server.go` | `networkMu`, `networkName`, `networkSource`, `stopCustomizer` fields; `WithNetworkName`, `WithCustomizerStopper` options; three new routes registered. |
-| `console/` | **scaffold only.** `package.json`, `vite.config.ts`, `tsconfig.json`, `index.html`, and `src/shell/navigation.ts` (the registry: branches, items, keywords, permissions, `visibleBranches`, `locate`, `searchNav`). No React components yet, no `npm install` run. |
+| `console/` | Complete React 19 + TypeScript operator console with Vite build, typed API client, resource screens, per-group settings, MapLibre/deck.gl map, map-based trip picker, and emissions/network pages. `npm ci`, build, and tests pass. |
 
-**Your first job is to verify the uncommitted work**, not to trust this table:
-run the tests, read the diffs, then commit it in small logical commits (§6).
+The work above has been tested and committed. `console/node_modules/` and
+`.env` are ignored and not tracked; generated `web/dist/` assets are intentionally
+committed because `go:embed` ships them in the binary.
 
 ---
 
-## 5. What remains
+## 5. Remaining work
 
-### A. Console (the bulk of the work)
-
-`console/` is a Vite + React 19 + TS app building into `../web/dist`, which
-`go:embed` will ship inside the binary (so `go run` needs no Node — PRD US-8).
-
-Required, in roughly this order:
-
-1. **`npm install` in `console/`, get it building.** Pin what resolves; commit
-   `package-lock.json`.
-2. **App shell** — `Layout` components mirroring Fleetbase: sidebar (from
-   `navigation.ts`), topbar with breadcrumb, run chip, stream chip, command
-   palette (`Ctrl/Cmd-K`, uses `searchNav`), content area, section header/body.
-3. **Router** — every branch and item gets its own route. **One page per config
-   group** (this is an explicit user requirement): `/settings/general`,
-   `/settings/simulation`, `/settings/weights`, `/settings/map`,
-   `/settings/network`.
-4. **API client** — typed, one module per resource, reading
-   `GET /api/{metrics,graph,network,emissions,vehicles,drivers,trips,runs}`,
-   `POST /api/{sim/start,sim/reset,vehicles,drivers,trips,network}`, and the
-   `/api/stream` SSE. Handle 409/404/401 explicitly.
-5. **The map** — rebuild `NetworkMap` in React + MapLibre + deck.gl:
-   roads as `PathLayer` coloured by load bands, junctions zoom-gated, vehicles as
-   `IconLayer` with per-ID lerp, origin/destination pick mode, peak-vs-instant
-   toggle, re-center, and **the background-vehicle toggle the user asked for**
-   (show all / fleet only / background only). Draw `Edge.Shape` when present.
-6. **Screens**: Operations → Live Map, Trips, Route Planner, Comparison Runs;
-   Resources → Vehicles, Drivers, Fleet Status; Analytics → Performance,
-   Emissions, Run Results; Settings → the five pages above.
-7. **Emissions screen** — the user's specific interest. Both arms side by side,
-   grams and g/km, savings with the sign made explicit, the method disclaimer
-   visible, per-trip calculator, and a **plain-language explanation of how it is
-   computed** (this is what Fleetbase lacks).
-8. **Network screen** — current network summary, and a file picker that POSTs a
-   `.net.xml` to `/api/network`, showing the importer's errors clearly.
-9. **Wire the binary**: replace `web/embed.go`'s three-file table with the Vite
-   output (hashed assets, `index.html` fallback for client routes), keep
-   `web/embed_test.go` honest, and make `GET /{$}` plus a catch-all serve the SPA
-   without breaking the `/api/*` 404/405 behaviour.
-10. **Delete the old vanilla dashboard** (`web/app.js`, `style.css`,
-    `index.html`) only once the React console serves everything it did.
-
-### B. Remaining backend work
-
-- Persist emissions on a saved run (`runs.metrics` already stores the JSON blob;
-  verify the new fields survive the round trip, and add a test).
-- Expose network import to the CLI/config so a deployment can start on an
-  imported network, not only the generated grid.
-- Make `scripts/generate_grid.go`'s **defaults match the committed graph**
-  (currently 450 m / 2 lanes; the shipped graph is 150 m / 1 lane with 2-lane
-  arterials). The documented command works; bare invocation does not.
-- `PRD.md` US-9 and US-3 remain partly unmet: US-9 is now met by the timestamps;
-  **US-3's "pick origin and destination on the map"** is still text fields and
-  needs the map pick mode wired to trip creation.
-
-### C. Deployment (TASKS T57/T58, still open)
-
-Multi-stage `Dockerfile` (Node build stage → Go build → distroless/scratch),
-Cloud Run with `max-instances=1` `min-instances=1`, and **fix the README**, which
-currently and correctly says it is not containerized — update it when it is.
+- Verify the imported map with a real Jakarta `.net.xml`. The browser flow was
+  verified using a synthetic two-node SUMO fixture; no real city network file
+  is available in this checkout.
+- Expose custom network selection through CLI/config so a deployment can start
+  on an imported graph. Runtime upload via the Network page is implemented.
+- Deploy to Cloud Run with one instance and production PostgreSQL. This is
+  blocked until a GCP project/authenticated `gcloud` environment and a production
+  database are provided; no deployment or public URL is claimed.
+- The optional Fly preview, release tag, and pitch deliverables remain open;
+  see `TASKS.md` for T59 and T67–T72. T58 and T68 require a real deployment.
+- The README, screenshot, clean-clone check, container build, Go checks, race
+  tests, and local browser flows are complete; their evidence is recorded in
+  `TASKS.md`.
 
 ---
 
@@ -291,26 +254,26 @@ From `AGENTS.md`; these are enforced by review, not preference.
 
 ## 8. Definition of done
 
-- [ ] `go build ./...`, `go vet ./...`, `go test ./...` all pass.
-- [ ] `go test -race ./...` passes in WSL.
-- [ ] `cd console && npm run build` succeeds and its output is what `go:embed`
+- [x] `go build ./...`, `go vet ./...`, `go test ./...` all pass.
+- [x] `go test -race ./...` passes in WSL.
+- [x] `cd console && npm run build` succeeds and its output is what `go:embed`
       ships; `go run ./cmd/fleetflow -demo` serves the console with no Node
       present.
-- [ ] Every branch and item in `navigation.ts` resolves to a real page; no
+- [x] Every branch and item in `navigation.ts` resolves to a real page; no
       configuration lives on a shared page.
 - [ ] The map draws an imported Jakarta `.net.xml` with shaped roads, coloured by
       load, with a working background-vehicle toggle and peak/instantaneous
-      switch.
-- [ ] Uploading a `.net.xml` from the Network page switches the running graph and
+      switch. Synthetic import verified; real Jakarta file still needed.
+- [x] Uploading a `.net.xml` from the Network page switches the running graph and
       says so; a bad file gets a clear, specific error.
-- [ ] The Emissions page shows both arms, the savings with an unambiguous sign,
+- [x] The Emissions page shows both arms, the savings with an unambiguous sign,
       the method disclaimer, and a per-trip calculator.
-- [ ] A completed trip shows start, end and duration; one that never started
+- [x] A completed trip shows start, end and duration; one that never started
       shows "not recorded" rather than a fabricated duration.
 - [ ] `PRD.md` acceptance criteria are ticked only where a test or a line of code
       proves them; `TASKS.md` ticks match the commits.
-- [ ] README's quick start, endpoint list and deployment claims match reality.
-- [ ] `git status` is clean and every commit is one logical idea.
+- [x] README's quick start, endpoint list and deployment claims match reality.
+- [x] `git status` is clean and changes are committed in logical units.
 
 ---
 
