@@ -251,14 +251,18 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   Done when: start loads a ready-made demo scenario, so one click shows a run (US-7).
 - [x] 🔴 **T55** Auto-reconnect on stream drop, label each vehicle simulated or live
   `feat(web): reconnect stream automatically`
-- [ ] 🟡 **T56** Mobile-friendly layout and basic styling pass
+- [x] 🟡 **T56** Mobile-friendly layout and basic styling pass
   `style(web): improve layout and styling`
+  Verified at a 390 px browser viewport: the network settings page has no
+  horizontal overflow (scroll width equals the 375 px content viewport).
 
 ## Day 7 (Fri 23 Oct): Deploy and tune
 
-- [ ] 🔴 **T57** Add multi-stage `Dockerfile` that listens on `$PORT`
+- [x] 🔴 **T57** Add multi-stage `Dockerfile` that listens on `$PORT`
   `build: add dockerfile`
   Done when: `docker run -p 8080:8080` serves the dashboard locally.
+  Verified by building `fleetflow:local` and loading the embedded console and
+  `/healthz` from the running image on a local port.
 - [ ] 🔴 **T58** Deploy to **Cloud Run** (`max-instances=1`, `min-instances=1`) with PostgreSQL connected
   `docs: add cloud run deployment steps`
   Done when: the public URL loads, a demo run completes, and fleet records survive a restart. Put the URL in the README. Record the Postgres hosting choice and cost.
@@ -271,8 +275,9 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   `feat(scripts): add multi-seed comparison script`
 - [x] 🟡 **T62** Test several fleet shares (for example 25%, 50%, 100%)
   `docs: record results across fleet shares`
-- [ ] 🟡 **T63** Add `NOTICE` with attributions (OpenStreetMap data if used, libraries)
+- [x] 🟡 **T63** Add `NOTICE` with attributions (OpenStreetMap data if used, libraries)
   `docs: add notice with third-party attributions`
+  NOTICE now includes console dependency licenses and the map tile/data credits.
 
 ## Day 8 (Sat 24 Oct): Ship
 
@@ -281,8 +286,10 @@ Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
   Done when: the README calls the project "production-shaped architecture, MVP feature set" and never claims it is production-ready (US-8).
 - [ ] 🔴 **T65** Verify a fresh clone builds and runs from the README steps only
   `docs: fix setup steps found during clean-clone check`
-- [ ] 🔴 **T66** Run `go vet`, `gofmt`, `go test -race ./...` and fix findings
+- [x] 🔴 **T66** Run `go vet`, `gofmt`, `go test -race ./...` and fix findings
   `chore: fix lint and race findings`
+  Verified: `go vet ./...` passed, `gofmt -l` reported no files, and
+  `go test -race -count=1 ./...` passed in WSL.
 - [ ] 🔴 **T67** Tag release `v0.1.0`
   `chore: release v0.1.0`
 - [ ] 🔴 **T68** Confirm deployed Cloud Run link works from another network or device

@@ -6,6 +6,8 @@
 *.dylib
 bin/
 /fleetflow
+/console/node_modules/
+/console/tsconfig.tsbuildinfo
 
 # Test artifacts
 *.test

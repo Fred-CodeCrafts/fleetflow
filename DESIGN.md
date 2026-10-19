@@ -12,7 +12,7 @@ Status: draft v0.1 (17 October 2026). Parameter values are starting points, to b
 ### Goals
 - Manage fleet records: vehicles, drivers with one-vehicle assignment, and trips (planned, in progress, completed), stored in PostgreSQL with rules enforced so nothing is lost or contradictory.
 - Show that a fleet which routes with live, smoothed congestion weights finishes trips faster and saturates fewer roads than a fleet using static shortest paths.
-- Make that visible in a live dashboard comparing both modes side by side on the same demand and seed.
+- Make that visible in a live console comparing both modes side by side on the same demand and seed.
 - Ship as one small Go service that is easy to run, deploy and read.
 - Let outside systems use the reports and route API with an API key, and accept real vehicle reports alongside simulated ones.
 - Be honest about maturity: describe the result as a "production-shaped architecture, MVP feature set" (layered code, migrations, hashed keys, typed errors, health and readiness, graceful shutdown, validated config, tests in CI), and never as "production-ready".
@@ -20,7 +20,7 @@ Status: draft v0.1 (17 October 2026). Parameter values are starting points, to b
 ### Non-goals (for this competition)
 - Driver mobile or web app for sending GPS, raw-GPS map matching, multi-org roles and billing, city-scale routing, persisted congestion weights, real-fleet validation (all roadmap, see PRD section 9).
 - Multi-stop optimization and dispatch/order management (fleet-tool territory, not this sprint).
-- End-user accounts and login: the dashboard is open for the demo, and only the programmatic reports and route API is key-protected (the PRD allows one operator login or none).
+- End-user accounts and login: the console is open for the demo, and only the programmatic reports and route API is key-protected (the PRD allows one operator login or none).
 - Real-world validation. All results come from simulation and must be described that way.
 - Matching a full traffic simulator such as SUMO.
 - Backups, an ops runbook beyond a sketch, and a full security review (all roadmap, see PRD section 9).
@@ -33,7 +33,7 @@ FleetFlow is a congestion-aware routing layer that fleet management tools could 
 
 ## 2. System overview
 
-One Go binary contains the routing engine, the simulator, the HTTP API and the embedded dashboard. Two engine instances run side by side in a comparison run: **baseline** (static free-flow weights) and **FleetFlow** (dynamic weights).
+One Go binary contains the routing engine, the simulator, the HTTP API and the embedded React console. Two engine instances run side by side in a comparison run: **baseline** (static free-flow weights) and **FleetFlow** (dynamic weights).
 
 ```mermaid
 flowchart LR
@@ -67,14 +67,14 @@ Honest status, not the target: this is what is in the repository today versus wh
 | Part | Choice | Status |
 |---|---|---|
 | Language | Go 1.25.5, module `fleetflow` | In place |
-| Dependencies | Standard library plus `github.com/jackc/pgx/v5` for PostgreSQL | In place |
+| Dependencies | Go standard library plus `github.com/jackc/pgx/v5`; React/TypeScript, MapLibre GL and deck.gl for the console | In place |
 | HTTP | `net/http` + `http.ServeMux` with method patterns; no framework | In place (the whole route table, including the SSE stream) |
 | Routing | Hand-written Dijkstra behind a `Router` interface | In place |
 | Simulation | Own deterministic mesoscopic model | In place |
 | Persistence | PostgreSQL with versioned SQL migrations, applied with Flyway; `pgx` as the driver | In place for keys, vehicles, drivers and trips (the integration tests need `TEST_DATABASE_URL`) |
-| Dashboard | Plain HTML/CSS/JS on two canvases, no map tiles, embedded with `go:embed` | In place as a page, a map and the run controls; the views fed by the stream are pending |
+| Console | React and TypeScript; MapLibre GL basemap with deck.gl road, junction and vehicle layers; Vite assets embedded with `go:embed` | In place; its basemap tiles are served by OpenFreeMap |
 | Streaming | Server-Sent Events | In place (`GET /api/stream`) |
-| Deployment | Multi-stage Dockerfile to Cloud Run, `max-instances=1`; Fly as a preview | Planned (no Dockerfile yet) |
+| Deployment | Multi-stage Dockerfile; Cloud Run target with `max-instances=1` | Docker image builds and runs locally; Cloud Run deployment is not complete |
 | CI | Build, vet, `gofmt` and `go test -race` on every push | In place, but with no database: the Postgres suites skip without `TEST_DATABASE_URL` (TASKS, "Found along the way") |
 | Testing | `go test` with table-driven unit tests; race detector run from WSL | In place |
 | Database MCP (dev only) | Google MCP Toolbox for Databases, read-only role, off by default | In place (local only) |
@@ -203,7 +203,7 @@ Server-Sent Events are used instead of WebSockets because they are one-way, simp
 | Event | Cadence | Body |
 |---|---|---|
 | `vehicles` | 5/s | `{now_s, running, vehicles: [...]}`, one entry per vehicle that is on the road or waiting to leave: `{id, kind, arm, fleet, state, edge_id, lat, lon, speed_mps, age_s}`. `kind` is `simulated` or `live`. `arm` is `baseline` or `fleetflow`, and is absent for a live vehicle, which belongs to neither panel. A vehicle that has not left yet sits at its origin. |
-| `edges` | 1/s | `{metric_version, edges: [{edge_id, cost_s, free_flow_s}]}`. Every edge is sent, so one frame paints the whole map and a client that joins late needs no history; congestion reads as `cost_s / free_flow_s`. This project's graph has 120 edges, so a full frame is a few kilobytes — a country-sized graph would need deltas instead. |
+| `edges` | 1/s | `{metric_version, edges: [{edge_id, cost_s, free_flow_s, load_ratio}]}`. Every edge is sent, so one frame paints the whole map and a client that joins late needs no history. `load_ratio` is simulated occupancy divided by estimated capacity for the active FleetFlow run, and zero when no run is active. This project's graph has 120 edges, so a full frame is a few kilobytes — a country-sized graph would need deltas instead. |
 | `metrics` | 1/s | Exactly the body of `GET /api/metrics`, so a client parses one shape whether it asks once or watches. |
 
 A comment frame every 15 seconds keeps an idle connection from being closed by a proxy. The stream holds no lock that a run could wait on: positions come from the same snapshot the run clock publishes for `GET /api/metrics`, congestion comes from the engine's active metric, and live vehicles come from their own register, so a slow client cannot slow a run down.
@@ -212,14 +212,14 @@ A comment frame every 15 seconds keeps an idle connection from being closed by a
 
 **Simulated or live.** A simulated vehicle belongs to a run and names the panel it is drawn in. A live vehicle is one that has reported through `POST /api/reports` in the last minute, placed on the edge it reported on. The report carries a speed, not a coordinate, so a live vehicle is drawn along its edge rather than at a point; real GPS traces are a later feature, and drawing a position the API never received would be worse than drawing the edge it did. A report describing a moment older than that minute still moves the weights, but does not put a vehicle on the road that is not there.
 
-### 3.6 Dashboard (`web/`)
-- Static HTML, CSS and vanilla JavaScript embedded into the binary with `go:embed`: no build step, no framework and no downloaded asset, so it runs on a host with no network and a changed page means a new binary.
-- Mounted as the exact path `GET /{$}`, with its assets under `GET /static/`, rather than as a catch-all `GET /`. A catch-all would also match `GET /api/reports`, which answers 405 today because only POST is registered there, and would quietly turn a wrong method on a real endpoint into a page.
-- Draws the road graph on a `<canvas>` from the node coordinates `GET /api/graph` serves. One scale serves both axes, so the network keeps its true shape, and the bitmap follows the display's pixel ratio so a hairline road stays a hairline on a dense screen. No map tiles and no projection library.
-- Controls: start, reset, seed, number of vehicles, fleet share, against the endpoints in 3.5. What the server answered is shown on the page, error code included, rather than only in the browser console.
-- Still owed, and each of these needs the stream: vehicles drawn as dots and moved as positions arrive, edges coloured by congestion (the FleetFlow panel from the stream's metric, the baseline panel at free flow because its weights never move), the two panels showing their own arm instead of the same static network, the metrics strip filled from `GET /api/metrics`, and each vehicle labelled simulated or live.
-- Fleet management views are still owed: vehicle list with status, driver list with vehicle assignment, trip creation with a picker from the map, trip history and saved comparison runs.
-- Metrics strip, once fed: average trip time, 95th percentile trip time, saturated roads (%), route changes, route query latency, fleet vs. background trip times, with the capacity derivation stated so the saturation figure is not a black box.
+### 3.6 Console (`console/`, embedded by `web/`)
+- The console is a React/TypeScript single-page app built by Vite. Its fingerprinted production assets are embedded into the Go binary, so the runtime image needs no Node installation. The map basemap is an external OpenFreeMap service and is attributed in the map UI.
+- `web.Handler` serves `/`, fingerprinted assets and client-side routes. It returns 404 for missing assets and extension-bearing paths rather than masking them with the SPA fallback; API routes remain on the more-specific API patterns.
+- MapLibre GL and deck.gl render shaped road geometry as `PathLayer`, junctions as zoom-gated `ScatterplotLayer`, and tracked vehicles as `IconLayer`. The map supports the all/fleet/background filter, peak versus instantaneous load, re-centering, route highlighting, and map-click selection of trip and route endpoints. Vehicle interpolation is keyed by vehicle identity rather than array position.
+- Navigation is a registry, with separate pages for operations, resources, analytics and each settings group. The map and simulation preferences persist in local storage; unavailable API calls are shown as page errors.
+- Operations include the live map, trip register and creation, route planner, and comparison runs. Resources include vehicles, drivers and fleet status. Analytics includes performance, emissions and saved-run results. Each configuration group has a distinct route.
+- The emissions page compares both arms, gives an explicit baseline-minus-FleetFlow saving, links to the estimator method disclaimer, and supports an individual-trip estimate. The displayed model is a simulation estimate, not a measurement.
+- The network page shows the active graph summary and uploads SUMO `.net.xml`; the server validates it and swaps the graph and engine atomically, and refuses replacement while a run is active.
 
 ### 3.7 Persistence (`internal/<entity>/` service + repository, `internal/store`)
 - PostgreSQL for vehicles, drivers, trips, saved runs, and hashed API keys. Live congestion state stays in memory (see `internal/weights`).
@@ -286,7 +286,7 @@ Each comparison run uses the same seed and demand for both modes.
 - Fleet vs. background vehicle trip times (a fairness check)
 - Engineering: route query latency (p50, p99), customization time, metric age
 
-**Method:** repeat each configuration over several seeds and report the mean and spread. The dashboard shows a single live run, and a script or the metrics endpoint records the multi-seed results for the write-up.
+**Method:** repeat each configuration over several seeds and report the mean and spread. The console shows a single live run, and a script or the metrics endpoint records the multi-seed results for the write-up.
 
 **Result, losses included.** `docs/results.md` records what the demo scenario produces over ten seeds, what the fleet-share sweep produces, and every configuration measured where FleetFlow ties or loses — including the wider network where it makes no difference at all. The short version: at the demo defaults the mean trip is 20.2 s shorter and the 95th percentile 175.8 s shorter over ten seeds, nine seeds better and one worse, and at a fleet share of zero the two arms are identical to the digit on all ten. That last row is the control, and it is the reason to believe the others: everything the arms share cannot be producing the difference, so the routing is.
 
@@ -313,7 +313,7 @@ The Fly path is easy for iteration, but the playbook says projects must be deplo
 - `max-instances=1`, because live congestion state is in memory (PostgreSQL holds fleet records externally, but each instance would still build its own congestion view).
 - `min-instances=1` for demo day, so the first request is not a cold start.
 - The simulator runs in background goroutines, and Cloud Run throttles CPU outside of requests by default. Either set CPU to always allocated, or run the simulation only while a client holds an open `/api/stream` connection. This design uses the second option as the default so it also works with default settings.
-- Request timeout raised for long-lived SSE connections, with the dashboard auto-reconnecting.
+- Request timeout raised for long-lived SSE connections, with the console auto-reconnecting.
 
 ### Fly settings
 - One machine, kept running (no auto-stop) during demos.
@@ -340,7 +340,8 @@ fleetflow/
 │   ├── config/                # env parsing + startup validation (refuse to start on bad config)
 │   ├── sim/                   # vehicles, demand, rerouting policy (client of the public API)
 │   └── api/                   # HTTP wiring: routes, middleware (request ID, limits, rate limit), SSE
-├── web/                       # embedded dashboard (HTML, CSS, JS)
+├── console/                   # React/TypeScript console and Vite build
+├── web/                       # embedded Vite output and SPA handler
 ├── data/graph.json            # road graph extract
 ├── scripts/                   # one-time OSM extraction
 ├── Dockerfile
@@ -365,7 +366,7 @@ Deployment deadline is **24 October**. Commit after each step, as described in `
 | 3 | Mon 19 Oct | Engine: customizer, atomic metric, Dijkstra router, race tests |
 | 4 | Tue 20 Oct | Simulator: demand, edge speed model, fleet vs. background vehicles, rerouting, trip metrics, baseline comparison |
 | 5 | Wed 21 Oct | API and SSE stream, layered fleet records (handler → service → repository, postgres + memory), migrations, API keys, simulated traffic on the public API, route query latency, config validation, typed errors, readiness, graceful shutdown |
-| 6 | Thu 22 Oct | Dashboard: fleet views, canvas map, side-by-side panels, controls, metrics strip, simulated/live labels |
+| 6 | Thu 22 Oct | React console: fleet views, MapLibre/deck.gl map, comparison controls, metrics, simulated/live labels |
 | 7 | Fri 23 Oct | Dockerfile, Cloud Run deployment (and Fly preview), tuning runs, fleet-share sweep |
 | 8 | Sat 24 Oct | Buffer, README polish, shipped and verified |
 | | 25 to 27 Oct | Demo video, 500-word summary, deck, pitch practice |
@@ -391,7 +392,7 @@ Deployment deadline is **24 October**. Commit after each step, as described in `
 | Router (MVP) | Dijkstra behind an interface | Fast enough for a few thousand nodes, CCH can be swapped in later |
 | Simulator | Own mesoscopic model | Runs without SUMO installed, deterministic, easy to deploy |
 | Live updates | Server-Sent Events | Simpler than WebSockets, enough for one-way streaming |
-| Dashboard | Canvas, no map tiles | No outside dependencies, works offline |
+| Console map | MapLibre GL with deck.gl overlays | Shaped roads, junctions, vehicles and external basemap attribution |
 | State | In memory (single instance) for congestion; PostgreSQL for fleet records | Persistent records survive restarts, congestion rebuilds from fresh reports |
 | Architecture | Handler → service → repository per entity; the routing core (`graph`, `weights`, `engine`) imports no HTTP or database package | Predictable layout for contributors and agents, and the hot path cannot reach the database by accident (PRD US-5, US-12) |
 | Deployment | Cloud Run for submission, Fly for preview | Competition rule, with Fly kept as a convenience |

@@ -12,7 +12,7 @@ Traditional navigation systems and static shortest-path routers direct vehicles 
 2. **Smoothing congestion states** using exponential moving averages per edge.
 3. **Decaying stale road weights** toward free-flow conditions when roads lack recent reports.
 4. **Publishing immutable metric snapshots** via atomic pointer swaps so route queries (Dijkstra) never block on weight updates.
-5. **Evaluating side by side** against a static baseline router using a deterministic mesoscopic simulator and an embedded live dashboard.
+5. **Evaluating side by side** against a static baseline router using a deterministic mesoscopic simulator and an embedded React console.
 
 ## Status
 
@@ -29,8 +29,8 @@ in CI are in place. Backups, API key rotation, tenant separation, persisted cong
 state, multi-instance support and a security review are not, and the results are
 simulation only.
 
-It is also **not yet deployed and not yet containerized**: there is no `Dockerfile`
-and no Cloud Run URL yet (TASKS T57, T58). Running it today means `go run`.
+The service is containerized with a multi-stage Dockerfile, but **has not been
+deployed to Cloud Run** and has no public URL yet (TASK T58).
 
 ## Background & Originality Notice
 
@@ -48,8 +48,9 @@ FleetFlow is designed as a single, self-contained Go binary:
 - `internal/weights`: Per-edge state, moving-average smoothing, hold-and-decay logic, and BPR-inspired cost calculations.
 - `internal/engine`: Customizer goroutine, atomic metric snapshots, and Dijkstra shortest-path router behind an interface.
 - `internal/sim`: Deterministic mesoscopic simulator with background traffic, fleet vehicles, and hysteresis rerouting.
-- `internal/api`: HTTP endpoints (`/healthz`, `/api/reports`, `/api/route`, `/api/sim/start`, `/api/stream`, `/api/metrics`, `/api/runs`).
-- `web`: Embedded real-time dual-canvas dashboard served via `go:embed`.
+- `internal/api`: HTTP endpoints for routing, simulation, network import, emissions, streaming, and fleet records.
+- `console`: React, TypeScript, MapLibre GL and deck.gl operator console.
+- `web`: Vite production assets embedded in the Go binary via `go:embed`.
 
 ## Quick Start (Local Development)
 
@@ -69,10 +70,25 @@ cd fleetflow
 go run ./cmd/fleetflow -demo
 ```
 
-Once running, open `http://localhost:8080` in your browser and press Start.
+Once running, open `http://localhost:8080/operations/runs` and start a comparison.
+
+The console and Go service can also be built and run together in Docker:
+
+```sh
+docker build -t fleetflow:local .
+docker run --rm -p 8080:8080 fleetflow:local
+```
+
+The image starts the demo configuration and listens on `PORT` (8080 by default).
+Fleet records are in memory unless PostgreSQL settings are provided. The map's
+OpenFreeMap basemap requires an internet connection; its attribution is shown
+in the map.
+
+For console-only development, start the Go service on port 8080 and run
+`npm ci && npm run dev` from `console/`; Vite proxies API requests to that service.
 
 `-demo` is what serves `POST /api/sim/start` and `POST /api/sim/reset`. Without it
-those two routes answer `404` and the dashboard's start button cannot begin a run,
+those two routes answer `404` and the console cannot begin a run,
 because it is the flag that asserts no live vehicles report to this process — which
 is what makes it safe for a run to clear the engine's weights when it starts.
 
@@ -87,14 +103,28 @@ conditional ones: they exist only under `-demo`.
 - `POST /api/route` - Query a route between origin and destination (requires an API key)
 - `POST /api/sim/start` - Start a comparison run (`-demo` only; `409` while one is going)
 - `POST /api/sim/reset` - Stop and clear the run (`-demo` only)
-- `GET /api/stream` - Server-Sent Events telemetry stream for the dashboard
+- `GET /api/stream` - Server-Sent Events telemetry stream for the console
 - `GET /api/metrics` - Live metrics, including the comparison arms and query latency
-- `GET /api/graph` - The road network, for the dashboard's canvas
+- `GET /api/graph` - Road network, including junctions and shaped edge geometry
+- `GET /api/network` - Active network name, source, size and geographic bounds
+- `POST /api/network` - Import a SUMO `.net.xml` network (blocked during a run)
+- `GET /api/emissions` - Run emissions comparison and optional per-trip estimate
 - `GET /api/vehicles`, `POST /api/vehicles` - Fleet vehicle records
 - `POST /api/vehicles/{id}/driver` - Assign or unassign a vehicle's driver
 - `GET /api/drivers`, `POST /api/drivers` - Driver records
 - `GET /api/trips`, `POST /api/trips` - Trip records, with `POST /api/trips/{id}/status` to advance one
 - `GET /api/runs`, `POST /api/runs` - Saved comparison runs
+
+### Emissions estimates
+
+`GET /api/emissions` returns CO₂, NOx, CO, HC, PM and estimated fuel for each
+arm of the current comparison, plus baseline-minus-FleetFlow savings. Add
+`?class=passenger_car&distance=12&speed=28` for a single-trip estimate;
+`light_commercial` is also supported. The estimate evaluates a speed-dependent
+COPERT-style curve per trip using that trip's traveled distance and duration,
+then sums results by arm. It excludes cold starts, gradient, payload and ambient
+temperature, so these are consistent simulation estimates, not measured
+tailpipe emissions or a certified inventory.
 
 ### API keys
 
@@ -139,7 +169,7 @@ curl -sS -X POST http://localhost:8080/api/route \
 A missing or wrong key returns `401` with `{"code":"unauthenticated"}` and does
 nothing else: no report reaches the weights, and no route is computed. The fleet
 record endpoints (`/api/vehicles`, `/api/drivers`, `/api/trips`, `/api/runs`) and
-the simulation controls stay open, because they belong to the dashboard.
+the simulation controls stay open, because they belong to the console.
 
 #### The report format
 
@@ -148,7 +178,7 @@ before anything is written, and every refusal names what it refused:
 
 | field | type | required | accepted |
 |---|---|---|---|
-| `vehicle_id` | string | yes | non-empty; it is also the vehicle the dashboard shows as live |
+| `vehicle_id` | string | yes | non-empty; it is also the vehicle the console shows as live |
 | `edge_id` | string | yes | an edge from `GET /api/graph` |
 | `speed_mps` | number | yes | greater than 0 and at most 90 (324 km/h, inclusive) |
 | `ts` | integer | no | Unix milliseconds, positive, at most 5 minutes ahead of this server's clock. Omit it to mean "now" |
@@ -262,8 +292,8 @@ would be worse than drawing the edge it did.
 
 A run advances only while somebody is watching the stream, so `start` followed by
 `stream` is the whole sequence; a run nobody is watching waits where it is rather
-than spending CPU on a demo nobody can see. That is what lets the deployed service
-keep Cloud Run's default CPU allocation, which is throttled outside a request.
+than spending CPU on a demo nobody can see. That lets the service use Cloud Run's
+default CPU allocation, which is throttled outside a request.
 
 ### Reading the logs
 
@@ -291,16 +321,20 @@ every vehicle of every tick; the totals are in the finish line.
 
 ## Deployment
 
-FleetFlow targets **Google Cloud Run** with `max-instances=1` and `min-instances=1`, as
-a multi-stage Docker image listening on `$PORT`.
+FleetFlow targets **Google Cloud Run** with `max-instances=1` and `min-instances=1`.
+The checked-in multi-stage `Dockerfile` builds the console, embeds it in the Go
+binary, and starts the demo on `$PORT`. The image can be tested locally using the
+Docker commands above.
 
-That is the target, not the current state: **the `Dockerfile` does not exist yet and
-nothing is deployed** (TASKS T57 and T58). When it does, `max-instances=1` is not a
-tuning choice — live congestion state is in memory, so a second instance would hold a
-different view of the same network. `min-instances=1` keeps demo day free of a cold
-start, and the simulation only advances while a client holds `/api/stream` open, which
-is what lets it run on Cloud Run's default CPU allocation.
+**Cloud Run deployment is not complete** (TASK T58): there is no public URL or
+configured production PostgreSQL instance yet. A deployment must provide a
+`DATABASE_URL` for persistent fleet records and set both the minimum and maximum
+instance count to one. The single-instance limit is required because live
+congestion state is in memory; a second instance would hold a different view of
+the network. `min-instances=1` avoids a cold start, and the simulation advances
+only while a client holds `/api/stream` open.
 
 ## License
 
 This project is licensed under the [Apache License, Version 2.0](LICENSE).
+Third-party software and map data notices are in [NOTICE](NOTICE).

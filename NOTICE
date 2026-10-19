@@ -28,3 +28,40 @@ github.com/jackc/pgservicefile
 golang.org/x/text
   BSD 3-Clause License. Copyright (c) 2009 The Go Authors.
   Required indirectly by pgx.
+
+JavaScript console dependencies
+-------------------------------
+
+The console is built from the dependency versions pinned in
+console/package-lock.json. Package license texts are available in the respective
+upstream repositories and npm packages.
+
+react, react-dom
+  MIT License. Copyright Meta Platforms, Inc. and affiliates.
+
+react-router-dom
+  MIT License. Copyright React Training LLC (2015-2019) and Remix Software Inc.
+  (2020-2021).
+
+maplibre-gl
+  BSD 3-Clause License. Copyright (c) 2023 MapLibre contributors.
+
+@deck.gl/core, @deck.gl/layers, @deck.gl/mapbox
+  MIT License. Copyright Vis.gl contributors.
+
+vite, vitest
+  MIT License. Copyright their respective contributors.
+
+typescript
+  Apache License, Version 2.0. Copyright Microsoft Corporation.
+
+@vitejs/plugin-react
+  MIT License. Copyright Yuxi (Evan) You and Vite contributors.
+
+Map data and tiles
+------------------
+
+The map uses OpenFreeMap tiles with OpenMapTiles and OpenStreetMap attribution.
+OpenStreetMap data is © OpenStreetMap contributors and is made available under
+the Open Database License (ODbL). The basemap's attribution control displays the
+provider and data credits.
