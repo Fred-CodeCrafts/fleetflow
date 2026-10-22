@@ -276,7 +276,7 @@ func loadGraph(path string) (*graph.Graph, error) {
 	if err != nil {
 		return nil, err
 	}
-	g, importErr := graph.ImportSUMONetwork(file, graph.ImportOptions{MinLengthM: 1})
+	g, importErr := graph.ImportSUMONetwork(file, graph.ImportOptions{MinLengthM: 1, KeepLargestComponent: true})
 	closeErr := file.Close()
 	if importErr != nil {
 		return nil, importErr

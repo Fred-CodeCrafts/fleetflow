@@ -93,6 +93,12 @@ type ImportOptions struct {
 	// geometry.remove leaves sub-metre connector stubs that add nothing to
 	// routing but inflate the graph. Zero keeps everything.
 	MinLengthM float64
+	// KeepLargestComponent prunes the graph to its largest strongly connected
+	// component after import. A filtered city extract arrives as thousands of
+	// islands, and demand drawn over all of them produces trips that cannot be
+	// routed; see KeepLargestStronglyConnected. Default false, which keeps the
+	// whole file as given.
+	KeepLargestComponent bool
 }
 
 // ImportSUMONetwork parses a SUMO .net.xml into a Graph.
@@ -218,6 +224,12 @@ func ImportSUMONetwork(r io.Reader, opts ImportOptions) (*Graph, error) {
 
 	if len(g.Nodes) == 0 || len(g.Edges) == 0 {
 		return nil, ErrNoRoutableEdges
+	}
+	if opts.KeepLargestComponent {
+		g.KeepLargestStronglyConnected()
+		if len(g.Nodes) == 0 || len(g.Edges) == 0 {
+			return nil, ErrNoRoutableEdges
+		}
 	}
 	return g, nil
 }

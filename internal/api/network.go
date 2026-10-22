@@ -118,7 +118,7 @@ func (s *Server) handleImportNetwork(w http.ResponseWriter, r *http.Request) {
 
 	// The importer reads the body once. MinLengthM drops the sub-metre connector
 	// stubs netconvert leaves behind, which add nothing to routing.
-	g, err := graph.ImportSUMONetwork(body, graph.ImportOptions{MinLengthM: 1})
+	g, err := graph.ImportSUMONetwork(body, graph.ImportOptions{MinLengthM: 1, KeepLargestComponent: true})
 	if err != nil {
 		writeError(w, r, networkImportError(err))
 		return
