@@ -19,7 +19,7 @@ import (
 const (
 	DefaultPort      = 8080
 	DefaultEnv       = "development"
-	DefaultGraphPath = "data/graph.json"
+	DefaultGraphPath = "data/networks/jakarta.net.xml"
 	DefaultDBPort    = "5432"
 	DefaultLogLevel  = "info"
 )
