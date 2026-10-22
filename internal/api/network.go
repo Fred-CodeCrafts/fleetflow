@@ -29,8 +29,8 @@ type networkResponse struct {
 	Source string `json:"source"`
 	Nodes  int    `json:"nodes"`
 	Edges  int    `json:"edges"`
-	// ShapedEdges counts edges carrying geometry, which is what tells a city
-	// import apart from the generated grid.
+	// ShapedEdges counts edges carrying geometry, which is what tells a network
+	// imported with its road shapes apart from one drawn junction to junction.
 	ShapedEdges int `json:"shaped_edges"`
 	// Capacity is the sum of edge capacities, in vehicles: the total the graph
 	// can hold before every road is saturated.

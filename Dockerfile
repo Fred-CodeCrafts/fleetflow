@@ -16,10 +16,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/fleetfl
 FROM gcr.io/distroless/static-debian12:nonroot
 WORKDIR /app
 COPY --from=build --chown=nonroot:nonroot /out/fleetflow /fleetflow
-COPY --from=build --chown=nonroot:nonroot /src/data/graph.json /app/data/graph.json
+COPY --from=build --chown=nonroot:nonroot /src/data/networks /app/data/networks
 ENV PORT=8080
 ENV ENV=production
-ENV GRAPH_PATH=data/graph.json
+ENV GRAPH_PATH=data/networks/jakarta.net.xml
 EXPOSE 8080
 ENTRYPOINT ["/fleetflow"]
 CMD ["-demo"]

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"fleetflow/internal/config"
 	"fleetflow/internal/sim"
 )
 
@@ -212,8 +213,8 @@ func TestParseFlags_Defaults(t *testing.T) {
 		t.Fatalf("parseFlags: %v", err)
 	}
 
-	if opts.graph != "data/graph.json" {
-		t.Errorf("graph = %q, want data/graph.json", opts.graph)
+	if opts.graph != config.DefaultGraphPath {
+		t.Errorf("graph = %q, want %q", opts.graph, config.DefaultGraphPath)
 	}
 	if opts.seedFrom != 1 || opts.seedTo != 10 {
 		t.Errorf("seed range = %d..%d, want 1..10", opts.seedFrom, opts.seedTo)

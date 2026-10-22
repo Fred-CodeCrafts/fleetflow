@@ -15,7 +15,7 @@
 //
 // Flags, with their defaults:
 //
-//	-graph              data/graph.json  graph JSON to load
+//	-graph              data/networks/jakarta.net.xml  network to load
 //	-seed-from          1               first seed, inclusive
 //	-seed-to            10              last seed, inclusive
 //	-vehicles           200             vehicles per run
@@ -47,6 +47,7 @@ import (
 	"strings"
 	"time"
 
+	"fleetflow/internal/config"
 	"fleetflow/internal/graph"
 	"fleetflow/internal/sim"
 	"fleetflow/internal/weights"
@@ -97,7 +98,7 @@ func parseFlags(args []string, stderr io.Writer) (options, error) {
 	fs.SetOutput(stderr)
 
 	var (
-		graphPath = fs.String("graph", "data/graph.json", "graph JSON to load")
+		graphPath = fs.String("graph", config.DefaultGraphPath, "network to load (.net.xml or .json)")
 		seedFrom  = fs.Int64("seed-from", 1, "first seed, inclusive")
 		seedTo    = fs.Int64("seed-to", 10, "last seed, inclusive")
 

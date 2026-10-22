@@ -20,10 +20,10 @@ type Node struct {
 
 // Point is one vertex of an edge's drawn geometry, in latitude and longitude.
 //
-// It exists because a road is not a straight line between two junctions. The
-// generated grid happens to be straight, so its edges carry no shape and the
-// dashboard draws node to node; an imported city network carries the vertices
-// the source file gave, so its roads bend where the real ones bend.
+// It exists because a road is not a straight line between two junctions. A
+// hand-written graph can draw node to node and carry no shape; a network
+// imported from a source file carries the vertices that file gave, so its roads
+// bend where the real ones bend.
 type Point struct {
 	Lat float64 `json:"lat"`
 	Lon float64 `json:"lon"`
