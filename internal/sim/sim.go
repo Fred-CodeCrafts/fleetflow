@@ -338,6 +338,14 @@ func (s *Sim) rerouteFleet() {
 // on the same snapshot and the comparison means what it says. Pricing them with
 // two calls could straddle a customization and read one cost against the other.
 func (s *Sim) reroute(v *Vehicle) {
+	// The check happened, whatever it decided. Recording it only on a successful
+	// switch made a declined vehicle re-query on every single step: on the
+	// Jakarta network that was 1,406 route queries for 50 vehicles over 100
+	// simulated seconds, against 24 for the same vehicles before they started
+	// declining. The interval is how often a vehicle may ask, not how often it
+	// may change its mind.
+	v.lastRouteS = s.nowS
+
 	edgeIndex := v.CurrentEdge()
 	if edgeIndex < 0 {
 		return
@@ -370,7 +378,6 @@ func (s *Sim) reroute(v *Vehicle) {
 	v.route = newRoute
 	v.leg = 0
 	v.routeChanges++
-	v.lastRouteS = s.nowS
 }
 
 // reportSpeeds lets every running fleet vehicle tell the service how fast it is
