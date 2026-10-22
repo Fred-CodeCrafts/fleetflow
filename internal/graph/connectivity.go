@@ -19,13 +19,22 @@ package graph
 // left is useless as a destination, and vice versa.
 //
 // It returns the number of nodes removed. A graph that is already one component
-// is returned unchanged.
+// is returned unchanged, and so is one with no cycle at all — pruning that would
+// leave nothing to route on.
 func (g *Graph) KeepLargestStronglyConnected() int {
 	if len(g.Nodes) == 0 {
 		return 0
 	}
 
 	keep := largestSCC(g)
+
+	// A graph with no cycle at all has no component worth keeping: pruning it
+	// would leave nothing, and "no routable edges" would be a worse description
+	// of a one-way road than the road itself. Leave it as given and let the
+	// caller route on it.
+	if len(keep) < 2 {
+		return 0
+	}
 
 	removed := len(g.Nodes) - len(keep)
 	if removed == 0 {
