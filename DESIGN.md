@@ -91,13 +91,14 @@ Honest status, not the target: this is what is in the repository today versus wh
 ## 3. Components
 
 ### 3.1 Road graph (`internal/graph`)
-- Directed graph loaded once from `data/graph.json`. Nodes have `id, lat, lon`. Edges have `id, from, to, length_m, speed_limit_mps, lanes`.
+- Directed graph loaded once from `GRAPH_PATH`. Nodes have `id, lat, lon`. Edges have `id, from, to, length_m, speed_limit_mps, lanes`.
 - The topology is fixed for a run, so the edge slice is built once and never resized.
 - **Derived values per edge:**
   - `free_flow_s = length_m / speed_limit_mps`
   - `capacity = lanes * length_m / 7.5` (vehicle length plus gap, an assumption; documented and tunable)
-- **Data source:** a small Jakarta area extract from OpenStreetMap (attribution required, ODbL), produced by a one-time script in `scripts/`. Fallback: a generated grid city with arterial roads, so the demo never depends on the extract.
-- **The demo network.** The generated grid is committed as `data/graph.json` and reproduced exactly with `go run ./scripts/generate_grid.go -spacing-m 150 -lanes 1`: 150 m blocks, one lane per street and two on the central arterials, which is 20 to 40 vehicles of capacity per edge and 3,200 across the graph. Its size is not decoration. Capacity comes from the network while demand comes from the fleet, and when the second is tiny beside the first no edge ever approaches its limit, every weight stays at free flow, and static and dynamic routing make identical choices. That is what happened at the 450 m, two-to-three lane size this grid was first generated at (16,800 vehicles of capacity), which is why the demo was scaled down to a network a peak-hour run can actually fill. `docs/results.md` has the measurement.
+- **Data source:** `data/networks/jakarta.net.xml`, a SUMO network converted from OpenStreetMap (attribution required, ODbL). It covers central Jakarta with 8,508 junctions and 9,529 directed road segments, keeping the arterial classes and excluding local streets. The exact commands are in `data/networks/README.md` so the file is reproducible rather than a mystery binary.
+- **Routable connectivity.** A filtered OpenStreetMap extract is not one connected road network: keeping the arterials loses the side streets that joined them, so the Jakarta extract arrives as 2,941 islands in which only 63% of junctions can be both reached and left. Because demand is drawn uniformly over the graph's nodes, every trip touching an island has no path and contributes nothing — measured at 142 of 300 vehicles never moving. `KeepLargestStronglyConnected` therefore prunes the graph to its largest strongly connected component after import, trading map coverage for trips that can be driven, and making "unroutable" mean a real routing failure rather than a disconnected fragment. The bundled network keeps 5,344 junctions and 6,874 segments after pruning.
+- **Building a network from a map area** (`internal/overpass`). The console can send a bounding box; the service fetches the roads of the chosen classes from Overpass and writes a SUMO `.net.xml` the importer reads back. Ways are split at every shared node, because a way that runs through a junction would otherwise become one edge with nothing touching that junction; on a 2 km test box this was the difference between 18% and 74% of junctions surviving as a routable graph.
 
 ### 3.2 Weight store (`internal/weights`)
 Per-edge mutable state, one lock per edge:
@@ -339,11 +340,11 @@ fleetflow/
 │   ├── store/                 # PostgreSQL connection pool, versioned migrations
 │   ├── config/                # env parsing + startup validation (refuse to start on bad config)
 │   ├── sim/                   # vehicles, demand, rerouting policy (client of the public API)
+│   ├── overpass/              # build a SUMO network from a map area
 │   └── api/                   # HTTP wiring: routes, middleware (request ID, limits, rate limit), SSE
 ├── console/                   # React/TypeScript console and Vite build
 ├── web/                       # embedded Vite output and SPA handler
-├── data/graph.json            # road graph extract
-├── scripts/                   # one-time OSM extraction
+├── data/networks/             # bundled Jakarta .net.xml and how it was generated
 ├── Dockerfile
 ├── fly.toml
 ├── README.md

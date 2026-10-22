@@ -115,6 +115,8 @@ conditional ones: they exist only under `-demo`.
 - `GET /api/graph` - Road network, including junctions and shaped edge geometry
 - `GET /api/network` - Active network name, source, size and geographic bounds
 - `POST /api/network` - Import a SUMO `.net.xml` network (blocked during a run)
+- `POST /api/network/build` - Build a network from a map area, optionally loading it
+- `GET /api/network/build/download` - The last network built from an area
 - `GET /api/emissions` - Run emissions comparison and optional per-trip estimate
 - `GET /api/vehicles`, `POST /api/vehicles` - Fleet vehicle records
 - `POST /api/vehicles/{id}/driver` - Assign or unassign a vehicle's driver
