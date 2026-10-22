@@ -224,4 +224,40 @@ export const api = {
       headers: { 'Content-Type': 'application/xml', 'X-Network-Name': file.name },
       body: file,
     }),
+  buildNetwork: (area: BuildArea) =>
+    request<BuildResult>('/api/network/build', {
+      method: 'POST',
+      body: JSON.stringify(area),
+    }),
+  /** The download URL for the last network built from an area. */
+  downloadBuiltNetwork: () => '/api/network/build/download',
 }
+
+/** The box a network is built for, in degrees. */
+export interface BuildArea {
+  min_lat: number
+  min_lon: number
+  max_lat: number
+  max_lon: number
+  /** OSM highway values to keep. Omitted means the arterials. */
+  classes?: string[]
+  /** Load the result as the active network. False builds a file only. */
+  install: boolean
+}
+
+export interface BuildResult {
+  network: NetworkSummary
+  bytes: number
+  osm_ways: number
+  duration_ms: number
+}
+
+/** The road classes the builder accepts, matching the server's own list. */
+export const roadClasses = [
+  'motorway',
+  'trunk',
+  'primary',
+  'secondary',
+  'tertiary',
+  'residential',
+] as const

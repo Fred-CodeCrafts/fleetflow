@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { IconLayer, PathLayer, ScatterplotLayer } from '@deck.gl/layers'
+import { IconLayer, PathLayer, PolygonLayer, ScatterplotLayer } from '@deck.gl/layers'
 import { MapboxOverlay } from '@deck.gl/mapbox'
 import * as maplibregl from 'maplibre-gl'
 import maplibreWorkerURL from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
@@ -9,6 +9,9 @@ import { ErrorMessage, Panel } from '../screens/Shared'
 
 type VehicleFilter = 'all' | 'fleet' | 'background'
 type MapPreferences = { peak: boolean; junctions: boolean; vehicles: VehicleFilter }
+
+/** A geographic box, in degrees. Matches the server's build request. */
+export type MapArea = { min_lat: number; min_lon: number; max_lat: number; max_lon: number }
 type DrawnVehicle = SimVehicle & { fromLon: number; fromLat: number; toLon: number; toLat: number; movedAt: number }
 type Track = { vehicle: SimVehicle; from: [number, number]; to: [number, number]; movedAt: number; lastSeen: number; missingAt?: number }
 
@@ -49,12 +52,27 @@ function colorForRatio(ratio: number, peak: boolean): [number, number, number, n
   return peak ? [43, 143, 108, 190] : [62, 158, 125, 180]
 }
 
-export function NetworkMap({ mode = 'live', onPickNode, selectedNodes, routeEdges = [], compact = false }: {
+/** Turn two dragged corners into a box with min/max in the right order. */
+function normalizeArea(a: [number, number], b: [number, number]): MapArea {
+  return {
+    min_lon: Math.min(a[0], b[0]),
+    max_lon: Math.max(a[0], b[0]),
+    min_lat: Math.min(a[1], b[1]),
+    max_lat: Math.max(a[1], b[1]),
+  }
+}
+
+export function NetworkMap({ mode = 'live', onPickNode, selectedNodes, routeEdges = [], compact = false, selectArea = false, area = null, onAreaChange }: {
   mode?: 'live' | 'picker'
   onPickNode?: (id: string) => void
   selectedNodes?: { from: string; to: string }
   routeEdges?: string[]
   compact?: boolean
+  /** Let the user drag a box on the map. */
+  selectArea?: boolean
+  /** The box to draw, in degrees. */
+  area?: MapArea | null
+  onAreaChange?: (area: MapArea) => void
 }) {
   const container = useRef<HTMLDivElement>(null)
   const map = useRef<maplibregl.Map | null>(null)
@@ -70,6 +88,11 @@ export function NetworkMap({ mode = 'live', onPickNode, selectedNodes, routeEdge
   const [runMetrics, setRunMetrics] = useState<MetricsResponse['run']>(null)
   const [preferences, setPreferences] = useState(readPreferences)
   const [error, setError] = useState('')
+  // The corner where an area drag started, while the drag is in progress.
+  const [dragCorner, setDragCorner] = useState<[number, number] | null>(null)
+  const [dragCurrent, setDragCurrent] = useState<[number, number] | null>(null)
+  const areaChangeRef = useRef(onAreaChange)
+  areaChangeRef.current = onAreaChange
   const nodes = useMemo(() => new Map((graph?.nodes ?? []).map((node) => [node.id, node])), [graph])
   const visibleEdges = useMemo(() => {
     const costByID = new Map(edges.map((edge) => [edge.edge_id, edge]))
@@ -95,6 +118,19 @@ export function NetworkMap({ mode = 'live', onPickNode, selectedNodes, routeEdge
     localStorage.setItem(prefKey, JSON.stringify(next))
   }
 
+  // The box being dragged, or the one already chosen.
+  const areaPolygon = useMemo(() => {
+    const fromDrag = dragCorner && dragCurrent ? normalizeArea(dragCorner, dragCurrent) : null
+    const box = fromDrag ?? area
+    if (!box) return []
+    return [[
+      [box.min_lon, box.min_lat],
+      [box.max_lon, box.min_lat],
+      [box.max_lon, box.max_lat],
+      [box.min_lon, box.max_lat],
+    ] as [number, number][]]
+  }, [area, dragCorner, dragCurrent])
+
   const drawLayers = useCallback(() => {
     if (!overlay.current || !graph) return
     const showNodes = mode === 'picker' || (preferences.junctions && (map.current?.getZoom() ?? 0) >= 13)
@@ -104,9 +140,10 @@ export function NetworkMap({ mode = 'live', onPickNode, selectedNodes, routeEdge
       new PathLayer({ id: 'roads', data: pathData, getPath: (item) => item.path, getColor: (item) => item.color, getWidth: (item) => item.width, widthUnits: 'pixels', pickable: false }),
       new ScatterplotLayer({ id: 'junctions', data: junctions, getPosition: (node: GraphNode) => [node.lon, node.lat], getRadius: (node: GraphNode) => selectedIDs.has(node.id) ? 7 : mode === 'picker' ? 4.5 : 2.5, radiusUnits: 'pixels', getFillColor: (node: GraphNode) => node.id === selectedNodes?.from ? [28, 125, 94, 240] : node.id === selectedNodes?.to ? [205, 91, 65, 240] : [68, 116, 130, mode === 'picker' ? 200 : 95], stroked: true, getLineColor: [255, 255, 255, 220], lineWidthMinPixels: 1, pickable: mode === 'picker', onClick: (info) => { const node = info.object as GraphNode | undefined; if (node) onPickNode?.(node.id) } }),
       new IconLayer({ id: 'vehicles', data: filteredVehicles, iconAtlas, iconMapping, getIcon: (vehicle: SimVehicle) => vehicle.fleet ? 'fleet' : 'background', getPosition: (vehicle: DrawnVehicle) => [vehicle.lon, vehicle.lat], getSize: 24, sizeUnits: 'pixels', billboard: true, pickable: true }),
+      new PolygonLayer({ id: 'selected-area', data: areaPolygon, getPolygon: (polygon: [number, number][]) => polygon, filled: true, getFillColor: [24, 134, 108, 40], stroked: true, getLineColor: [24, 134, 108, 230], getLineWidth: 2, lineWidthUnits: 'pixels', pickable: false }),
     ]
     overlay.current.setProps({ layers })
-  }, [filteredVehicles, graph, mode, onPickNode, pathData, preferences.junctions, selectedNodes])
+  }, [areaPolygon, filteredVehicles, graph, mode, onPickNode, pathData, preferences.junctions, selectedNodes])
   drawLayersRef.current = drawLayers
 
   useEffect(() => {
@@ -144,6 +181,51 @@ export function NetworkMap({ mode = 'live', onPickNode, selectedNodes, routeEdge
       overlay.current = null
     }
   }, [])
+
+  // Area selection: press, drag, release. The map's own drag-to-pan has to be
+  // disabled for the gesture, so it is switched off on mousedown and restored on
+  // mouseup — including when the release happens outside the canvas.
+  useEffect(() => {
+    const instance = map.current
+    if (!selectArea || !instance) return
+
+    const cornerOf = (event: maplibregl.MapMouseEvent): [number, number] => [event.lngLat.lng, event.lngLat.lat]
+
+    const onDown = (event: maplibregl.MapMouseEvent) => {
+      if (event.originalEvent.button !== 0) return
+      instance.dragPan.disable()
+      setDragCorner(cornerOf(event))
+      setDragCurrent(cornerOf(event))
+    }
+    const onMove = (event: maplibregl.MapMouseEvent) => {
+      setDragCurrent((current) => (current === null ? current : cornerOf(event)))
+    }
+    const onUp = (event: maplibregl.MapMouseEvent) => {
+      instance.dragPan.enable()
+      setDragCorner((corner) => {
+        if (corner === null) return null
+        const [lng, lat] = cornerOf(event)
+        const next = normalizeArea(corner, [lng, lat])
+        // A click is not a box. Below this the drag was probably a misfire, and
+        // building a network for it would fail on an empty area.
+        if (next.max_lat - next.min_lat > 1e-4 && next.max_lon - next.min_lon > 1e-4) {
+          areaChangeRef.current?.(next)
+        }
+        return null
+      })
+      setDragCurrent(null)
+    }
+
+    instance.on('mousedown', onDown)
+    instance.on('mousemove', onMove)
+    instance.on('mouseup', onUp)
+    return () => {
+      instance.off('mousedown', onDown)
+      instance.off('mousemove', onMove)
+      instance.off('mouseup', onUp)
+      instance.dragPan.enable()
+    }
+  }, [selectArea])
 
   useEffect(() => {
     drawLayers()
