@@ -144,6 +144,14 @@ type Server struct {
 	// stopCustomizer stops the running customizer goroutine when the engine it
 	// belongs to is replaced.
 	stopCustomizer func()
+	// builtNetwork is the last .net.xml generated from a map area, kept so the
+	// operator can download the file they just built. Guarded by networkMu
+	// because it is written alongside the graph that came from it.
+	builtNetwork     []byte
+	builtNetworkName string
+	// overpassEndpoint overrides the road data service the area builder queries.
+	// Empty means the package default; tests set it to a local server.
+	overpassEndpoint string
 }
 
 // Option customises a Server at construction time.
@@ -353,6 +361,12 @@ func (s *Server) routes() {
 	// the read-only graph endpoint.
 	s.mux.Handle("GET /api/network", s.public(s.handleNetwork))
 	s.mux.Handle("POST /api/network", s.public(s.handleImportNetwork))
+
+	// Build a network from a map area, and download the last one built. Both are
+	// writes to the same slot, so they are refused while a run is going for the
+	// same reason the import is.
+	s.mux.Handle("POST /api/network/build", s.public(s.handleBuildNetwork))
+	s.mux.Handle("GET /api/network/build/download", s.public(s.handleDownloadNetwork))
 
 	// Estimated exhaust emissions: the live run's two arms, and a single trip on
 	// request. Read-only and derived from data the server already holds.
