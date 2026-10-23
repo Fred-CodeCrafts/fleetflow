@@ -36,5 +36,5 @@ func buildStaticCosts(g *graph.Graph) []float64 {
 // baseline engine uses. It is version 0 because it comes from no customization
 // pass. Vehicles that never contact an engine can route on it.
 func NewStaticMetric(g *graph.Graph) *Metric {
-	return NewMetric(buildStaticCosts(g), 0)
+	return NewMetricFor(g, buildStaticCosts(g), 0)
 }
