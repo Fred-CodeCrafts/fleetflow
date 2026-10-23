@@ -33,6 +33,9 @@ type Runner struct {
 }
 
 func NewRunner(ctx context.Context, tools Toolchain) (*Runner, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("context is required")
+	}
 	for name, path := range map[string]string{
 		"Python":       tools.Python,
 		"duarouter":    tools.DuaRouter,
@@ -82,6 +85,12 @@ func NewRunner(ctx context.Context, tools Toolchain) (*Runner, error) {
 }
 
 func (r *Runner) Run(ctx context.Context, scenario Scenario) (Result, error) {
+	if r == nil {
+		return Result{}, fmt.Errorf("SUMO runner is required")
+	}
+	if ctx == nil {
+		return Result{}, fmt.Errorf("context is required")
+	}
 	if err := scenario.Validate(); err != nil {
 		return Result{}, err
 	}
@@ -109,8 +118,9 @@ func (r *Runner) Run(ctx context.Context, scenario Scenario) (Result, error) {
 		"--prefix", "fleetflow",
 		"--min-distance", strconv.Itoa(minTripDistanceM),
 		"--max-distance", strconv.Itoa(maxTripDistanceM),
+		"--no-validate",
 	}
-	if _, err := r.runCommand(ctx, "generate seeded demand", r.tools.Python, args...); err != nil {
+	if _, err := r.runCommand(ctx, workDir, "generate seeded demand", r.tools.Python, args...); err != nil {
 		return Result{}, err
 	}
 
@@ -121,7 +131,7 @@ func (r *Runner) Run(ctx context.Context, scenario Scenario) (Result, error) {
 		"--seed", strconv.FormatInt(scenario.Seed, 10),
 		"--no-warnings", "true",
 	}
-	if _, err := r.runCommand(ctx, "route seeded demand", r.tools.DuaRouter, args...); err != nil {
+	if _, err := r.runCommand(ctx, workDir, "route seeded demand", r.tools.DuaRouter, args...); err != nil {
 		return Result{}, err
 	}
 
@@ -141,8 +151,13 @@ func (r *Runner) Run(ctx context.Context, scenario Scenario) (Result, error) {
 	}
 
 	startedAt := time.Now().UTC()
-	if _, err := r.runCommand(ctx, "run SUMO scenario", r.tools.SUMO, args...); err != nil {
+	if _, err := r.runCommand(ctx, workDir, "run SUMO scenario", r.tools.SUMO, args...); err != nil {
 		return Result{}, err
+	}
+	if info, err := os.Stat(emissionsPath); err != nil {
+		return Result{}, fmt.Errorf("SUMO did not create emissions output: %w", err)
+	} else if !info.Mode().IsRegular() || info.Size() == 0 {
+		return Result{}, fmt.Errorf("SUMO emissions output %q is empty or not a regular file", emissionsPath)
 	}
 
 	tripsFile, err := os.Open(tripInfoPath)
@@ -187,8 +202,9 @@ func (r *Runner) Run(ctx context.Context, scenario Scenario) (Result, error) {
 	}, nil
 }
 
-func (r *Runner) runCommand(ctx context.Context, action, executable string, args ...string) ([]byte, error) {
+func (r *Runner) runCommand(ctx context.Context, dir, action, executable string, args ...string) ([]byte, error) {
 	command := exec.CommandContext(ctx, executable, args...)
+	command.Dir = dir
 	home := filepath.Dir(filepath.Dir(r.tools.RandomTrips))
 	command.Env = append(os.Environ(), "SUMO_HOME="+home)
 
