@@ -66,7 +66,9 @@ func (r *Repository) List(ctx context.Context) ([]simulation.Run, error) {
 	defer r.mu.RUnlock()
 	runs := make([]simulation.Run, 0, len(r.runs))
 	for _, run := range r.runs {
-		runs = append(runs, clone(run))
+		record := clone(run)
+		record.Result = nil
+		runs = append(runs, record)
 	}
 	sort.Slice(runs, func(i, j int) bool {
 		if runs[i].CreatedAt.Equal(runs[j].CreatedAt) {

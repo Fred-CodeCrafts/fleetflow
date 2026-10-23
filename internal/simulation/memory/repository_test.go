@@ -54,4 +54,7 @@ func TestRepositoryListOrdersNewestFirst(t *testing.T) {
 	if len(found) != 2 || found[0].ID != "newer" || found[1].ID != "older" {
 		t.Fatalf("run list order = %#v", found)
 	}
+	if found[0].Result != nil || found[1].Result != nil {
+		t.Fatal("run list included large result payloads")
+	}
 }
