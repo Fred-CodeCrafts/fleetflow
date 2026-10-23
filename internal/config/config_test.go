@@ -23,42 +23,41 @@ func TestLoad(t *testing.T) {
 			name: "defaults",
 			env:  map[string]string{},
 			want: Config{
-				Addr:      ":8080",
-				Env:       EnvDevelopment,
-				GraphPath: DefaultGraphPath,
+				Addr:    ":8080",
+				Env:     EnvDevelopment,
+				OSRMURL: DefaultOSRMURL,
 			},
 		},
 		{
-			name: "production with a port and graph path",
+			name: "production with a port",
 			env: map[string]string{
-				"ENV":        EnvProduction,
-				"PORT":       "9090",
-				"GRAPH_PATH": "/srv/graph.json",
+				"ENV":  EnvProduction,
+				"PORT": "9090",
 			},
 			want: Config{
-				Addr:      ":9090",
-				Env:       EnvProduction,
-				GraphPath: "/srv/graph.json",
+				Addr:    ":9090",
+				Env:     EnvProduction,
+				OSRMURL: DefaultOSRMURL,
 			},
 		},
 		{
 			name: "log level is set",
 			env:  map[string]string{"LOG_LEVEL": "debug"},
 			want: Config{
-				Addr:      ":8080",
-				Env:       EnvDevelopment,
-				GraphPath: DefaultGraphPath,
-				LogLevel:  LogDebug,
+				Addr:     ":8080",
+				Env:      EnvDevelopment,
+				OSRMURL:  DefaultOSRMURL,
+				LogLevel: LogDebug,
 			},
 		},
 		{
 			name: "log level is case-insensitive",
 			env:  map[string]string{"LOG_LEVEL": "WARN"},
 			want: Config{
-				Addr:      ":8080",
-				Env:       EnvDevelopment,
-				GraphPath: DefaultGraphPath,
-				LogLevel:  LogWarn,
+				Addr:     ":8080",
+				Env:      EnvDevelopment,
+				OSRMURL:  DefaultOSRMURL,
+				LogLevel: LogWarn,
 			},
 		},
 		{
@@ -87,12 +86,25 @@ func TestLoad(t *testing.T) {
 			wantErr: "ENV",
 		},
 		{
+			name: "OSRM URL is configurable",
+			env:  map[string]string{"OSRM_URL": "http://router:5000"},
+			want: Config{
+				Addr:    ":8080",
+				Env:     EnvDevelopment,
+				OSRMURL: "http://router:5000",
+			},
+		},
+		{
+			name:    "OSRM URL rejects credentials",
+			env:     map[string]string{"OSRM_URL": "http://user:pass@router:5000"},
+			wantErr: "OSRM_URL",
+		},
+		{
 			name: "database url with an explicit port",
 			env:  map[string]string{"DATABASE_URL": "postgres://user:secret@db.example.com:6432/fleetflow"},
 			want: Config{
 				Addr:         ":8080",
 				Env:          EnvDevelopment,
-				GraphPath:    DefaultGraphPath,
 				DatabaseDSN:  "postgres://user:secret@db.example.com:6432/fleetflow",
 				DatabaseAddr: "db.example.com:6432",
 			},
@@ -103,7 +115,6 @@ func TestLoad(t *testing.T) {
 			want: Config{
 				Addr:         ":8080",
 				Env:          EnvDevelopment,
-				GraphPath:    DefaultGraphPath,
 				DatabaseDSN:  "postgresql://user:secret@127.0.0.1/fleetflow",
 				DatabaseAddr: "127.0.0.1:5432",
 			},
@@ -127,7 +138,6 @@ func TestLoad(t *testing.T) {
 			want: Config{
 				Addr:         ":8080",
 				Env:          EnvDevelopment,
-				GraphPath:    DefaultGraphPath,
 				DatabaseAddr: "127.0.0.1:55432",
 			},
 		},
@@ -137,7 +147,6 @@ func TestLoad(t *testing.T) {
 			want: Config{
 				Addr:         ":8080",
 				Env:          EnvDevelopment,
-				GraphPath:    DefaultGraphPath,
 				DatabaseAddr: "127.0.0.1:5432",
 			},
 		},
@@ -175,6 +184,9 @@ func TestLoad(t *testing.T) {
 			want := tt.want
 			if want.LogLevel == "" {
 				want.LogLevel = DefaultLogLevel
+			}
+			if want.OSRMURL == "" {
+				want.OSRMURL = DefaultOSRMURL
 			}
 			if got != want {
 				t.Errorf("Load() = %+v, want %+v", got, want)

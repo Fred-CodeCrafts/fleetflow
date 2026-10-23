@@ -17,11 +17,11 @@ import (
 
 // Defaults used when the matching environment variable is unset.
 const (
-	DefaultPort      = 8080
-	DefaultEnv       = "development"
-	DefaultGraphPath = "data/networks/jakarta.net.xml"
-	DefaultDBPort    = "5432"
-	DefaultLogLevel  = "info"
+	DefaultPort     = 8080
+	DefaultEnv      = "development"
+	DefaultOSRMURL  = "http://127.0.0.1:5000"
+	DefaultDBPort   = "5432"
+	DefaultLogLevel = "info"
 )
 
 // Env values accepted by Load.
@@ -46,8 +46,8 @@ type Config struct {
 	Addr string
 	// Env is the deployment environment, EnvDevelopment or EnvProduction.
 	Env string
-	// GraphPath is the road graph file to load at startup.
-	GraphPath string
+	// OSRMURL is the base URL of the OSRM routing service.
+	OSRMURL string
 	// DatabaseDSN is the configured connection string, or "" when none is set.
 	// Fleet records use it; the routing hot path never does (PRD US-5).
 	DatabaseDSN string
@@ -69,8 +69,11 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 
 	cfg := Config{
-		Env:       valueOr(getenv, "ENV", EnvDevelopment),
-		GraphPath: valueOr(getenv, "GRAPH_PATH", DefaultGraphPath),
+		Env:     valueOr(getenv, "ENV", EnvDevelopment),
+		OSRMURL: valueOr(getenv, "OSRM_URL", DefaultOSRMURL),
+	}
+	if err := validateOSRMURL(cfg.OSRMURL); err != nil {
+		return Config{}, err
 	}
 
 	level := strings.ToLower(valueOr(getenv, "LOG_LEVEL", DefaultLogLevel))
@@ -79,6 +82,7 @@ func Load(getenv func(string) string) (Config, error) {
 	default:
 		return Config{}, fmt.Errorf("LOG_LEVEL %q: must be one of debug, info, warn, error", level)
 	}
+
 	cfg.LogLevel = level
 
 	port := valueOr(getenv, "PORT", strconv.Itoa(DefaultPort))
@@ -101,6 +105,15 @@ func Load(getenv func(string) string) (Config, error) {
 	cfg.DatabaseDSN, cfg.DatabaseAddr = dsn, addr
 
 	return cfg, nil
+}
+
+func validateOSRMURL(value string) error {
+	u, err := url.Parse(value)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" ||
+		u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return fmt.Errorf("OSRM_URL %q: must be an http(s) base URL without credentials, query, or fragment", value)
+	}
+	return nil
 }
 
 // database resolves the optional database settings. DATABASE_URL wins; otherwise
