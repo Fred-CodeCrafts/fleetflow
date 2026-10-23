@@ -15,16 +15,6 @@ import (
 // stops a careless client from making the service allocate for it.
 const maxBodyBytes = 64 << 10 // 64 KiB
 
-// maxBatchBodyBytes bounds the one endpoint whose body is not a small object.
-//
-// POST /api/reports/batch carries a step's observations, one per occupied edge. A
-// city network has thousands of them: the Jakarta graph at 60,000 vehicles sent
-// 921 observations in one batch, and the 64 KiB limit refused it as
-// body_too_large, which silently cost the run those reports. The bound is sized
-// from maxBatchReports at roughly 64 bytes an observation, which is more than one
-// carries, so the count limit is what a client actually meets.
-const maxBatchBodyBytes = maxBatchReports * 64
-
 // Error codes for input the transport refuses before the domain sees it. They
 // travel in API error bodies, so they are part of the public contract.
 const (
@@ -52,13 +42,7 @@ var refusedBodyTooLarge = &refusedError{
 // misspelled key would otherwise be ignored silently and the request would look
 // accepted.
 func decodeJSON(w http.ResponseWriter, r *http.Request, v any) error {
-	return decodeJSONLimit(w, r, v, maxBodyBytes)
-}
-
-// decodeJSONLimit is decodeJSON with an explicit body bound, for the endpoints
-// whose payload is legitimately larger than a small object.
-func decodeJSONLimit(w http.ResponseWriter, r *http.Request, v any, limit int64) error {
-	r.Body = http.MaxBytesReader(w, r.Body, limit)
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()

@@ -8,6 +8,8 @@ import (
 	"fleetflow/internal/driver"
 )
 
+const codeVehicleIDRequired = "vehicle_id_required"
+
 // driverView is a driver as the API writes it. VehicleID is left out when the
 // driver holds no vehicle, so "unassigned" reads the same as "absent".
 type driverView struct {

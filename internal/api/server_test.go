@@ -8,24 +8,22 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"fleetflow/internal/auth"
 	authmemory "fleetflow/internal/auth/memory"
-	"fleetflow/internal/graph"
+	"fleetflow/internal/osrm"
 )
 
-// testGraph loads the fixture road graph.
-func testGraph(t *testing.T) *graph.Graph {
-	t.Helper()
+type testRouter struct{}
 
-	g, err := graph.LoadFromFile("../../data/test_graph.json")
-	if err != nil {
-		t.Fatalf("failed to load fixture graph: %v", err)
-	}
-	return g
+func (testRouter) Route(context.Context, osrm.Coordinate, osrm.Coordinate) (osrm.Route, error) {
+	return osrm.Route{}, nil
 }
+
+func (testRouter) Health(context.Context) error { return nil }
 
 // testAPIKey is the key every test server accepts. It is a fixed string rather
 // than one issued per test, so that a test calling an ingest endpoint does not
@@ -54,25 +52,18 @@ func testKeyService(t *testing.T) *auth.Service {
 
 func testServer(t *testing.T, opts ...Option) *Server {
 	t.Helper()
-	return testServerFor(t, testGraph(t), opts...)
-}
-
-// testServerFor builds a server over a specific graph, for the tests that need
-// one small enough to contain an unreachable pair.
-func testServerFor(t *testing.T, g *graph.Graph, opts ...Option) *Server {
-	t.Helper()
-
 	// Tests are noisy enough without a line per request; the logging middleware
 	// has its own test that captures into a buffer. A test may override this by
 	// passing its own WithLogger, which is applied later.
 	all := append([]Option{
 		WithLogger(slog.New(slog.NewTextHandler(io.Discard, nil))),
+		WithRouter(testRouter{}),
 		// Every test server accepts the same key, so a test that calls an ingest
 		// endpoint does not first have to arrange authentication. The one test
 		// about a server with no key service builds its own server.
 		WithAPIKeys(testKeyService(t)),
 	}, opts...)
-	return NewServer(g, all...)
+	return NewServer(all...)
 }
 
 func TestHealthz(t *testing.T) {
@@ -107,15 +98,39 @@ func TestConsoleRoutesDoNotChangeAPIErrorBehavior(t *testing.T) {
 	}
 
 	wrongMethod := httptest.NewRecorder()
-	s.ServeHTTP(wrongMethod, httptest.NewRequest(http.MethodGet, "/api/reports", nil))
+	s.ServeHTTP(wrongMethod, httptest.NewRequest(http.MethodGet, "/api/route", nil))
 	if wrongMethod.Code != http.StatusMethodNotAllowed {
-		t.Errorf("GET /api/reports answered %d, want 405", wrongMethod.Code)
+		t.Errorf("GET /api/route answered %d, want 405", wrongMethod.Code)
 	}
 
 	unknownAPI := httptest.NewRecorder()
 	s.ServeHTTP(unknownAPI, httptest.NewRequest(http.MethodGet, "/api/not-a-route", nil))
 	if unknownAPI.Code != http.StatusNotFound {
 		t.Errorf("GET /api/not-a-route answered %d, want 404", unknownAPI.Code)
+	}
+}
+
+func TestPrototypeEndpointsAreNotRegistered(t *testing.T) {
+	s := testServer(t)
+	for _, endpoint := range []struct {
+		method string
+		path   string
+	}{
+		{http.MethodPost, "/api/sim/start"},
+		{http.MethodGet, "/api/runs"},
+		{http.MethodPost, "/api/reports"},
+		{http.MethodGet, "/api/metrics"},
+		{http.MethodGet, "/api/network"},
+		{http.MethodGet, "/api/emissions"},
+		{http.MethodGet, "/api/stream"},
+	} {
+		t.Run(endpoint.path, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			s.ServeHTTP(rec, httptest.NewRequest(endpoint.method, endpoint.path, nil))
+			if rec.Code != http.StatusNotFound {
+				t.Errorf("%s %s answered %d, want 404", endpoint.method, endpoint.path, rec.Code)
+			}
+		})
 	}
 }
 
@@ -153,6 +168,17 @@ func decodeBody(t *testing.T, rec *httptest.ResponseRecorder) map[string]any {
 	return body
 }
 
+func postJSON(t *testing.T, s *Server, path, body string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+testAPIKey)
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, req)
+	return rec
+}
+
 func TestReadyz_WithoutDatabase(t *testing.T) {
 	s := testServer(t)
 	rec := httptest.NewRecorder()
@@ -167,8 +193,8 @@ func TestReadyz_WithoutDatabase(t *testing.T) {
 	if body["status"] != "ok" {
 		t.Errorf("status = %v, want ok", body["status"])
 	}
-	if body["graph_loaded"] != true {
-		t.Errorf("graph_loaded = %v, want true", body["graph_loaded"])
+	if body["routing"] != "available" {
+		t.Errorf("routing = %v, want available", body["routing"])
 	}
 	if body["database"] != "not_configured" {
 		t.Errorf("database = %v, want not_configured", body["database"])
