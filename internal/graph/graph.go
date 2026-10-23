@@ -78,6 +78,11 @@ type Graph struct {
 	// distance estimate reads without a map lookup.
 	nodeLat []float64
 	nodeLon []float64
+	// nodeUnit holds each node's position as a unit vector in three dimensions,
+	// three values per node. The router's estimate is a chord length between two
+	// of them, which needs no trigonometry and is never longer than the
+	// great-circle arc, so it stays a lower bound.
+	nodeUnit []float64
 }
 
 // New creates an empty Graph.
@@ -106,6 +111,22 @@ func (g *Graph) NodeIDAt(i int) string { return g.nodeIDs[i] }
 
 // NodeLatLonAt returns the coordinates of a node, addressed by index.
 func (g *Graph) NodeLatLonAt(i int) (lat, lon float64) { return g.nodeLat[i], g.nodeLon[i] }
+
+// ChordMetres returns the straight-line distance between two nodes through the
+// earth, in metres, addressed by node index.
+//
+// It is a lower bound on the great-circle distance between them — a chord is
+// never longer than its arc — and it needs no trigonometry, which matters
+// because the router evaluates it for every node it expands. Dividing it by the
+// earth's radius gives the central angle, which is the same quantity
+// MetresBetween returns, only understated.
+func (g *Graph) ChordMetres(a, b int) float64 {
+	const earthRadiusM = 6371000.0
+	ax, ay, az := g.nodeUnit[a*3], g.nodeUnit[a*3+1], g.nodeUnit[a*3+2]
+	bx, by, bz := g.nodeUnit[b*3], g.nodeUnit[b*3+1], g.nodeUnit[b*3+2]
+	dx, dy, dz := ax-bx, ay-by, az-bz
+	return earthRadiusM * math.Sqrt(dx*dx+dy*dy+dz*dz)
+}
 
 // MaxSpeedMPS returns the fastest speed limit any edge in the graph allows, or 0
 // for a graph with no edges.
@@ -198,8 +219,18 @@ func (g *Graph) AddNode(node Node) error {
 	g.outEdgesByIndex = append(g.outEdgesByIndex, nil)
 	g.nodeLat = append(g.nodeLat, node.Lat)
 	g.nodeLon = append(g.nodeLon, node.Lon)
+	unit := unitVector(node.Lat, node.Lon)
+	g.nodeUnit = append(g.nodeUnit, unit[0], unit[1], unit[2])
 	g.Nodes[node.ID] = node
 	return nil
+}
+
+// unitVector returns a latitude/longitude pair as a unit vector on the sphere.
+func unitVector(lat, lon float64) [3]float64 {
+	radians := math.Pi / 180
+	phi, lambda := lat*radians, lon*radians
+	cosPhi := math.Cos(phi)
+	return [3]float64{cosPhi * math.Cos(lambda), cosPhi * math.Sin(lambda), math.Sin(phi)}
 }
 
 // AddEdge adds a directed edge to the graph. Both From and To nodes must exist.

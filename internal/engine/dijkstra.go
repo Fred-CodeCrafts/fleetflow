@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"container/heap"
 	"errors"
 	"fmt"
 	"sync"
@@ -40,6 +39,8 @@ type dijkstraScratch struct {
 	// clearing between queries.
 	settledStamp []uint32
 	generation   uint32
+	// frontier is the search's own heap, reused between queries.
+	frontier frontier
 }
 
 var scratchPool = sync.Pool{New: func() any { return &dijkstraScratch{} }}
@@ -80,14 +81,14 @@ func (s *dijkstraScratch) reset(n int) uint32 {
 // plus a lower bound on the cost still to come. The bound is the great-circle
 // distance to the destination divided by the fastest speed any edge in the graph
 // allows, which no real route can beat, so the first path popped is still the
-// cheapest one — the answer is identical and only the work differs.
+// cheapest one â€” the answer is identical and only the work differs.
 //
 // On a city network the saving is large because the graph is spread over 30 km
 // while trips cross a fraction of it: Dijkstra settles every junction closer to
 // the origin than the destination, A* settles the ones between them.
 //
 // Nodes are addressed by their integer index rather than their ID: the maps this
-// used to keep — distances, predecessors, visited — were the largest single cost
+// used to keep â€” distances, predecessors, visited â€” were the largest single cost
 // in the simulation, because a city-scale run expands them tens of thousands of
 // times a step.
 func dijkstraRoute(g *graph.Graph, m *Metric, fromID, toID string) (*Path, error) {
@@ -109,46 +110,46 @@ func dijkstraRoute(g *graph.Graph, m *Metric, fromID, toID string) (*Path, error
 	gen := scratch.reset(g.NodeCount())
 	dist, prevEdge, stamp, settled := scratch.dist, scratch.prevEdge, scratch.stamp, scratch.settledStamp
 
-	toLat, toLon := g.NodeLatLonAt(to)
 	maxSpeed := m.MaxSpeed()
 	// estimate is the heuristic: straight-line distance to the destination,
 	// discounted by how far the graph's coordinates can overstate its roads, and
 	// divided by the fastest speed any edge allows. See graph.GeometrySlack.
 	slack := m.GeometrySlack()
+	scale := slack * maxSpeed
 	estimate := func(node int) float64 {
-		if maxSpeed <= 0 || slack <= 0 {
+		if scale <= 0 {
 			return 0
 		}
-		lat, lon := g.NodeLatLonAt(node)
-		return graph.MetresBetween(lat, lon, toLat, toLon) / (slack * maxSpeed)
+		return g.ChordMetres(node, to) / scale
 	}
 
 	dist[from] = 0
 	stamp[from] = gen
 
-	frontier := &priorityQueue{{node: from, dist: 0, cost: estimate(from)}}
-	heap.Init(frontier)
+	frontier := &scratch.frontier
+	frontier.reset()
+	frontier.push(from, estimate(from))
 
-	for frontier.Len() > 0 {
-		current := heap.Pop(frontier).(*queueItem)
-		if settled[current.node] == gen {
+	for frontier.len() > 0 {
+		current, _ := frontier.pop()
+		if settled[current] == gen {
 			continue // a shorter route to this node was already settled
 		}
-		settled[current.node] = gen
-		if current.node == to {
+		settled[current] = gen
+		if current == to {
 			break
 		}
 
-		for _, edgeIndex := range g.OutgoingEdgeIndicesByIndex(current.node) {
+		for _, edgeIndex := range g.OutgoingEdgeIndicesByIndex(current) {
 			neighbour := g.EdgeToIndex(edgeIndex)
-			candidate := dist[current.node] + m.Cost(edgeIndex)
+			candidate := dist[current] + m.Cost(edgeIndex)
 			if stamp[neighbour] == gen && dist[neighbour] <= candidate {
 				continue
 			}
 			stamp[neighbour] = gen
 			dist[neighbour] = candidate
 			prevEdge[neighbour] = edgeIndex
-			heap.Push(frontier, &queueItem{node: neighbour, dist: candidate, cost: candidate + estimate(neighbour)})
+			frontier.push(neighbour, candidate+estimate(neighbour))
 		}
 	}
 
@@ -177,33 +178,72 @@ func reverseInts(s []int) {
 	}
 }
 
-// queueItem is one node in the A* frontier.
-type queueItem struct {
-	node int
-	// dist is the cost from the origin to this node, which is what the answer
-	// reports and what relaxations compare against.
-	dist float64
-	// cost is dist plus the estimate of the cost still to come, which is what
-	// orders the frontier.
-	cost float64
+// frontier is a binary min-heap of candidate nodes, stored flat.
+//
+// It replaces container/heap with one []*queueItem per node, which allocated an
+// item for every relaxation and then chased pointers through the interface
+// methods. On a 60,000-vehicle run the heap was 40% of the step: it is now a
+// slice of indices ordered by a parallel slice of keys, so pushing and popping
+// are array writes.
+type frontier struct {
+	// nodes holds the node index of each entry.
+	nodes []int
+	// keys holds the ordering value of each entry: cost so far plus the
+	// estimate of the cost to come.
+	keys []float64
 }
 
-// priorityQueue is a min-heap of frontier nodes, ordered by estimated total cost.
-type priorityQueue []*queueItem
-
-func (pq priorityQueue) Len() int           { return len(pq) }
-func (pq priorityQueue) Less(i, j int) bool { return pq[i].cost < pq[j].cost }
-func (pq priorityQueue) Swap(i, j int)      { pq[i], pq[j] = pq[j], pq[i] }
-
-func (pq *priorityQueue) Push(x any) {
-	*pq = append(*pq, x.(*queueItem))
+// reset empties the frontier, keeping its storage.
+func (f *frontier) reset() {
+	f.nodes = f.nodes[:0]
+	f.keys = f.keys[:0]
 }
 
-func (pq *priorityQueue) Pop() any {
-	old := *pq
-	n := len(old)
-	last := old[n-1]
-	old[n-1] = nil
-	*pq = old[:n-1]
-	return last
+func (f *frontier) len() int { return len(f.nodes) }
+
+// push adds a node with the given key.
+func (f *frontier) push(node int, key float64) {
+	f.nodes = append(f.nodes, node)
+	f.keys = append(f.keys, key)
+	i := len(f.nodes) - 1
+	for i > 0 {
+		parent := (i - 1) / 2
+		if f.keys[parent] <= f.keys[i] {
+			break
+		}
+		f.nodes[parent], f.nodes[i] = f.nodes[i], f.nodes[parent]
+		f.keys[parent], f.keys[i] = f.keys[i], f.keys[parent]
+		i = parent
+	}
+}
+
+// pop removes and returns the node with the smallest key, and that key. It
+// panics on an empty frontier, which the caller's loop condition prevents.
+func (f *frontier) pop() (node int, key float64) {
+	node, key = f.nodes[0], f.keys[0]
+
+	last := len(f.nodes) - 1
+	f.nodes[0] = f.nodes[last]
+	f.keys[0] = f.keys[last]
+	f.nodes = f.nodes[:last]
+	f.keys = f.keys[:last]
+
+	i := 0
+	for {
+		left, right := 2*i+1, 2*i+2
+		smallest := i
+		if left < len(f.nodes) && f.keys[left] < f.keys[smallest] {
+			smallest = left
+		}
+		if right < len(f.nodes) && f.keys[right] < f.keys[smallest] {
+			smallest = right
+		}
+		if smallest == i {
+			break
+		}
+		f.nodes[smallest], f.nodes[i] = f.nodes[i], f.nodes[smallest]
+		f.keys[smallest], f.keys[i] = f.keys[i], f.keys[smallest]
+		i = smallest
+	}
+	return node, key
 }
