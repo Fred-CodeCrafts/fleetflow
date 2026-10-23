@@ -32,12 +32,12 @@ export function EmissionsPage() {
     {data.loading && <Loading />}
     {data.error && <ErrorMessage>{data.error}</ErrorMessage>}
     {run && <div className="emission-comparison">
-      <Panel title="Baseline · static shortest path">
+      <Panel title="Baseline">
         <div className="emission-primary">{formatNumber(run.baseline.co2_g)}<small>g CO₂</small></div>
         <div className="emission-sub">{formatNumber(run.baseline.co2_per_km, 2)} g/km · {formatNumber(run.baseline.distance_km)} km</div>
         <div className="emission-sub">{formatNumber(run.baseline.fuel_litres, 2)} L estimated fuel</div>
       </Panel>
-      <Panel title="FleetFlow · dynamic weights">
+      <Panel title="FleetFlow">
         <div className="emission-primary">{formatNumber(run.fleet_flow.co2_g)}<small>g CO₂</small></div>
         <div className="emission-sub">{formatNumber(run.fleet_flow.co2_per_km, 2)} g/km · {formatNumber(run.fleet_flow.distance_km)} km</div>
         <div className="emission-sub">{formatNumber(run.fleet_flow.fuel_litres, 2)} L estimated fuel</div>
