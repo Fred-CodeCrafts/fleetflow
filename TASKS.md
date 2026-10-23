@@ -10,7 +10,7 @@ implementation caveats.
 - [x] MapLibre map, OpenFreeMap tiles, and visible map attribution.
 - [x] OSRM route client/API and Jakarta-region OSM data preparation workflow.
 - [x] Authenticated GPS ingestion with a separate live-GPS view.
-- [ ] Remove the legacy static map preview; replace it with SUMO run playback.
+- [x] Remove the legacy static map preview; show SUMO scenario playback instead.
 - [x] PostgreSQL persistence for existing fleet, driver, and trip records.
 
 ## SUMO simulation and delivery operations
@@ -23,22 +23,23 @@ implementation caveats.
   Jakarta; verify its extent against the administrative boundary, provenance,
   license, connectivity, and representative routes. Keep source/generated data
   out of Git.
-- [ ] Add validated SUMO runtime/network configuration and clear readiness and
-  process failure reporting.
-- [ ] Add seeded scenario presets and a reproducible SUMO run lifecycle;
-  capture network/version/seed and persist run state.
-- [ ] Persist SUMO positions, completed trips, ordered stops, package events,
-  and history with a new database migration and memory-backed tests.
+- [x] Add validated SUMO runtime/network configuration and explicit process
+  failure reporting.
+- [x] Add seeded scenarios and a reproducible SUMO run lifecycle; capture
+  SUMO version/seed and persist run state.
+- [x] Persist scenario results, generated trips, and SUMO position traces.
+- [ ] Persist ordered delivery stops, package events, and event history with a
+  database migration and memory-backed tests.
 - [ ] Generate scenario delivery demand and automatically assign compatible
   available vehicles and drivers; explain unassigned deliveries.
-- [ ] Add scenario/run monitoring and read-only trip detail screens with route
-  playback and package-event timelines. Remove manual trip creation and
-  assignment from the scenario workflow.
+- [x] Add scenario/run monitoring and read-only generated trip detail screens;
+  remove manual trip creation and driver assignment controls.
+- [ ] Add multi-stop route playback and package-event timelines.
 - [ ] Expand vehicle details with specifications and maintenance history; add
   driver contact, license, shift, and availability without unnecessary
   sensitive identity fields.
-- [ ] Report SUMO fuel/emissions as model estimates with model, units, and
-  assumptions; separate simulated estimates from measured activity.
+- [ ] Record SUMO fuel/emissions model, units, and assumptions; separate
+  simulated estimates from measured activity.
 - [ ] Package or delegate SUMO execution for durable Cloud Run deployment; test
   recovery and observability across API restarts.
 
