@@ -131,6 +131,33 @@ func (f *HTTPFleet) Report(vehicleID, edgeID string, speedMPS float64, now time.
 	}, nil)
 }
 
+// batchRequest is the body of POST /api/reports/batch.
+type batchRequest struct {
+	Observations []reportRequest `json:"observations"`
+}
+
+// ReportBatch implements BatchReporter over POST /api/reports/batch.
+//
+// One request carries a whole step's observations, which is what makes a large
+// run usable: per-vehicle reporting put 30,000 serial round trips in one step,
+// and the run advanced two simulated seconds in forty seconds of wall clock.
+//
+// The observations are sent with their shared timestamp and the server folds them
+// in order, so the result is the same as sending them one at a time.
+func (f *HTTPFleet) ReportBatch(obs []SpeedObservation, now time.Time) error {
+	ms := now.UnixMilli()
+	req := batchRequest{Observations: make([]reportRequest, len(obs))}
+	for i, o := range obs {
+		req.Observations[i] = reportRequest{
+			VehicleID: o.VehicleID,
+			EdgeID:    o.EdgeID,
+			SpeedMPS:  o.SpeedMPS,
+			TS:        &ms,
+		}
+	}
+	return f.post("/api/reports/batch", req, nil)
+}
+
 // edgeIDsFor turns edge indices into the IDs the API speaks. A non-nil empty
 // slice of indices stays a non-nil empty slice of IDs, which encodes as [] and
 // tells the server an empty path was held rather than none at all.

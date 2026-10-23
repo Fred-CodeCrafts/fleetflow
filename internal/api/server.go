@@ -332,6 +332,7 @@ func (s *Server) routes() {
 	// endpoints stay open: they belong to the dashboard, and the demo is meant to
 	// be browsable.
 	s.mux.Handle("POST /api/reports", s.authed(s.handleReport))
+	s.mux.Handle("POST /api/reports/batch", s.authed(s.handleReportBatch))
 	s.mux.Handle("POST /api/route", s.authed(s.handleRoute))
 
 	// Simulation control (DESIGN 3.5). These belong to the dashboard, like the

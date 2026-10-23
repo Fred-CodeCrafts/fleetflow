@@ -54,10 +54,18 @@ func observedFleetOf(inner sim.FleetService, logger *slog.Logger) sim.FleetServi
 	// wrapper must answer that assertion exactly as the thing it wraps does. A
 	// service that is not a customizer stays not one: claiming otherwise would
 	// make the clock refresh on a zero interval.
+	//
+	// The batch reporter is the same problem in the other direction: a wrapper
+	// that swallowed ReportBatch would leave the simulator reporting one vehicle
+	// at a time over HTTP, which is the cost batching exists to remove.
+	var out sim.FleetService = counted
 	if customizer, ok := inner.(sim.FleetCustomizer); ok {
-		return &observedCustomFleet{observedFleet: counted, customizer: customizer}
+		out = &observedCustomFleet{observedFleet: counted, customizer: customizer}
 	}
-	return counted
+	if batch, ok := inner.(sim.BatchReporter); ok {
+		return &observedBatchFleet{FleetService: out, inner: counted, batch: batch}
+	}
+	return out
 }
 
 // Route implements sim.FleetService.
@@ -104,6 +112,42 @@ func (f *observedFleet) Report(vehicleID, edgeID string, speedMPS float64, now t
 			slog.String("vehicle", vehicleID),
 			slog.String("edge", edgeID),
 			slog.Float64("speed_mps", speedMPS),
+			slog.String("error", err.Error()),
+			slog.String("note", "the run continues and counts it; further report failures are counted, not logged"))
+	}
+	return err
+}
+
+// observedBatchFleet is the wrapper for a service that can take a batch. It keeps
+// the counted wrapper so single reports and batches are counted the same way, and
+// the batch goes to the wrapped service rather than through it.
+type observedBatchFleet struct {
+	sim.FleetService
+	inner *observedFleet
+	batch sim.BatchReporter
+}
+
+// ReportBatch implements sim.BatchReporter.
+//
+// It counts one report per observation, not per call, so the run's report count
+// still means "how many observations reached the weights" whether the client
+// batched them or not.
+func (f *observedBatchFleet) ReportBatch(obs []sim.SpeedObservation, now time.Time) error {
+	err := f.batch.ReportBatch(obs, now)
+
+	f.inner.mu.Lock()
+	defer f.inner.mu.Unlock()
+
+	if err == nil {
+		f.inner.reports += len(obs)
+		return nil
+	}
+
+	f.inner.reportFailures += len(obs)
+	if !f.inner.loggedReport {
+		f.inner.loggedReport = true
+		f.inner.logger.Error("a simulated report batch failed",
+			slog.Int("observations", len(obs)),
 			slog.String("error", err.Error()),
 			slog.String("note", "the run continues and counts it; further report failures are counted, not logged"))
 	}

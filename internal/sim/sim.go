@@ -26,6 +26,31 @@ type FleetService interface {
 	Report(vehicleID, edgeID string, speedMPS float64, now time.Time) error
 }
 
+// BatchReporter is a FleetService that can publish a whole step's observations in
+// one call. A service that does not implement it still works: the simulator falls
+// back to Report per vehicle.
+//
+// It exists because congestion is a property of an edge, not of a vehicle. Every
+// vehicle on an edge observes the same speed, so a step that moves 60,000
+// vehicles produces a few thousand distinct observations, not 30,000 — and over
+// HTTP, one request instead of 30,000. Measured on the Jakarta network, per-vehicle
+// reporting over the public API advanced the run two simulated seconds in forty
+// seconds of wall clock; batching is what makes a large run watchable at all.
+type BatchReporter interface {
+	// ReportBatch publishes observations made at one simulated instant. now is
+	// the instant, and obs is read-only for the duration of the call.
+	ReportBatch(obs []SpeedObservation, now time.Time) error
+}
+
+// SpeedObservation is one edge's observed speed at one instant. The vehicle is
+// the one that happened to be sampled for the edge, and is what the API records
+// so a reader can tell a simulated report from a live one.
+type SpeedObservation struct {
+	VehicleID string
+	EdgeID    string
+	SpeedMPS  float64
+}
+
 // EngineFleet serves a routing engine to the simulator in-process. The comparison
 // runs and the unit tests use it; production uses the HTTP client instead, so
 // simulated traffic takes the public, validated path.
@@ -158,6 +183,15 @@ type Sim struct {
 	// can never report has no dynamic weights at all, and without a count it
 	// looks exactly like a run with nothing to report.
 	reportFailures int
+
+	// batchScratch and reportedEdgeStamp support reporting one observation per
+	// edge per step. batchScratch is reused between steps so a step allocates
+	// nothing; reportedEdgeStamp marks which edges this step has already covered,
+	// carrying a generation in reportStep rather than being cleared, because
+	// clearing it is a pass over every edge in the graph.
+	batchScratch      []SpeedObservation
+	reportedEdgeStamp []uint32
+	reportStep        uint32
 }
 
 // New builds a simulation whose vehicles start pending. They step onto the
@@ -180,11 +214,12 @@ func New(g *graph.Graph, cfg Config) (*Sim, error) {
 	})
 
 	s := &Sim{
-		g:            g,
-		cfg:          cfg,
-		occ:          NewOccupancy(len(g.Edges)),
-		staticMetric: engine.NewStaticMetric(g),
-		staticRouter: engine.NewDijkstraRouter(g),
+		g:                 g,
+		cfg:               cfg,
+		occ:               NewOccupancy(len(g.Edges)),
+		staticMetric:      engine.NewStaticMetric(g),
+		staticRouter:      engine.NewDijkstraRouter(g),
+		reportedEdgeStamp: make([]uint32, len(g.Edges)),
 	}
 	s.vehicles = make([]*Vehicle, len(demand))
 	for i, d := range demand {
@@ -390,6 +425,39 @@ func (s *Sim) reportSpeeds() {
 	}
 
 	now := s.ReportTime()
+
+	// Congestion is a property of an edge, and every vehicle on an edge observes
+	// the same speed, so one observation per edge is the whole information
+	// content of a step. Reporting per vehicle instead repeated the same number
+	// once per vehicle: on the Jakarta network a 60,000-vehicle step had 30,000
+	// fleet vehicles on a few thousand distinct edges.
+	//
+	// A service that can take a batch gets one call per step. One that cannot
+	// still gets one Report per vehicle, which is what the interface promises;
+	// the deduplication only saves the network, not the engine.
+	batch, canBatch := s.fleet.(BatchReporter)
+	if !canBatch {
+		for _, v := range s.vehicles {
+			if !v.IsFleet() || v.state != VehicleRunning {
+				continue
+			}
+			edgeIndex := v.CurrentEdge()
+			if edgeIndex < 0 {
+				continue
+			}
+			edge := s.g.Edges[edgeIndex]
+			speed := EdgeSpeed(edge.SpeedLimitMPS, edge.Capacity, s.occ.Count(edgeIndex))
+			if err := s.fleet.Report(v.ID(), edge.ID, speed, now); err != nil {
+				s.reportFailures++
+			}
+		}
+		return
+	}
+
+	s.batchScratch = s.batchScratch[:0]
+	// Bump the generation before the scan: the stamps start zeroed, so a step
+	// that reused 0 would find every edge already marked.
+	s.reportStep++
 	for _, v := range s.vehicles {
 		if !v.IsFleet() || v.state != VehicleRunning {
 			continue
@@ -398,11 +466,25 @@ func (s *Sim) reportSpeeds() {
 		if edgeIndex < 0 {
 			continue
 		}
+		if s.reportedEdgeStamp[edgeIndex] == s.reportStep {
+			continue // an earlier vehicle on this edge already reported it
+		}
+		s.reportedEdgeStamp[edgeIndex] = s.reportStep
+
 		edge := s.g.Edges[edgeIndex]
 		speed := EdgeSpeed(edge.SpeedLimitMPS, edge.Capacity, s.occ.Count(edgeIndex))
-		if err := s.fleet.Report(v.ID(), edge.ID, speed, now); err != nil {
-			s.reportFailures++
-		}
+		s.batchScratch = append(s.batchScratch, SpeedObservation{
+			VehicleID: v.ID(),
+			EdgeID:    edge.ID,
+			SpeedMPS:  speed,
+		})
+	}
+
+	if len(s.batchScratch) == 0 {
+		return
+	}
+	if err := batch.ReportBatch(s.batchScratch, now); err != nil {
+		s.reportFailures++
 	}
 }
 

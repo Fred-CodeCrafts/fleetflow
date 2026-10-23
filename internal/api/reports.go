@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"fleetflow/internal/domain"
+	"fleetflow/internal/engine"
 )
 
 // maxReportSpeedMPS bounds the speed a report may carry. A vehicle is not a
@@ -31,6 +32,9 @@ const (
 	codeSpeedOutOfRange   = "speed_out_of_range"
 	codeTimestampInvalid  = "ts_invalid"
 	codeTimestampInFuture = "ts_in_future"
+	// codeBatchTooLarge refuses a batch bigger than maxBatchReports. It is its own
+	// code because the batch endpoint has a bound the single endpoint does not.
+	codeBatchTooLarge = "batch_too_large"
 )
 
 // reportRequest is the body of POST /api/reports (DESIGN 3.5).
@@ -68,9 +72,87 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := eng.Report(req.EdgeID, req.SpeedMPS, observedAt); err != nil {
+	if err := s.foldReport(r, eng, req, observedAt); err != nil {
 		writeError(w, r, err)
 		return
+	}
+
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})
+}
+
+// batchReportRequest is the body of POST /api/reports/batch: one simulated
+// instant's observations, one per edge.
+type batchReportRequest struct {
+	Observations []reportRequest `json:"observations"`
+}
+
+// maxBatchReports bounds one batch request. A step reports at most one
+// observation per edge, so this is a graph-sized bound rather than a vehicle
+// count; it exists so a single request cannot ask the process to fold an
+// unbounded number of reports into the weights.
+const maxBatchReports = 200_000
+
+// handleReportBatch folds a step's observations into the weights and answers 202
+// with how many it accepted.
+//
+// It is the batch form of POST /api/reports, and it exists because congestion is a
+// property of an edge: every vehicle on an edge observes the same speed, so a
+// 60,000-vehicle step carries a few thousand distinct observations. Sent one at a
+// time they were 30,000 serial round trips per step, which advanced a run two
+// simulated seconds in forty seconds of wall clock.
+//
+// A batch is all-or-nothing on validation: one malformed observation rejects the
+// request and none are folded, so a client never has to work out which half of a
+// batch landed.
+func (s *Server) handleReportBatch(w http.ResponseWriter, r *http.Request) {
+	_, eng := s.networkSnapshot()
+	if eng == nil {
+		writeError(w, r, errNoEngine)
+		return
+	}
+
+	var req batchReportRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	if len(req.Observations) > maxBatchReports {
+		writeError(w, r, domain.Invalid(codeBatchTooLarge,
+			"a batch may carry at most %d observations", maxBatchReports))
+		return
+	}
+
+	// Validate the whole batch first, so a bad entry cannot leave the weights
+	// half updated.
+	observedAt := make([]time.Time, len(req.Observations))
+	for i, obs := range req.Observations {
+		at, err := obs.observeTime()
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		observedAt[i] = at
+	}
+
+	for i, obs := range req.Observations {
+		if err := s.foldReport(r, eng, obs, observedAt[i]); err != nil {
+			writeError(w, r, err)
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusAccepted, map[string]any{
+		"status":   "accepted",
+		"accepted": len(req.Observations),
+	})
+}
+
+// foldReport folds one validated report into the weights, and records it as live
+// traffic unless it came from the simulator. It is the whole of what a report
+// does, so the single and batch endpoints cannot drift apart.
+func (s *Server) foldReport(r *http.Request, eng *engine.Engine, req reportRequest, observedAt time.Time) error {
+	if err := eng.Report(req.EdgeID, req.SpeedMPS, observedAt); err != nil {
+		return err
 	}
 
 	// A real vehicle that has just reported is on the road now. The weights have
@@ -84,8 +166,7 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	if !s.isInternalKey(r) {
 		s.live.observe(req.VehicleID, req.EdgeID, req.SpeedMPS, observedAt)
 	}
-
-	writeJSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})
+	return nil
 }
 
 // observeTime checks the report and returns the moment it describes. It is the

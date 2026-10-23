@@ -439,6 +439,21 @@ func (f selfFleet) DecayStale(now time.Time) { f.eng.DecayStale(now) }
 // Customize implements sim.FleetCustomizer.
 func (f selfFleet) Customize() *engine.Metric { return f.eng.Customize() }
 
+// batchedSelfFleet is selfFleet for a service that can take a batch.
+//
+// It is a separate type rather than a method on selfFleet because Go has no
+// conditional interfaces: adding ReportBatch to selfFleet would make every
+// wrapped service look like a sim.BatchReporter, including one that is not, and
+// the simulator would take the batch path and count an error instead of falling
+// back to a report per vehicle. Choosing the wrapper at construction keeps the
+// type assertion in the simulator honest.
+type batchedSelfFleet struct{ selfFleet }
+
+// ReportBatch implements sim.BatchReporter.
+func (f batchedSelfFleet) ReportBatch(obs []sim.SpeedObservation, now time.Time) error {
+	return f.FleetService.(sim.BatchReporter).ReportBatch(obs, now)
+}
+
 // handleSimStart builds a fresh comparison run from the request and sets its
 // clock going, replacing whatever was running before.
 func (s *Server) handleSimStart(w http.ResponseWriter, r *http.Request) {
@@ -495,7 +510,14 @@ func (s *Server) handleSimStart(w http.ResponseWriter, r *http.Request) {
 	if s.fleetService != nil {
 		// The client speaks HTTP, so the clock's weight refresh has to be handed
 		// to the engine the server itself routes with.
-		fleet = selfFleet{FleetService: s.fleetService(g, eng), eng: eng}
+		wrapped := selfFleet{FleetService: s.fleetService(g, eng), eng: eng}
+		// Only a service that can actually take a batch is wrapped as one, so the
+		// simulator's type assertion reflects what the service can do.
+		if _, ok := wrapped.FleetService.(sim.BatchReporter); ok {
+			fleet = batchedSelfFleet{wrapped}
+		} else {
+			fleet = wrapped
+		}
 		wire = true
 	}
 

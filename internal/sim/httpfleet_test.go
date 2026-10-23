@@ -210,7 +210,11 @@ func TestHTTPFleet_RunsADemoRunThroughThePublicAPI(t *testing.T) {
 	}
 
 	// The traffic really went over the wire, and the API accepted both kinds.
-	if got := traffic.acceptedOn("/api/reports"); got == 0 {
+	// Reports may arrive singly or batched: congestion is per edge, so the
+	// simulator sends one observation per edge per step and the client batches
+	// them into /api/reports/batch. Either route proves the reports went over the
+	// public, authenticated API rather than around it.
+	if got := traffic.acceptedOn("/api/reports") + traffic.acceptedOn("/api/reports/batch"); got == 0 {
 		t.Error("the API accepted no reports: simulated traffic did not use /api/reports")
 	}
 	if got := traffic.acceptedOn("/api/route"); got == 0 {
