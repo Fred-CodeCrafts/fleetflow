@@ -82,17 +82,20 @@ if ($ValidateWithSumo) {
 $version = (& $netconvert.Source --version 2>&1 | Select-Object -First 1).ToString()
 $metadata = [ordered]@{
     source = $sourceUrl
+    source_sha256 = (Get-FileHash -LiteralPath $sourceFile -Algorithm SHA256).Hash.ToLowerInvariant()
     source_region = 'Geofabrik Java extract'
     osm_boundary = 'OpenStreetMap relation 6362934 (Daerah Khusus Ibukota Jakarta)'
     osm_boundary_bounds = '106.3146732,-6.3744575,106.9739750,-4.9993635'
     boundary_buffer_degrees = 0.02
+    boundary_sha256 = (Get-FileHash -LiteralPath $boundaryFile -Algorithm SHA256).Hash.ToLowerInvariant()
     generated_at_utc = [DateTime]::UtcNow.ToString('o')
     netconvert_version = $version
     sumo_load_test = [bool]$ValidateWithSumo
     network_file = 'jakarta-dki.net.xml'
+    network_sha256 = (Get-FileHash -LiteralPath $networkFile -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 $metadata | ConvertTo-Json | Set-Content -LiteralPath $metadataFile -Encoding utf8
 
 Write-Output "Generated and validated $networkFile"
-Write-Output "Network extent includes the OSM DKI Jakarta administrative bounds; the extract also includes surrounding road context."
+Write-Output "Road extraction follows the buffered OSM DKI Jakarta administrative boundary."
 Write-Output "SUMO network metadata: $metadataFile"
