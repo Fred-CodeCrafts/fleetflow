@@ -112,7 +112,7 @@ func (s *Server) handleReportBatch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req batchReportRequest
-	if err := decodeJSON(w, r, &req); err != nil {
+	if err := decodeJSONLimit(w, r, &req, maxBatchBodyBytes); err != nil {
 		writeError(w, r, err)
 		return
 	}
