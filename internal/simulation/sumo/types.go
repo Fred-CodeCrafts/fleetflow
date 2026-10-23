@@ -15,9 +15,9 @@ const (
 var errScenarioInvalid = errors.New("invalid SUMO scenario")
 
 type Scenario struct {
-	Seed             int64
-	Vehicles         int
-	DepartureWindowS int
+	Seed             int64 `json:"seed"`
+	Vehicles         int   `json:"vehicles"`
+	DepartureWindowS int   `json:"departure_window_s"`
 }
 
 func (s Scenario) Validate() error {

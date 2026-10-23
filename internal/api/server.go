@@ -15,6 +15,7 @@ import (
 	"fleetflow/internal/domain"
 	"fleetflow/internal/driver"
 	"fleetflow/internal/osrm"
+	"fleetflow/internal/simulation"
 	"fleetflow/internal/trip"
 	"fleetflow/internal/vehicle"
 	"fleetflow/web"
@@ -35,12 +36,13 @@ var errNoFleet = domain.Unavailable("fleet_unavailable", "fleet records are not 
 var errNoAuth = domain.Unavailable("auth_unavailable", "API keys are not configured")
 
 type Server struct {
-	vehicles *vehicle.Service
-	drivers  *driver.Service
-	trips    *trip.Service
-	router   osrm.Router
-	keys     *auth.Service
-	live     *liveVehicles
+	vehicles   *vehicle.Service
+	drivers    *driver.Service
+	trips      *trip.Service
+	router     osrm.Router
+	simulation *simulation.Service
+	keys       *auth.Service
+	live       *liveVehicles
 
 	mux      *http.ServeMux
 	handler  http.Handler
@@ -62,6 +64,16 @@ func WithDrivers(svc *driver.Service) Option {
 
 func WithTrips(svc *trip.Service) Option {
 	return func(s *Server) { s.trips = svc }
+}
+
+func WithSimulation(svc *simulation.Service) Option {
+	return func(s *Server) {
+		if svc == nil {
+			return
+		}
+		s.simulation = svc
+		s.stoppers = append(s.stoppers, svc.Shutdown)
+	}
 }
 
 func WithRouter(router osrm.Router) Option {
@@ -127,6 +139,9 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/trips", s.public(s.handleListTrips))
 	s.mux.Handle("POST /api/trips", s.public(s.handleCreateTrip))
 	s.mux.Handle("POST /api/trips/{id}/status", s.public(s.handleSetTripStatus))
+	s.mux.Handle("POST /api/simulation/runs", s.public(s.handleCreateSimulationRun))
+	s.mux.Handle("GET /api/simulation/runs", s.public(s.handleListSimulationRuns))
+	s.mux.Handle("GET /api/simulation/runs/{id}", s.public(s.handleGetSimulationRun))
 
 	console := s.public(web.Handler().ServeHTTP)
 	s.mux.Handle("GET /{$}", console)
