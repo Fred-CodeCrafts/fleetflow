@@ -92,7 +92,7 @@ export const navigation: NavBranch[] = [
         label: 'Live Map',
         icon: 'map',
         path: '/operations',
-        keywords: ['dashboard', 'live', 'map', 'track', 'vehicles', 'congestion'],
+        keywords: ['dashboard', 'live', 'map', 'track', 'vehicles', 'GPS'],
       },
       {
         id: 'operations.orders',
@@ -106,18 +106,7 @@ export const navigation: NavBranch[] = [
         label: 'Route Planner',
         icon: 'routes',
         path: '/operations/routes',
-        keywords: ['route', 'planner', 'origin', 'destination', 'shortest path', 'cost'],
-      },
-      {
-        id: 'operations.runs',
-        label: 'Comparison Runs',
-        icon: 'runs',
-        path: '/operations/runs',
-        keywords: ['runs', 'comparison', 'saved', 'baseline', 'results', 'seed'],
-        // Hidden from the sidebar at the operator's request. The screen and its
-        // route still work; only the entry point is gone, so the comparison
-        // machinery stays reachable by URL and is not deleted.
-        visible: false,
+        keywords: ['route', 'planner', 'origin', 'destination', 'OSRM', 'driving'],
       },
     ],
   },
@@ -153,40 +142,6 @@ export const navigation: NavBranch[] = [
     ],
   },
   {
-    id: 'analytics',
-    label: 'Analytics',
-    icon: 'analytics',
-    path: '/analytics',
-    keywords: ['metrics', 'reports', 'performance'],
-    requiresVisibleChildren: true,
-    children: [
-      {
-        id: 'analytics.overview',
-        label: 'Performance',
-        icon: 'analytics',
-        path: '/analytics',
-        keywords: ['performance', 'average trip', 'p95', 'saturation', 'route changes'],
-      },
-      {
-        id: 'analytics.emissions',
-        label: 'Emissions',
-        icon: 'emissions',
-        path: '/analytics/emissions',
-        keywords: ['emissions', 'co2', 'carbon', 'fuel', 'nox', 'green', 'sustainability'],
-      },
-      {
-        id: 'analytics.results',
-        label: 'Run Results',
-        icon: 'reports',
-        path: '/analytics/results',
-        keywords: ['results', 'ten seeds', 'evidence', 'comparison', 'table'],
-        // Hidden from the sidebar at the operator's request, like Comparison
-        // Runs. The route and screen remain.
-        visible: false,
-      },
-    ],
-  },
-  {
     id: 'settings',
     label: 'Settings',
     icon: 'settings',
@@ -200,34 +155,6 @@ export const navigation: NavBranch[] = [
         icon: 'settings',
         path: '/settings/general',
         keywords: ['general', 'environment', 'version', 'about'],
-      },
-      {
-        id: 'settings.simulation',
-        label: 'Simulation',
-        icon: 'simulation',
-        path: '/settings/simulation',
-        keywords: ['simulation', 'seed', 'vehicles', 'fleet share', 'demo', 'step'],
-      },
-      {
-        id: 'settings.weights',
-        label: 'Routing Weights',
-        icon: 'routes',
-        path: '/settings/weights',
-        keywords: ['weights', 'alpha', 'beta', 'gamma', 'lambda', 'decay', 'smoothing', 'hysteresis'],
-      },
-      {
-        id: 'settings.map',
-        label: 'Map',
-        icon: 'map',
-        path: '/settings/map',
-        keywords: ['map', 'basemap', 'layers', 'junction dots', 'colour scale'],
-      },
-      {
-        id: 'settings.network',
-        label: 'Road Network',
-        icon: 'network',
-        path: '/settings/network',
-        keywords: ['network', 'graph', 'import', 'sumo', 'net.xml', 'osm', 'jakarta'],
       },
     ],
   },
@@ -263,7 +190,8 @@ export function locate(
   let best: { branch: NavBranch; item: NavItem } | null = null
   for (const branch of branches) {
     for (const item of branch.children) {
-      const matches = pathname === item.path || pathname.startsWith(item.path + '/')
+      const matches = pathname === item.path ||
+        (item.path !== branch.path && pathname.startsWith(item.path + '/'))
       if (!matches) continue
       if (!best || item.path.length > best.item.path.length) best = { branch, item }
     }

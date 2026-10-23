@@ -7,21 +7,17 @@ describe('navigation registry', () => {
     for (const item of allNavItems()) expect(screenExists(item.id), item.id).toBe(true)
   })
 
-  it('gives each settings group its own route', () => {
+  it('keeps only the general settings route', () => {
     const paths = navigation.find((branch) => branch.id === 'settings')?.children.map((item) => item.path)
-    expect(paths).toEqual([
-      '/settings/general',
-      '/settings/simulation',
-      '/settings/weights',
-      '/settings/map',
-      '/settings/network',
-    ])
+    expect(paths).toEqual(['/settings/general'])
     expect(new Set(paths).size).toBe(paths?.length)
   })
 
-  it('locates the most specific route and searches by keyword', () => {
+  it('routes fleet operations and excludes retired experiment pages', () => {
     expect(locate('/operations/trips')?.item.id).toBe('operations.orders')
-    expect(searchNav('co2')[0]?.id).toBe('analytics.emissions')
+    expect(searchNav('OSRM')[0]?.id).toBe('operations.routes')
+    expect(locate('/operations/runs')).toBeNull()
+    expect(searchNav('comparison')).toEqual([])
   })
 
   it('hides branches with no permitted children', () => {

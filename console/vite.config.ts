@@ -11,15 +11,14 @@ export default defineConfig({
     outDir: '../web/dist',
     emptyOutDir: true,
     sourcemap: false,
-    // One chunk per vendor family keeps the map libraries out of the shell's
-    // critical path: the sidebar paints before MapLibre and deck.gl arrive.
+    // Keep MapLibre in a separate chunk so the shell can load before the map.
     rollupOptions: {
       output: {
         manualChunks(id) {
           if (id.includes('node_modules/react') || id.includes('node_modules/react-dom') || id.includes('node_modules/react-router-dom')) {
             return 'react'
           }
-          if (id.includes('node_modules/maplibre-gl') || id.includes('node_modules/@deck.gl')) {
+          if (id.includes('node_modules/maplibre-gl')) {
             return 'map'
           }
           return undefined
@@ -30,7 +29,7 @@ export default defineConfig({
   server: {
     port: 5173,
     // The dev server talks to the Go process, so the console can be developed
-    // without rebuilding the binary. `go run ./cmd/fleetflow -demo` on 8080.
+    // without rebuilding the binary. Run `go run ./cmd/fleetflow` on 8080.
     proxy: {
       '/api': { target: 'http://127.0.0.1:8080', changeOrigin: true },
       '/healthz': { target: 'http://127.0.0.1:8080', changeOrigin: true },

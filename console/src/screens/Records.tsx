@@ -87,21 +87,3 @@ export function DriversPage() {
     </Panel>
   </Page>
 }
-
-export function RunResultsPage() {
-  const runs = useLoad(api.runs)
-  return <Page eyebrow="Analytics" title="Run Results" description="Saved simulation comparisons and their captured metrics.">
-    <Panel title="Saved run results" action={<button className="button" onClick={() => void runs.reload()}>Refresh</button>}>
-      {runs.loading ? <Loading /> : runs.error ? <ErrorMessage>{runs.error}</ErrorMessage> :
-        <Table headers={['Run', 'Seed', 'Created', 'Baseline average', 'FleetFlow average', 'CO₂ baseline / FleetFlow']}>
-          {(runs.data ?? []).map((run) => <tr key={run.id}><td>{run.id.slice(0, 8)}</td><td>{run.seed}</td>
-            <td>{new Date(run.created_at).toLocaleString()}</td>
-            <td>{run.metrics.baseline?.average_trip_s?.toFixed(1) ?? '—'} s</td>
-            <td>{run.metrics.fleet_flow?.average_trip_s?.toFixed(1) ?? '—'} s</td>
-            <td>{run.metrics.baseline?.emissions?.co2_g?.toFixed(0) ?? '—'} / {run.metrics.fleet_flow?.emissions?.co2_g?.toFixed(0) ?? '—'} g</td>
-          </tr>)}
-        </Table>}
-      {!runs.loading && !runs.error && runs.data?.length === 0 && <p className="empty-state">No saved runs yet. Save a comparison from Operations → Comparison Runs.</p>}
-    </Panel>
-  </Page>
-}

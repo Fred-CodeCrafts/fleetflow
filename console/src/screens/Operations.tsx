@@ -1,86 +1,45 @@
 import { useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
-import { api, type MetricsResponse, type SavedRun, type Trip, type Vehicle } from '../api/client'
-import { NetworkMap } from '../map/LazyNetworkMap'
+import { api, type Coordinate, type OSRMRoute, type Trip, type Vehicle } from '../api/client'
+import { RoutingMap } from '../map/RoutingMap'
 import { ErrorMessage, formatNumber, Loading, Metric, Page, Panel, Status, Table, useLoad } from './Shared'
 
-function savedSimulationDefaults() {
-  // 60,000 is the smallest fleet measured to load the bundled Jakarta network.
-  // At the 100 a small grid needed, no edge on a city graph approaches its
-  // capacity, every weight stays at free flow and the two arms route
-  // identically. See DESIGN 3.1.
-  const defaults = { seed: 42, vehicles: 60000, fleet_share: 0.5 }
-  try {
-    return { ...defaults, ...JSON.parse(window.localStorage.getItem('fleetflow.simulation') ?? '{}') as Partial<typeof defaults> }
-  } catch (error) {
-    console.warn('Could not load saved simulation defaults; using defaults.', error)
-    return defaults
-  }
-}
-
-/** The controls that start and reset a run, shared by the Live Map and the runs
- *  screen so a run can be started from wherever an operator is looking. */
-function RunControls() {
-  const [saved] = useState(savedSimulationDefaults)
-  const [seed, setSeed] = useState(saved.seed)
-  const [vehicles, setVehicles] = useState(saved.vehicles)
-  const [fleetShare, setFleetShare] = useState(saved.fleet_share)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-
-  const start = async () => {
-    setBusy(true)
-    setError('')
-    try {
-      await api.start({ seed, vehicles, fleet_share: fleetShare })
-      window.localStorage.setItem('fleetflow.simulation', JSON.stringify({ seed, vehicles, fleet_share: fleetShare }))
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not start the run.') }
-    finally { setBusy(false) }
-  }
-  const reset = async () => {
-    setBusy(true)
-    try { await api.reset() } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not reset the run.') }
-    finally { setBusy(false) }
-  }
-
-  return <>
-    <div className="form-row">
-      <label className="field">Demand seed<input type="number" value={seed} onChange={(e) => setSeed(Number(e.target.value))} /></label>
-      <label className="field">Vehicles<input type="number" min="1" value={vehicles} onChange={(e) => setVehicles(Number(e.target.value))} /></label>
-      <label className="field">Fleet share<input type="number" min="0" max="1" step="0.05" value={fleetShare} onChange={(e) => setFleetShare(Number(e.target.value))} /></label>
-      <button className="button primary" onClick={() => void start()} disabled={busy}>Start comparison</button>
-      <button className="button danger" onClick={() => void reset()} disabled={busy}>Reset</button>
-    </div>
-    {error && <ErrorMessage>{error}</ErrorMessage>}
-  </>
+function formatCoordinate(point: Coordinate | null) {
+  return point ? `${point.lat.toFixed(5)}, ${point.lon.toFixed(5)}` : ''
 }
 
 export function LiveMapPage() {
-  return <Page eyebrow="Operations" title="Live Map" description="Track simulated fleet traffic and road congestion as the comparison runs.">
-    <Panel title="Run controls"><RunControls /></Panel>
-    <NetworkMap />
+  return <Page eyebrow="Operations" title="Live Fleet Map" description="See recent GPS positions from connected vehicles on the Jakarta street map.">
+    <RoutingMap />
+    <p className="muted">Locations are shown only when a connected device reports them. No demo movement or simulated traffic is displayed.</p>
   </Page>
 }
 
 export function TripsPage() {
   const trips = useLoad(api.trips)
   const vehicles = useLoad(api.vehicles)
-  const [origin, setOrigin] = useState('')
-  const [destination, setDestination] = useState('')
+  const [origin, setOrigin] = useState<Coordinate | null>(null)
+  const [destination, setDestination] = useState<Coordinate | null>(null)
   const [vehicleID, setVehicleID] = useState('')
-  const [pickOpen, setPickOpen] = useState(false)
-  const [pickTarget, setPickTarget] = useState<'origin' | 'destination'>('origin')
+  const [pickTarget, setPickTarget] = useState<'origin' | 'destination' | null>(null)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
   const create = async (event: FormEvent) => {
     event.preventDefault()
+    if (!origin || !destination) {
+      setError('Choose both trip locations on the map.')
+      return
+    }
     setError('')
     setMessage('')
     try {
-      await api.createTrip({ origin, destination, vehicle_id: vehicleID })
-      setOrigin('')
-      setDestination('')
+      await api.createTrip({
+        origin: formatCoordinate(origin),
+        destination: formatCoordinate(destination),
+        vehicle_id: vehicleID,
+      })
+      setOrigin(null)
+      setDestination(null)
       setVehicleID('')
       setMessage('Trip created.')
       await trips.reload()
@@ -88,6 +47,7 @@ export function TripsPage() {
       setError(cause instanceof Error ? cause.message : 'Could not create trip.')
     }
   }
+
   const advance = async (trip: Trip) => {
     const next = trip.status === 'planned' ? 'in_progress' : 'completed'
     try {
@@ -97,33 +57,43 @@ export function TripsPage() {
       setError(cause instanceof Error ? cause.message : 'Could not update trip.')
     }
   }
-  const pick = (id: string) => {
+
+  const pick = (point: Coordinate) => {
     if (pickTarget === 'origin') {
-      setOrigin(id)
+      setOrigin(point)
       setPickTarget('destination')
-    } else {
-      setDestination(id)
-      setPickTarget('origin')
-      setPickOpen(false)
+    } else if (pickTarget === 'destination') {
+      setDestination(point)
+      setPickTarget(null)
     }
   }
 
-  return <Page eyebrow="Operations" title="Trips" description="Create and assign trips, then follow their lifecycle.">
-    <Panel title="Create trip" action={<button className="button" onClick={() => setPickOpen((open) => !open)}>{pickOpen ? 'Hide map picker' : 'Pick locations on map'}</button>}>
-      <form className="form-row" onSubmit={create}>
-        <label className="field">Origin node<input required value={origin} onChange={(e) => setOrigin(e.target.value)} placeholder="e.g. node-1" /></label>
-        <label className="field">Destination node<input required value={destination} onChange={(e) => setDestination(e.target.value)} placeholder="e.g. node-8" /></label>
-        <label className="field">Available vehicle<select value={vehicleID} onChange={(e) => setVehicleID(e.target.value)}>
-          <option value="">Unassigned</option>{(vehicles.data ?? []).filter((v) => v.status === 'available').map((v) =>
-            <option key={v.id} value={v.id}>{v.name}</option>)}
+  return <Page eyebrow="Operations" title="Trips" description="Create a trip using real map locations and assign it to an available vehicle.">
+    <Panel title="Create trip" action={<button className="button" type="button" onClick={() => setPickTarget((target) => target ? null : 'origin')}>
+      {pickTarget ? 'Stop selecting locations' : 'Choose locations on map'}
+    </button>}>
+      <form className="form-row" onSubmit={(event) => void create(event)}>
+        <label className="field">Origin (latitude, longitude)
+          <input required readOnly value={formatCoordinate(origin)} placeholder="Choose on map" />
+        </label>
+        <label className="field">Destination (latitude, longitude)
+          <input required readOnly value={formatCoordinate(destination)} placeholder="Choose on map" />
+        </label>
+        <label className="field">Available vehicle<select value={vehicleID} onChange={(event) => setVehicleID(event.target.value)}>
+          <option value="">Unassigned</option>{(vehicles.data ?? []).filter((vehicle) => vehicle.status === 'available').map((vehicle) =>
+            <option key={vehicle.id} value={vehicle.id}>{vehicle.name}</option>)}
         </select></label>
-        <button className="button primary" type="submit">Create trip</button>
+        <button className="button primary" type="submit" disabled={!origin || !destination}>Create trip</button>
       </form>
-      {pickOpen && <div className="picker-wrap">
-        <p className="help-text">Select {pickTarget} by clicking a junction. Current: {origin || '—'} → {destination || '—'}</p>
-        <NetworkMap mode="picker" onPickNode={pick} selectedNodes={{ from: origin, to: destination }} compact />
+      {pickTarget && <div className="picker-wrap">
+        <p className="help-text">Click to choose {pickTarget}. {origin && `Origin: ${formatCoordinate(origin)}.`} {destination && `Destination: ${formatCoordinate(destination)}.`}</p>
+        <RoutingMap
+          compact
+          selectedPoints={{ from: origin ?? undefined, to: destination ?? undefined }}
+          onPickPoint={pick}
+        />
       </div>}
-      {message && <p className="success">{message}</p>}
+      {message && <p className="success" role="status">{message}</p>}
       {error && <ErrorMessage>{error}</ErrorMessage>}
     </Panel>
     <Panel title="Trip register" action={<button className="button" onClick={() => void trips.reload()}>Refresh</button>}>
@@ -143,93 +113,60 @@ export function TripsPage() {
 }
 
 export function RoutePlannerPage() {
-  const [from, setFrom] = useState('')
-  const [to, setTo] = useState('')
+  const [from, setFrom] = useState<Coordinate | null>(null)
+  const [to, setTo] = useState<Coordinate | null>(null)
   const [pickTarget, setPickTarget] = useState<'from' | 'to' | null>(null)
-  const [route, setRoute] = useState<{ edges: string[]; cost_s: number } | null>(null)
+  const [route, setRoute] = useState<OSRMRoute | null>(null)
+  const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+
   const plan = async (event: FormEvent) => {
     event.preventDefault()
+    if (!from || !to) return
+    setBusy(true)
     setError('')
     setRoute(null)
     try {
       setRoute(await api.route(from, to))
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Route request failed.')
+      setError(cause instanceof Error ? cause.message : 'OSRM route request failed.')
+    } finally {
+      setBusy(false)
     }
   }
-  const pick = (id: string) => {
+
+  const pick = (point: Coordinate) => {
     if (pickTarget === 'from') {
-      setFrom(id)
+      setFrom(point)
       setPickTarget('to')
-    } else {
-      setTo(id)
+      setRoute(null)
+    } else if (pickTarget === 'to') {
+      setTo(point)
       setPickTarget(null)
+      setRoute(null)
     }
   }
-  return <Page eyebrow="Operations" title="Route Planner" description="Compare a live-weight route between selected road-network junctions.">
+
+  return <Page eyebrow="Operations" title="Route Planner" description="Request a driving route from OSRM for two points on the Jakarta map.">
     <Panel title="Plan a route">
-      <form className="form-row" onSubmit={plan}>
-        <label className="field">Origin node<input required value={from} onChange={(e) => setFrom(e.target.value)} /></label>
-        <label className="field">Destination node<input required value={to} onChange={(e) => setTo(e.target.value)} /></label>
-        <button className="button" type="button" onClick={() => setPickTarget((v) => v ? null : 'from')}>{pickTarget ? 'Cancel map pick' : 'Pick on map'}</button>
-        <button className="button primary" type="submit">Find route</button>
+      <form className="form-row" onSubmit={(event) => void plan(event)}>
+        <div className="field location-value"><span>Origin</span><output>{formatCoordinate(from) || 'Choose a point'}</output></div>
+        <button className="button" type="button" onClick={() => setPickTarget('from')}>Choose origin</button>
+        <div className="field location-value"><span>Destination</span><output>{formatCoordinate(to) || 'Choose a point'}</output></div>
+        <button className="button" type="button" onClick={() => setPickTarget('to')}>Choose destination</button>
+        <button className="button primary" type="submit" disabled={!from || !to || busy}>{busy ? 'Routing…' : 'Find driving route'}</button>
       </form>
-      {route && <p className="success">Estimated {formatNumber(route.cost_s)} seconds · {route.edges.length} road segments</p>}
+      {route && <p className="success" role="status">
+        {route.provider} · {formatNumber(route.distance_m / 1000, 2)} km · {formatNumber(route.duration_s / 60, 1)} min estimated
+      </p>}
       {error && <ErrorMessage>{error}</ErrorMessage>}
     </Panel>
-    <NetworkMap mode={pickTarget ? 'picker' : 'live'} onPickNode={pick} selectedNodes={{ from, to }} routeEdges={route?.edges} />
-  </Page>
-}
-
-export function ComparisonRunsPage() {
-  const runs = useLoad(api.runs)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const save = async () => {
-    setBusy(true)
-    try { await api.saveRun(); await runs.reload() } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not save the run.') }
-    finally { setBusy(false) }
-  }
-  return <Page eyebrow="Operations" title="Comparison Runs" description="Run the same seeded demand through baseline and congestion-aware routing.">
-    <Panel title="Run controls">
-      <RunControls />
-      <div className="form-row">
-        <button className="button" onClick={() => void save()} disabled={busy}>Save current run</button>
-      </div>
-    </Panel>
-    <Panel title="Saved comparisons" action={<button className="button" onClick={() => void runs.reload()}>Refresh</button>}>
-      {runs.loading ? <Loading /> : runs.error ? <ErrorMessage>{runs.error}</ErrorMessage> :
-        <Table headers={['Run', 'Seed', 'Saved', 'Baseline trips', 'FleetFlow trips', 'Mode']}>
-          {(runs.data ?? []).map((run: SavedRun) => <tr key={run.id}><td>{run.id.slice(0, 8)}</td><td>{run.seed}</td>
-            <td>{new Date(run.created_at).toLocaleString()}</td><td>{run.metrics.baseline?.completed_trips ?? '—'}</td>
-            <td>{run.metrics.fleet_flow?.completed_trips ?? '—'}</td><td><Status value={run.demo ? 'demo' : 'live'} /></td></tr>)}
-        </Table>}
-      {!runs.loading && !runs.error && runs.data?.length === 0 && <p className="empty-state">No saved comparison runs.</p>}
-    </Panel>
-    {error && <ErrorMessage>{error}</ErrorMessage>}
-  </Page>
-}
-
-export function PerformancePage() {
-  const metrics = useLoad<MetricsResponse>(api.metrics, [])
-  const run = metrics.data?.run
-  return <Page eyebrow="Analytics" title="Performance" description="Simulation metrics for the current paired comparison. Results are not field measurements.">
-    {metrics.error && <ErrorMessage>{metrics.error}</ErrorMessage>}
-    {metrics.loading ? <Loading /> : run ? <>
-      <div className="metric-grid">
-        <Metric label="Demand seed" value={String(run.seed)} note={`${run.vehicles} vehicles`} />
-        <Metric label="Fleet share" value={`${formatNumber(run.fleet_share * 100)}%`} />
-        <Metric label="Baseline trips" value={String(run.baseline.completed_trips)} />
-        <Metric label="FleetFlow trips" value={String(run.fleet_flow.completed_trips)} />
-      </div>
-      <Panel title="Side-by-side results"><Table headers={['Measure', 'Baseline', 'FleetFlow']}>
-        <tr><td>Average trip time</td><td>{formatNumber(run.baseline.average_trip_s)} s</td><td>{formatNumber(run.fleet_flow.average_trip_s)} s</td></tr>
-        <tr><td>95th percentile trip</td><td>{formatNumber(run.baseline.p95_trip_s)} s</td><td>{formatNumber(run.fleet_flow.p95_trip_s)} s</td></tr>
-        <tr><td>Saturated edges</td><td>{formatNumber(run.baseline.saturated_edges_pct)}%</td><td>{formatNumber(run.fleet_flow.saturated_edges_pct)}%</td></tr>
-        <tr><td>Route changes</td><td>{formatNumber(run.baseline.route_changes, 0)}</td><td>{formatNumber(run.fleet_flow.route_changes, 0)}</td></tr>
-      </Table></Panel>
-    </> : <Panel title="No active run"><p className="muted">Start a comparison run from the Live Map to see performance metrics.</p><Link className="button primary" to="/operations">Open the live map</Link></Panel>}
+    <RoutingMap
+      route={route}
+      selectedPoints={{ from: from ?? undefined, to: to ?? undefined }}
+      onPickPoint={pickTarget ? pick : undefined}
+    />
+    {pickTarget && <p className="help-text">Click the map to set the {pickTarget === 'from' ? 'origin' : 'destination'}.</p>}
   </Page>
 }
 
@@ -237,17 +174,17 @@ export function FleetStatusPage() {
   const vehicles = useLoad(api.vehicles)
   const drivers = useLoad(api.drivers)
   const allVehicles: Vehicle[] = vehicles.data ?? []
-  return <Page eyebrow="Resources" title="Fleet Status" description="Current vehicle availability and driver assignment overview.">
+  return <Page eyebrow="Resources" title="Fleet Status" description="Current vehicle availability and driver assignments.">
     <div className="metric-grid">
       <Metric label="Vehicles" value={String(allVehicles.length)} />
-      <Metric label="Available" value={String(allVehicles.filter((v) => v.status === 'available').length)} />
-      <Metric label="On trip" value={String(allVehicles.filter((v) => v.status === 'on_trip').length)} />
+      <Metric label="Available" value={String(allVehicles.filter((vehicle) => vehicle.status === 'available').length)} />
+      <Metric label="On trip" value={String(allVehicles.filter((vehicle) => vehicle.status === 'on_trip').length)} />
       <Metric label="Drivers" value={String(drivers.data?.length ?? 0)} />
     </div>
     <Panel title="Fleet register">{vehicles.loading ? <Loading /> : vehicles.error ? <ErrorMessage>{vehicles.error}</ErrorMessage> :
       <Table headers={['Vehicle', 'Type', 'Status', 'Assigned driver']}>
-        {allVehicles.map((v) => <tr key={v.id}><td>{v.name}</td><td>{v.type}</td><td><Status value={v.status} /></td>
-          <td>{drivers.data?.find((d) => d.vehicle_id === v.id)?.name ?? 'Unassigned'}</td></tr>)}
+        {allVehicles.map((vehicle) => <tr key={vehicle.id}><td>{vehicle.name}</td><td>{vehicle.type}</td><td><Status value={vehicle.status} /></td>
+          <td>{drivers.data?.find((driver) => driver.vehicle_id === vehicle.id)?.name ?? 'Unassigned'}</td></tr>)}
       </Table>}</Panel>
   </Page>
 }
