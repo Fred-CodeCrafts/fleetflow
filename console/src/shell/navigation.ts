@@ -114,6 +114,10 @@ export const navigation: NavBranch[] = [
         icon: 'runs',
         path: '/operations/runs',
         keywords: ['runs', 'comparison', 'saved', 'baseline', 'results', 'seed'],
+        // Hidden from the sidebar at the operator's request. The screen and its
+        // route still work; only the entry point is gone, so the comparison
+        // machinery stays reachable by URL and is not deleted.
+        visible: false,
       },
     ],
   },
@@ -176,6 +180,9 @@ export const navigation: NavBranch[] = [
         icon: 'reports',
         path: '/analytics/results',
         keywords: ['results', 'ten seeds', 'evidence', 'comparison', 'table'],
+        // Hidden from the sidebar at the operator's request, like Comparison
+        // Runs. The route and screen remain.
+        visible: false,
       },
     ],
   },

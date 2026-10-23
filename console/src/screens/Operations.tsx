@@ -5,7 +5,11 @@ import { NetworkMap } from '../map/LazyNetworkMap'
 import { ErrorMessage, formatNumber, Loading, Metric, Page, Panel, Status, Table, useLoad } from './Shared'
 
 function savedSimulationDefaults() {
-  const defaults = { seed: 42, vehicles: 100, fleet_share: 0.5 }
+  // 60,000 is the smallest fleet measured to load the bundled Jakarta network.
+  // At the 100 a small grid needed, no edge on a city graph approaches its
+  // capacity, every weight stays at free flow and the two arms route
+  // identically. See DESIGN 3.1.
+  const defaults = { seed: 42, vehicles: 60000, fleet_share: 0.5 }
   try {
     return { ...defaults, ...JSON.parse(window.localStorage.getItem('fleetflow.simulation') ?? '{}') as Partial<typeof defaults> }
   } catch (error) {
@@ -14,8 +18,46 @@ function savedSimulationDefaults() {
   }
 }
 
+/** The controls that start and reset a run, shared by the Live Map and the runs
+ *  screen so a run can be started from wherever an operator is looking. */
+function RunControls() {
+  const [saved] = useState(savedSimulationDefaults)
+  const [seed, setSeed] = useState(saved.seed)
+  const [vehicles, setVehicles] = useState(saved.vehicles)
+  const [fleetShare, setFleetShare] = useState(saved.fleet_share)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  const start = async () => {
+    setBusy(true)
+    setError('')
+    try {
+      await api.start({ seed, vehicles, fleet_share: fleetShare })
+      window.localStorage.setItem('fleetflow.simulation', JSON.stringify({ seed, vehicles, fleet_share: fleetShare }))
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not start the run.') }
+    finally { setBusy(false) }
+  }
+  const reset = async () => {
+    setBusy(true)
+    try { await api.reset() } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not reset the run.') }
+    finally { setBusy(false) }
+  }
+
+  return <>
+    <div className="form-row">
+      <label className="field">Demand seed<input type="number" value={seed} onChange={(e) => setSeed(Number(e.target.value))} /></label>
+      <label className="field">Vehicles<input type="number" min="1" value={vehicles} onChange={(e) => setVehicles(Number(e.target.value))} /></label>
+      <label className="field">Fleet share<input type="number" min="0" max="1" step="0.05" value={fleetShare} onChange={(e) => setFleetShare(Number(e.target.value))} /></label>
+      <button className="button primary" onClick={() => void start()} disabled={busy}>Start comparison</button>
+      <button className="button danger" onClick={() => void reset()} disabled={busy}>Reset</button>
+    </div>
+    {error && <ErrorMessage>{error}</ErrorMessage>}
+  </>
+}
+
 export function LiveMapPage() {
   return <Page eyebrow="Operations" title="Live Map" description="Track simulated fleet traffic and road congestion as the comparison runs.">
+    <Panel title="Run controls"><RunControls /></Panel>
     <NetworkMap />
   </Page>
 }
@@ -142,26 +184,8 @@ export function RoutePlannerPage() {
 
 export function ComparisonRunsPage() {
   const runs = useLoad(api.runs)
-  const [saved] = useState(savedSimulationDefaults)
-  const [seed, setSeed] = useState(saved.seed)
-  const [vehicles, setVehicles] = useState(saved.vehicles)
-  const [fleetShare, setFleetShare] = useState(saved.fleet_share)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const start = async () => {
-    setBusy(true)
-    setError('')
-    try {
-      await api.start({ seed, vehicles, fleet_share: fleetShare })
-      window.localStorage.setItem('fleetflow.simulation', JSON.stringify({ seed, vehicles, fleet_share: fleetShare }))
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not start the run.') }
-    finally { setBusy(false) }
-  }
-  const reset = async () => {
-    setBusy(true)
-    try { await api.reset() } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not reset the run.') }
-    finally { setBusy(false) }
-  }
   const save = async () => {
     setBusy(true)
     try { await api.saveRun(); await runs.reload() } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not save the run.') }
@@ -169,15 +193,10 @@ export function ComparisonRunsPage() {
   }
   return <Page eyebrow="Operations" title="Comparison Runs" description="Run the same seeded demand through baseline and congestion-aware routing.">
     <Panel title="Run controls">
+      <RunControls />
       <div className="form-row">
-        <label className="field">Demand seed<input type="number" value={seed} onChange={(e) => setSeed(Number(e.target.value))} /></label>
-        <label className="field">Vehicles<input type="number" min="1" value={vehicles} onChange={(e) => setVehicles(Number(e.target.value))} /></label>
-        <label className="field">Fleet share<input type="number" min="0" max="1" step="0.05" value={fleetShare} onChange={(e) => setFleetShare(Number(e.target.value))} /></label>
-        <button className="button primary" onClick={() => void start()} disabled={busy}>Start comparison</button>
-        <button className="button danger" onClick={() => void reset()} disabled={busy}>Reset</button>
         <button className="button" onClick={() => void save()} disabled={busy}>Save current run</button>
       </div>
-      {error && <ErrorMessage>{error}</ErrorMessage>}
     </Panel>
     <Panel title="Saved comparisons" action={<button className="button" onClick={() => void runs.reload()}>Refresh</button>}>
       {runs.loading ? <Loading /> : runs.error ? <ErrorMessage>{runs.error}</ErrorMessage> :
@@ -188,6 +207,7 @@ export function ComparisonRunsPage() {
         </Table>}
       {!runs.loading && !runs.error && runs.data?.length === 0 && <p className="empty-state">No saved comparison runs.</p>}
     </Panel>
+    {error && <ErrorMessage>{error}</ErrorMessage>}
   </Page>
 }
 
@@ -209,7 +229,7 @@ export function PerformancePage() {
         <tr><td>Saturated edges</td><td>{formatNumber(run.baseline.saturated_edges_pct)}%</td><td>{formatNumber(run.fleet_flow.saturated_edges_pct)}%</td></tr>
         <tr><td>Route changes</td><td>{formatNumber(run.baseline.route_changes, 0)}</td><td>{formatNumber(run.fleet_flow.route_changes, 0)}</td></tr>
       </Table></Panel>
-    </> : <Panel title="No active run"><p className="muted">Start a comparison run to see live performance metrics.</p><Link className="button primary" to="/operations/runs">Open comparison runs</Link></Panel>}
+    </> : <Panel title="No active run"><p className="muted">Start a comparison run from the Live Map to see performance metrics.</p><Link className="button primary" to="/operations">Open the live map</Link></Panel>}
   </Page>
 }
 
