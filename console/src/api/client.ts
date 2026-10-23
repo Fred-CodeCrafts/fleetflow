@@ -134,9 +134,4 @@ export const api = {
     request<Vehicle>('/api/vehicles', { method: 'POST', body: JSON.stringify(vehicle) }),
   createDriver: (driver: Pick<Driver, 'name' | 'contact'>) =>
     request<Driver>('/api/drivers', { method: 'POST', body: JSON.stringify(driver) }),
-  assignDriver: (vehicleID: string, driverID: string) =>
-    request(`/api/vehicles/${encodeURIComponent(vehicleID)}/driver`, {
-      method: 'POST',
-      body: JSON.stringify({ driver_id: driverID }),
-    }),
 }

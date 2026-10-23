@@ -129,6 +129,7 @@ func TestPrototypeEndpointsAreNotRegistered(t *testing.T) {
 		{http.MethodGet, "/api/trips"},
 		{http.MethodPost, "/api/trips"},
 		{http.MethodPost, "/api/trips/example/status"},
+		{http.MethodPost, "/api/vehicles/example/driver"},
 	} {
 		t.Run(endpoint.path, func(t *testing.T) {
 			rec := httptest.NewRecorder()

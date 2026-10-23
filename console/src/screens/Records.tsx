@@ -39,7 +39,6 @@ export function DriversPage() {
   const vehicles = useLoad(api.vehicles)
   const [form, setForm] = useState({ name: '', contact: '' })
   const [error, setError] = useState('')
-  const [assigning, setAssigning] = useState(false)
   const create = async (event: FormEvent) => {
     event.preventDefault()
     setError('')
@@ -49,34 +48,19 @@ export function DriversPage() {
       await drivers.reload()
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not create driver.') }
   }
-  const assign = async (vehicleID: string, driverID: string) => {
-    setError('')
-    setAssigning(true)
-    try {
-      await api.assignDriver(vehicleID, driverID)
-      await Promise.all([drivers.reload(), vehicles.reload()])
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not update the driver assignment.')
-    } finally {
-      setAssigning(false)
-    }
-  }
   return <Page eyebrow="Resources" title="Drivers" description="Manage driver records and see their vehicle assignments.">
     <Panel title="Add driver"><form className="form-row" onSubmit={create}>
       <label className="field">Full name<input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
       <label className="field">Contact<input required value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })} /></label>
       <button className="button primary">Add driver</button>
     </form>{error && <ErrorMessage>{error}</ErrorMessage>}</Panel>
-    <Panel title="Vehicle assignments">
+    <Panel title="Current vehicle allocation">
       {vehicles.loading || drivers.loading ? <Loading /> : vehicles.error ? <ErrorMessage>{vehicles.error}</ErrorMessage> :
-        <Table headers={['Vehicle', 'Driver', 'Assignment']}>{(vehicles.data ?? []).map((vehicle) => {
+        drivers.error ? <ErrorMessage>{drivers.error}</ErrorMessage> :
+        <Table headers={['Vehicle', 'Current driver']}>{(vehicles.data ?? []).map((vehicle) => {
           const current = drivers.data?.find((driver) => driver.vehicle_id === vehicle.id)
           return <tr key={vehicle.id}><td>{vehicle.name}</td><td>{current?.name ?? 'Unassigned'}</td>
-            <td><select aria-label={`Assign driver to ${vehicle.name}`} disabled={assigning} value={current?.id ?? ''}
-              onChange={(event) => void assign(vehicle.id, event.target.value)}>
-              <option value="">Unassign</option>{(drivers.data ?? []).filter((driver) => !driver.vehicle_id || driver.vehicle_id === vehicle.id).map((driver) =>
-                <option key={driver.id} value={driver.id}>{driver.name}</option>)}
-            </select></td></tr>
+          </tr>
         })}</Table>}
     </Panel>
     <Panel title="Driver register">

@@ -127,7 +127,6 @@ func (s *Server) routes() {
 
 	s.mux.Handle("GET /api/vehicles", s.public(s.handleListVehicles))
 	s.mux.Handle("POST /api/vehicles", s.public(s.handleCreateVehicle))
-	s.mux.Handle("POST /api/vehicles/{id}/driver", s.public(s.handleAssignDriver))
 	s.mux.Handle("GET /api/drivers", s.public(s.handleListDrivers))
 	s.mux.Handle("POST /api/drivers", s.public(s.handleCreateDriver))
 	s.mux.Handle("POST /api/simulation/runs", s.public(s.handleCreateSimulationRun))
