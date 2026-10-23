@@ -10,6 +10,7 @@ bin/
 /data/networks/generated/
 /console/node_modules/
 /console/tsconfig.tsbuildinfo
+/scripts/sumo/__pycache__/
 /web/dist/*
 !/web/dist/.gitkeep
 
