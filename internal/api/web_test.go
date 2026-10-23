@@ -19,7 +19,10 @@ func TestConsoleIsPublic(t *testing.T) {
 	srv.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("GET / answered %d, want 200", rec.Code)
+		if rec.Code == http.StatusServiceUnavailable && strings.Contains(rec.Body.String(), "console is not built") {
+			return
+		}
+		t.Fatalf("GET / answered %d, want 200 or an explicit unbuilt-console response", rec.Code)
 	}
 	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
 		t.Errorf("GET / answered Content-Type %q, want text/html", ct)

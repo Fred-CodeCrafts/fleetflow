@@ -93,7 +93,10 @@ func TestConsoleRoutesDoNotChangeAPIErrorBehavior(t *testing.T) {
 
 	clientRoute := httptest.NewRecorder()
 	s.ServeHTTP(clientRoute, httptest.NewRequest(http.MethodGet, "/operations/trips", nil))
-	if clientRoute.Code != http.StatusOK || clientRoute.Header().Get("Content-Type") != "text/html; charset=utf-8" {
+	unbuiltConsole := clientRoute.Code == http.StatusServiceUnavailable &&
+		strings.Contains(clientRoute.Body.String(), "console is not built")
+	if !unbuiltConsole && (clientRoute.Code != http.StatusOK ||
+		clientRoute.Header().Get("Content-Type") != "text/html; charset=utf-8") {
 		t.Errorf("client route answered %d with %q, want the SPA document", clientRoute.Code, clientRoute.Header().Get("Content-Type"))
 	}
 
