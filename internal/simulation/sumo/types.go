@@ -1,0 +1,72 @@
+package sumo
+
+import (
+	"errors"
+	"fmt"
+	"time"
+)
+
+const (
+	maxVehicles     = 500
+	maxSeed         = 2147483647
+	maxDepartureWin = 24 * 60 * 60
+)
+
+var errScenarioInvalid = errors.New("invalid SUMO scenario")
+
+type Scenario struct {
+	Seed             int64
+	Vehicles         int
+	DepartureWindowS int
+}
+
+func (s Scenario) Validate() error {
+	if s.Seed < 0 || s.Seed > maxSeed {
+		return fmt.Errorf("%w: seed must be between 0 and %d", errScenarioInvalid, maxSeed)
+	}
+	if s.Vehicles < 1 || s.Vehicles > maxVehicles {
+		return fmt.Errorf("%w: vehicles must be between 1 and %d", errScenarioInvalid, maxVehicles)
+	}
+	if s.DepartureWindowS < 60 || s.DepartureWindowS > maxDepartureWin {
+		return fmt.Errorf("%w: departure window must be between 60 and %d seconds", errScenarioInvalid, maxDepartureWin)
+	}
+	return nil
+}
+
+type TripStatus string
+
+const (
+	TripRunning   TripStatus = "running"
+	TripCompleted TripStatus = "completed"
+)
+
+type Trip struct {
+	ID        string     `json:"id"`
+	Status    TripStatus `json:"status"`
+	DepartS   float64    `json:"depart_s"`
+	ArrivalS  *float64   `json:"arrival_s,omitempty"`
+	DurationS float64    `json:"duration_s"`
+	DistanceM float64    `json:"distance_m"`
+	CO2Kg     float64    `json:"co2_kg"`
+	FuelKg    float64    `json:"fuel_kg"`
+}
+
+type Position struct {
+	TimeS     float64 `json:"time_s"`
+	Longitude float64 `json:"longitude"`
+	Latitude  float64 `json:"latitude"`
+}
+
+type Track struct {
+	VehicleID string     `json:"vehicle_id"`
+	Positions []Position `json:"positions"`
+}
+
+type Result struct {
+	SUMOVersion string    `json:"sumo_version"`
+	Seed        int64     `json:"seed"`
+	StartedAt   time.Time `json:"started_at"`
+	FinishedAt  time.Time `json:"finished_at"`
+	Trips       []Trip    `json:"trips"`
+	Tracks      []Track   `json:"tracks"`
+}
