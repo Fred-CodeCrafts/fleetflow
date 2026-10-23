@@ -77,7 +77,8 @@ their attribution is displayed on the map.
 ## Operations
 
 - **Live Map** shows only recently reported GPS locations. It starts empty until
-  a connected device sends positions.
+  a connected device sends positions. Its separate **Demo preview** mode shows
+  clearly labeled static sample points; these are not GPS reports.
 - **Trips** lets dispatchers choose actual map coordinates and assign an
   available vehicle.
 - **Route Planner** sends the selected coordinates to OSRM and draws the returned
