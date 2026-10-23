@@ -86,35 +86,6 @@ foreach ($seed in $driverSeeds) {
     $drivers += $driver
 }
 
-$tripData = Invoke-FleetFlowApi -Method 'Get' -Path '/api/trips' -Body $null
-$trips = @($tripData.trips)
-$tripSeeds = @(
-    @{
-        origin = 'DEMO - Monas, Jakarta (-6.1754, 106.8272)'
-        destination = 'DEMO - Gelora Bung Karno, Jakarta (-6.2186, 106.8025)'
-        status = 'planned'
-    },
-    @{
-        origin = 'DEMO - Kota Tua, Jakarta (-6.1352, 106.8133)'
-        destination = 'DEMO - Bundaran HI, Jakarta (-6.1945, 106.8229)'
-        status = 'planned'
-    }
-)
-foreach ($seed in $tripSeeds) {
-    $found = @($trips | Where-Object {
-        $_.origin -eq $seed.origin -and $_.destination -eq $seed.destination
-    })
-    if ($found.Count -gt 1) {
-        throw "Multiple trips already match '$($seed.origin)' to '$($seed.destination)'; refusing to seed duplicates."
-    }
-    if ($found.Count -eq 1) {
-        $trip = $found[0]
-    } else {
-        $trip = Invoke-FleetFlowApi -Method 'Post' -Path '/api/trips' -Body $seed
-    }
-    $trips += $trip
-}
-
 Write-Output "Seeded demo fleet records at $BaseUrl."
-Write-Output 'Created or reused 3 demo vehicles, 2 demo drivers, and 2 planned trips.'
+Write-Output 'Created or reused 3 demo vehicles and 2 demo drivers.'
 Write-Output 'No GPS positions were generated. DEMO records are sample data, not live fleet activity.'

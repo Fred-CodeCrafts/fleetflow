@@ -12,17 +12,6 @@ export interface Driver {
   vehicle_id?: string
 }
 
-export interface Trip {
-  id: string
-  origin: string
-  destination: string
-  vehicle_id?: string
-  status: string
-  started_at: string | null
-  finished_at: string | null
-  duration_s: number | null
-}
-
 export interface SimulationScenario {
   seed: number
   vehicles: number
@@ -125,7 +114,6 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   vehicles: async () => (await request<{ vehicles: Vehicle[] }>('/api/vehicles')).vehicles,
   drivers: async () => (await request<{ drivers: Driver[] }>('/api/drivers')).drivers,
-  trips: async () => (await request<{ trips: Trip[] }>('/api/trips')).trips,
   simulationRuns: async () => (await request<{ runs: SimulationRun[] }>('/api/simulation/runs')).runs,
   simulationRun: (id: string) =>
     request<SimulationRun>(`/api/simulation/runs/${encodeURIComponent(id)}`),
@@ -150,12 +138,5 @@ export const api = {
     request(`/api/vehicles/${encodeURIComponent(vehicleID)}/driver`, {
       method: 'POST',
       body: JSON.stringify({ driver_id: driverID }),
-    }),
-  createTrip: (trip: Pick<Trip, 'origin' | 'destination' | 'vehicle_id'>) =>
-    request<Trip>('/api/trips', { method: 'POST', body: JSON.stringify(trip) }),
-  tripStatus: (id: string, status: string) =>
-    request<Trip>(`/api/trips/${encodeURIComponent(id)}/status`, {
-      method: 'POST',
-      body: JSON.stringify({ status }),
     }),
 }
