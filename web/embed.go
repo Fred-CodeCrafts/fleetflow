@@ -31,7 +31,7 @@ func serve(w http.ResponseWriter, r *http.Request) {
 		requestPath = "index.html"
 	}
 
-	file := "dist/" + requestPath
+	file := "dist/build/" + requestPath
 	info, err := fs.Stat(content, file)
 	if err == nil && !info.IsDir() {
 		writeAsset(w, requestPath, file)
@@ -45,7 +45,7 @@ func serve(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	writeAsset(w, "index.html", "dist/index.html")
+	writeAsset(w, "index.html", "dist/build/index.html")
 }
 
 func writeAsset(w http.ResponseWriter, name, file string) {

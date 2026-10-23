@@ -74,7 +74,7 @@ func TestHandlerServesAssetsReferencedByViteIndex(t *testing.T) {
 		t.Skip("console assets are not built; run npm run build from console/")
 	}
 
-	index, err := content.ReadFile("dist/index.html")
+	index, err := content.ReadFile("dist/build/index.html")
 	if err != nil {
 		t.Fatalf("reading Vite index: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestHandlerServesModuleWorkerAsJavaScript(t *testing.T) {
 		t.Skip("console assets are not built; run npm run build from console/")
 	}
 
-	assets, err := fs.ReadDir(content, "dist/assets")
+	assets, err := fs.ReadDir(content, "dist/build/assets")
 	if err != nil {
 		t.Fatalf("reading embedded assets: %v", err)
 	}
@@ -122,7 +122,7 @@ func TestHandlerServesModuleWorkerAsJavaScript(t *testing.T) {
 
 func consoleBuilt(t *testing.T) bool {
 	t.Helper()
-	_, err := fs.Stat(content, "dist/index.html")
+	_, err := fs.Stat(content, "dist/build/index.html")
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("checking embedded console entry: %v", err)
 	}

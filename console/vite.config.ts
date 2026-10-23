@@ -1,14 +1,14 @@
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 
-// The console builds into ../web/dist, which is what go:embed ships inside the
+// The console builds into ../web/dist/build, which is what go:embed ships inside the
 // binary. Keeping the output inside the module is what lets `go run` serve the
 // built console with no Node on the host (PRD US-8, one command).
 export default defineConfig({
   plugins: [react()],
   base: '/',
   build: {
-    outDir: '../web/dist',
+    outDir: '../web/dist/build',
     emptyOutDir: true,
     sourcemap: false,
     // Keep MapLibre in a separate chunk so the shell can load before the map.
