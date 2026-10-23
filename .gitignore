@@ -7,6 +7,7 @@
 bin/
 /fleetflow
 /data/osrm/
+/data/networks/generated/
 /console/node_modules/
 /console/tsconfig.tsbuildinfo
 /web/dist/*
