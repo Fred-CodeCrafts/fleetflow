@@ -102,6 +102,7 @@ tr:last-child td { border-bottom: 0; }
 .palette-results small { margin-left: auto; color: #99a3a6; font-size: 10px; }
 .network-map { width: 100%; height: min(66vh,680px); min-height: 420px; overflow: hidden; border: 1px solid #e5eaea; border-radius: 7px; background: #e9efed; }
 .network-map.compact { height: 380px; min-height: 300px; }
+.map-mode-controls { display: flex; flex-wrap: wrap; gap: 8px; }
 .map-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .map-toolbar select { min-height: 32px; padding: 0 7px; border: 1px solid #dce4e5; border-radius: 5px; color: #4d5b5e; background: white; font-size: 11px; }
 .map-toggle { display: inline-flex; align-items: center; gap: 4px; color: #647174; font-size: 10px; white-space: nowrap; }
@@ -112,6 +113,7 @@ tr:last-child td { border-bottom: 0; }
 .legend-road { display: inline-block; width: 16px; height: 4px; border-radius: 2px; }
 .legend-road.route { background: #16866c; }
 .legend-road.vehicle { width: 9px; height: 9px; border-radius: 50%; background: #4263eb; }
+.legend-road.demo-vehicle { width: 9px; height: 9px; border-radius: 50%; background: #d05c48; }
 .map-disclaimer { margin: 8px 0 0; color: #939ea1; font-size: 10px; }
 .location-value { min-width: 180px; }
 .location-value output { display: block; min-height: 36px; padding: 10px; border: 1px solid #dce4e5; border-radius: 6px; color: var(--ink); background: #f9fbfb; font-size: 12px; }

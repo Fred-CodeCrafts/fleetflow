@@ -8,9 +8,23 @@ function formatCoordinate(point: Coordinate | null) {
 }
 
 export function LiveMapPage() {
-  return <Page eyebrow="Operations" title="Live Fleet Map" description="See recent GPS positions from connected vehicles on the Jakarta street map.">
-    <RoutingMap />
-    <p className="muted">Locations are shown only when a connected device reports them. No demo movement or simulated traffic is displayed.</p>
+  const [demoMode, setDemoMode] = useState(false)
+  return <Page eyebrow="Operations" title="Live Fleet Map" description="See GPS positions reported by connected vehicles on the Jakarta street map.">
+    <div className="map-mode-controls" role="group" aria-label="Map position source">
+      <button className={`button ${!demoMode ? 'primary' : ''}`} type="button"
+        aria-pressed={!demoMode} onClick={() => setDemoMode(false)}>Live GPS</button>
+      <button className={`button ${demoMode ? 'primary' : ''}`} type="button"
+        aria-pressed={demoMode} onClick={() => setDemoMode(true)}>Demo preview</button>
+    </div>
+    {demoMode && <div className="notice" role="status">
+      <strong>Demo preview:</strong> these static sample points are illustrative only, not real vehicles or GPS reports.
+    </div>}
+    <RoutingMap positionMode={demoMode ? 'demo' : 'live'} />
+    <p className="muted">
+      {demoMode
+        ? 'Switch back to Live GPS to see only positions actually reported by connected devices.'
+        : 'No positions appear until a connected device reports GPS data.'}
+    </p>
   </Page>
 }
 
