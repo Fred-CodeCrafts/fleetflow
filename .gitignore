@@ -6,6 +6,7 @@
 *.dylib
 bin/
 /fleetflow
+/data/osrm/
 /console/node_modules/
 /console/tsconfig.tsbuildinfo
 
