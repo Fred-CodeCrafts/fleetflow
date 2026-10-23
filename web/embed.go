@@ -40,7 +40,8 @@ func serve(w http.ResponseWriter, r *http.Request) {
 
 	// Missing fingerprinted assets and paths with extensions are real 404s.
 	// Other paths are client-side routes and need the SPA entry document.
-	if strings.HasPrefix(requestPath, "assets/") || path.Ext(requestPath) != "" ||
+	if requestPath != "index.html" &&
+		(strings.HasPrefix(requestPath, "assets/") || path.Ext(requestPath) != "") ||
 		(err != nil && !errors.Is(err, fs.ErrNotExist)) {
 		http.NotFound(w, r)
 		return
