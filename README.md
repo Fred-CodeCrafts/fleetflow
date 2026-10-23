@@ -1,349 +1,128 @@
 # FleetFlow
 
-> An open-source fleet navigation platform with dynamic weights.
+FleetFlow is a fleet operations console for Jakarta. Dispatchers can manage
+vehicles, drivers, and trips; plan driving routes through OSRM; and see GPS
+positions that connected vehicles have actually reported.
 
-FleetFlow coordinates fleet vehicle routing in real time by dynamically re-weighting road networks based on live observed speeds, preventing fleets from congesting their own routes.
+The console uses MapLibre GL with OpenFreeMap tiles. FleetFlow does not generate
+traffic, run a simulator, compare routing experiments, or invent vehicle
+positions or emissions measurements.
 
-## Overview
+## Routing and map data
 
-Traditional navigation systems and static shortest-path routers direct vehicles along the exact same optimal corridors, often causing self-induced congestion when multiple fleet vehicles share the road network. FleetFlow solves this by:
+Route calculations are delegated to the OSRM driving profile. The application
+does not run its own shortest-path implementation. The map is rendered from
+OpenFreeMap; the local OSRM service routes over a Jakarta/Jabodetabek extract of
+OpenStreetMap roads.
 
-1. **Ingesting live speed reports** from fleet vehicles.
-2. **Smoothing congestion states** using exponential moving averages per edge.
-3. **Decaying stale road weights** toward free-flow conditions when roads lack recent reports.
-4. **Publishing immutable metric snapshots** via atomic pointer swaps so route queries (Dijkstra) never block on weight updates.
-5. **Evaluating side by side** against a static baseline router using a deterministic mesoscopic simulator and an embedded React console.
+The first-time dataset setup downloads Geofabrik's Java PBF (about 856 MB at the
+time this workflow was added), clips it to a buffered Jakarta metropolitan
+bounding box, and builds the OSRM MLD data files. Allow several gigabytes of
+free disk space and time for preprocessing. The generated PBF and OSRM files
+stay under `data/osrm/`, which is ignored by Git.
 
-## Console
+Requirements: Docker Desktop, PowerShell, Go 1.25.5+, and Node.js/npm.
 
-The operations console includes a live network map, trip and fleet records,
-comparison runs, emissions estimates, and separate pages for each settings group.
+```powershell
+# From the repository root. First run downloads the OSM PBF and builds OSRM files.
+.\scripts\osrm\build-jakarta.ps1
 
-![FleetFlow live map console](docs/console.png)
+# Start OSRM after the data build has completed.
+docker compose --profile routing up -d osrm
+
+# Build and embed the console.
+Set-Location console
+npm ci
+npm run build
+Set-Location ..
+
+# The Go app defaults to http://127.0.0.1:5000 for OSRM.
+go run ./cmd/fleetflow
+```
+
+Open `http://localhost:8080`. For console-only development, start the Go service
+in one terminal and run `npm run dev` from `console/` in another; Vite proxies
+API requests to port 8080.
+
+To run the Go app in a container while OSRM is running on the host, set
+`OSRM_URL=http://host.docker.internal:5000`. If both are services in the same
+Compose network, use `OSRM_URL=http://osrm:5000`.
+
+The Java extract includes Jakarta and surrounding routes; the configured
+bounding box is a routing buffer, not an official administrative border. To
+change coverage, update the `--bbox` in `scripts/osrm/build-jakarta.ps1` and
+rebuild the dataset with `-Force`.
+
+OpenStreetMap data is licensed under ODbL. Attribution: © OpenStreetMap
+contributors. OpenFreeMap basemap tiles require an internet connection and
+their attribution is displayed on the map.
+
+## Operations
+
+- **Live Map** shows only recently reported GPS locations. It starts empty until
+  a connected device sends positions.
+- **Trips** lets dispatchers choose actual map coordinates and assign an
+  available vehicle.
+- **Route Planner** sends the selected coordinates to OSRM and draws the returned
+  route geometry, distance, and estimated duration.
+- **Vehicles** and **Drivers** manage fleet records and assignments.
+- **General Settings** reports app health and the routing/map providers.
+
+There is no simulation-run or comparison screen. Emissions tracking is not part
+of this implementation; do not treat a model estimate as measured output.
+
+## API
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /healthz` | Process liveness |
+| `GET /readyz` | OSRM availability and database readiness |
+| `POST /api/route` | Route coordinates with OSRM; returns GeoJSON coordinates, distance, and duration |
+| `GET /api/locations` | Recent GPS positions |
+| `POST /api/locations` | Submit a vehicle GPS position (API key required) |
+| `GET /api/vehicles`, `POST /api/vehicles` | Vehicle records |
+| `POST /api/vehicles/{id}/driver` | Assign or unassign a driver |
+| `GET /api/drivers`, `POST /api/drivers` | Driver records |
+| `GET /api/trips`, `POST /api/trips` | Trip records |
+| `POST /api/trips/{id}/status` | Advance a trip through its lifecycle |
+
+Example route request:
+
+```json
+{
+  "from": { "lat": -6.2088, "lon": 106.8456 },
+  "to": { "lat": -6.1754, "lon": 106.8272 }
+}
+```
+
+Example authenticated vehicle position:
+
+```sh
+curl -sS -X POST http://localhost:8080/api/locations \
+  -H "Authorization: Bearer $FLEETFLOW_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"vehicle_id":"van-17","lat":-6.2088,"lon":106.8456,"speed_mps":8.5}'
+```
+
+Issue an API key with `go run ./cmd/fleetflow -issue-key "vehicle integration"`.
+Key issuance requires PostgreSQL; plaintext is printed once and only its hash
+is stored.
+
+## Persistence
+
+Fleet records use PostgreSQL when `DATABASE_URL` or the `POSTGRES_*` settings
+are configured. Without a database, records and API keys use in-memory stores
+and are lost when the service restarts. Start the local database with
+`docker compose up -d`; apply migrations with
+`docker compose --profile tools run --rm migrate`.
+
+Copy `.env.example` to `.env` for the Compose database values. Set `OSRM_URL`
+in the environment of the Go process; local shell processes do not load `.env`
+automatically.
 
 ## Status
 
-**MVP in active development** for the **Road To DevFest Jakarta 2026** competition.
-
-- **Initial Commit:** 17 October 2026
-- **Target Deployment:** Google Cloud Run (single instance, in-memory state)
-- **License:** Apache License 2.0
-
-This is a **production-shaped architecture with an MVP feature set**, not a
-production-ready service. Layered code, versioned migrations, hashed API keys, typed
-errors, health and readiness endpoints, graceful shutdown, validated config and tests
-in CI are in place. Backups, API key rotation, tenant separation, persisted congestion
-state, multi-instance support and a security review are not, and the results are
-simulation only.
-
-The service is containerized with a multi-stage Dockerfile, but **has not been
-deployed to Cloud Run** and has no public URL yet (TASK T58).
-
-## Background & Originality Notice
-
-FleetFlow builds conceptually on academic research and an earlier thesis prototype (`sumo-routing`). However:
-- **All code in this repository is written fresh from scratch starting 17 October 2026.**
-- No code, files, or text were copied from earlier prototypes or third-party repositories (`sumo-routing`, `fleetbase`).
-- The earlier thesis prototype serves solely as background conceptual motivation.
-
-## Project Architecture
-
-FleetFlow is designed as a single, self-contained Go binary:
-
-- `cmd/fleetflow`: Server entrypoint, flag parsing, and wiring.
-- `internal/graph`: Road network topology, parsing, and derived capacity/free-flow metrics.
-- `internal/weights`: Per-edge state, moving-average smoothing, hold-and-decay logic, and BPR-inspired cost calculations.
-- `internal/engine`: Customizer goroutine, atomic metric snapshots, and Dijkstra shortest-path router behind an interface.
-- `internal/sim`: Deterministic mesoscopic simulator with background traffic, fleet vehicles, and hysteresis rerouting.
-- `internal/api`: HTTP endpoints for routing, simulation, network import, emissions, streaming, and fleet records.
-- `console`: React, TypeScript, MapLibre GL and deck.gl operator console.
-- `web`: Vite production assets embedded in the Go binary via `go:embed`.
-
-## Quick Start (Local Development)
-
-### Prerequisites
-
-- [Go](https://golang.org/) 1.25+
-- [Git](https://git-scm.com/)
-
-### Running Locally
-
-```bash
-# Clone the repository
-git clone https://github.com/Fred-CodeCrafts/fleetflow.git
-cd fleetflow
-
-# Run the service with the demo scenario enabled
-go run ./cmd/fleetflow -demo
-```
-
-Once running, open `http://localhost:8080/operations/runs` and start a comparison.
-
-The console and Go service can also be built and run together in Docker:
-
-```sh
-docker build -t fleetflow:local .
-docker run --rm -p 8080:8080 fleetflow:local
-```
-
-The image starts the demo configuration and listens on `PORT` (8080 by default).
-Fleet records are in memory unless PostgreSQL settings are provided. The map's
-OpenFreeMap basemap requires an internet connection; its attribution is shown
-in the map.
-
-For console-only development, start the Go service on port 8080 and run
-`npm ci && npm run dev` from `console/`; Vite proxies API requests to that service.
-
-`-demo` is what serves `POST /api/sim/start` and `POST /api/sim/reset`. Without it
-those two routes answer `404` and the console cannot begin a run,
-because it is the flag that asserts no live vehicles report to this process — which
-is what makes it safe for a run to clear the engine's weights when it starts.
-
-## API Endpoints
-
-Every endpoint below is registered today. The two simulation controls are the only
-conditional ones: they exist only under `-demo`.
-
-- `GET /healthz` - Liveness probe
-- `GET /readyz` - Readiness probe: graph loaded, database reachable when configured
-- `POST /api/reports` - Ingest vehicle speed reports (requires an API key)
-- `POST /api/route` - Query a route between origin and destination (requires an API key)
-- `POST /api/sim/start` - Start a comparison run (`-demo` only; `409` while one is going)
-- `POST /api/sim/reset` - Stop and clear the run (`-demo` only)
-- `GET /api/stream` - Server-Sent Events telemetry stream for the console
-- `GET /api/metrics` - Live metrics, including the comparison arms and query latency
-- `GET /api/graph` - Road network, including junctions and shaped edge geometry
-- `GET /api/network` - Active network name, source, size and geographic bounds
-- `POST /api/network` - Import a SUMO `.net.xml` network (blocked during a run)
-- `POST /api/network/build` - Build a network from a map area, optionally loading it
-- `GET /api/network/build/download` - The last network built from an area
-- `GET /api/emissions` - Run emissions comparison and optional per-trip estimate
-- `GET /api/vehicles`, `POST /api/vehicles` - Fleet vehicle records
-- `POST /api/vehicles/{id}/driver` - Assign or unassign a vehicle's driver
-- `GET /api/drivers`, `POST /api/drivers` - Driver records
-- `GET /api/trips`, `POST /api/trips` - Trip records, with `POST /api/trips/{id}/status` to advance one
-- `GET /api/runs`, `POST /api/runs` - Saved comparison runs
-
-### Emissions estimates
-
-`GET /api/emissions` returns CO₂, NOx, CO, HC, PM and estimated fuel for each
-arm of the current comparison, plus baseline-minus-FleetFlow savings. Add
-`?class=passenger_car&distance=12&speed=28` for a single-trip estimate;
-`light_commercial` is also supported. The estimate evaluates a speed-dependent
-COPERT-style curve per trip using that trip's traveled distance and duration,
-then sums results by arm. It excludes cold starts, gradient, payload and ambient
-temperature, so these are consistent simulation estimates, not measured
-tailpipe emissions or a certified inventory.
-
-### API keys
-
-The two ingest endpoints require a key, because they are the ones an outside system
-calls. Issue one with the service's own command; it stores the key, prints it once,
-and exits without serving:
-
-```sh
-go run ./cmd/fleetflow -issue-key "dispatch integration"
-# flf_9Qx...   <- the only time this is shown
-```
-
-Only the SHA-256 digest is stored, so the key cannot be read back afterwards, and it
-is never written to a log. If you lose it, issue another one: there is nothing to
-recover, and nothing to look up. Present it as a bearer token:
-
-```sh
-# submit a vehicle report
-curl -sS -X POST http://localhost:8080/api/reports \
-  -H "Authorization: Bearer $FLEETFLOW_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"vehicle_id":"v1","edge_id":"e_AB","speed_mps":13.9}'
-
-# ask for a route
-curl -sS -X POST http://localhost:8080/api/route \
-  -H "Authorization: Bearer $FLEETFLOW_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"from_node":"A","to_node":"D"}'
-
-# ask for a route and price the path already being driven, so the two costs
-# come from one snapshot and can be compared
-curl -sS -X POST http://localhost:8080/api/route \
-  -H "Authorization: Bearer $FLEETFLOW_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"from_node":"A","to_node":"D","current_edges":["e_AB","e_BD"]}'
-# {"edges":["e_AC","e_CD"],"cost_s":46.1,"metric_version":3,"current_cost_s":72.0}
-```
-
-`current_edges` must be a chain that starts at `from_node`; anything else returns
-`400` and computes nothing.
-
-A missing or wrong key returns `401` with `{"code":"unauthenticated"}` and does
-nothing else: no report reaches the weights, and no route is computed. The fleet
-record endpoints (`/api/vehicles`, `/api/drivers`, `/api/trips`, `/api/runs`) and
-the simulation controls stay open, because they belong to the console.
-
-#### The report format
-
-A report says how fast one vehicle is going on one edge. Every field is checked
-before anything is written, and every refusal names what it refused:
-
-| field | type | required | accepted |
-|---|---|---|---|
-| `vehicle_id` | string | yes | non-empty; it is also the vehicle the console shows as live |
-| `edge_id` | string | yes | an edge from `GET /api/graph` |
-| `speed_mps` | number | yes | greater than 0 and at most 90 (324 km/h, inclusive) |
-| `ts` | integer | no | Unix milliseconds, positive, at most 5 minutes ahead of this server's clock. Omit it to mean "now" |
-
-A field the payload does not define is refused rather than ignored, so a
-misspelled key is an error instead of a report that looks accepted and changes
-nothing — and the same goes for a second JSON object after the first.
-
-| status | code | meaning |
-|---|---|---|
-| `401` | `unauthenticated` | missing, malformed or unknown key; nothing is read and nothing is written |
-| `400` | `vehicle_id_required`, `edge_id_required` | a required field was empty |
-| `400` | `speed_out_of_range` | zero, negative, not a number, or above 90 m/s |
-| `400` | `ts_invalid`, `ts_in_future` | not a positive Unix-millisecond time, or dated in the future |
-| `400` | `empty_body`, `malformed_json`, `unknown_field`, `bad_field_type`, `trailing_data` | the body is not one JSON object of the shape above |
-| `404` | `edge_not_found` | `edge_id` is not in the graph |
-| `413` | `body_too_large` | over 64 KiB |
-| `503` | `engine_unavailable` | this process is running without an engine |
-
-The future bound is not pedantry. A report's timestamp is kept on the edge, and
-decay only resumes once the hold time has passed since it, so a single report
-dated next year would hold that road at its last congestion until next year.
-
-### Simulation runs
-
-`POST /api/sim/start` drives one seeded demand through both engines at once — the
-static baseline and the dynamic one — and answers `202` with the run that is now
-going; `POST /api/sim/reset` stops it and clears it.
-
-```sh
-# start the demo scenario: a 30 second morning peak of 2,000 vehicles, half of
-# them on FleetFlow
-curl -sS -X POST http://localhost:8080/api/sim/start \
-  -H "Content-Type: application/json" \
-  -d '{"seed":1}'
-# {"seed":1,"vehicles":2000,"fleet_share":0.5,"step_s":1,"window_s":30,"running":true}
-
-curl -sS -X POST http://localhost:8080/api/sim/reset
-```
-
-Every field is optional and defaults to the demo configuration
-(`seed`, `vehicles`, `fleet_share`, `step_s`, `window_s`, `reroute_every_s`,
-`reroute_threshold`); a value out of range comes back as `400` with a named code
-and changes nothing. Starting a run replaces the one that was going.
-
-The departure window is the field worth knowing about: 2,000 vehicles spread over
-ten minutes barely meet each other, and a network nobody fills is one where static
-and dynamic routing make identical choices. The 30 s default is a peak, and it is
-what gives the comparison something to measure. `docs/results.md` has the numbers,
-including the seeds where FleetFlow does not win.
-
-A run's fleet vehicles reach the routing engine over the public API, so simulated
-traffic is validated, authenticated and measured like an external client. That
-needs a credential the process can present as its own, and it mints one at startup:
-a random key, kept hashed in memory, never written to the database, the environment
-or a log. There is nothing to issue and nothing to configure.
-
-```sh
-go run ./cmd/fleetflow -demo
-```
-
-`-demo` is what serves `/api/sim/start` and `/api/sim/reset`; without it those routes
-are 404. A run takes the engine's weights — it clears them at start and then feeds
-them — so the flag is an assertion that nothing live is reporting to this process.
-The deployed demo passes it; a real deployment does not.
-
-### Saving a run
-
-`POST /api/runs` keeps the run that is going, and `GET /api/runs` lists what has
-been kept. The endpoint takes no body: the server captures the seed, the demand
-and the metrics from the run itself, so what is stored is what ran. A save with
-no run going is `409` with `{"code":"no_run"}`, and a save that carries a body is
-refused rather than silently ignored.
-
-```sh
-curl -sS -X POST http://localhost:8080/api/runs
-# {"id":"run_d9a4...","seed":1,"config":{...},"metrics":{...},"created_at":"..."}
-
-curl -sS "http://localhost:8080/api/runs?limit=10"
-# {"runs":[...]}
-```
-
-Saved runs live in Postgres when a database is configured, so they are still
-there after a restart; without one they are in memory and lost with the process.
-
-### Watching a run
-
-`GET /api/stream` is one Server-Sent Events connection carrying three kinds of
-event, each at the cadence its contents change at: `vehicles` five times a second,
-`edges` and `metrics` once a second. The body of `metrics` is exactly what
-`GET /api/metrics` answers, so the same shape is parsed whether you ask once or
-watch.
-
-```sh
-# watch a run: -N keeps curl from buffering the stream
-curl -sS -N http://localhost:8080/api/stream
-# event: metrics
-# data: {"engine":{"metric_version":3,...},"run":{...}}
-# event: edges
-# data: {"metric_version":3,"edges":[{"edge_id":"e_AB","cost_s":10.2,"free_flow_s":10}]}
-# event: vehicles
-# data: {"now_s":42,"running":true,"vehicles":[{"id":"v0007","kind":"simulated",...}]}
-```
-
-Every vehicle is labelled with where its position came from. A simulated vehicle
-names the panel it belongs to (`arm`: `baseline` or `fleetflow`); a vehicle that has
-reported through `POST /api/reports` in the last minute appears as `live`, drawn on
-the edge it reported on. The report carries a speed rather than a coordinate, so
-that is the edge rather than a point — drawing a position the API never received
-would be worse than drawing the edge it did.
-
-A run advances only while somebody is watching the stream, so `start` followed by
-`stream` is the whole sequence; a run nobody is watching waits where it is rather
-than spending CPU on a demo nobody can see. That lets the service use Cloud Run's
-default CPU allocation, which is throttled outside a request.
-
-### Reading the logs
-
-The process writes one structured log line per event, through `log/slog` from the
-standard library. `ENV=production` writes JSON for a log collector; anywhere else
-writes readable text. `LOG_LEVEL` sets the floor (`debug`, `info`, `warn`, `error`).
-
-A comparison run accounts for itself in three lines, and the third is the one worth
-knowing:
-
-```
-msg="comparison run started" seed=5 vehicles=2000 fleet_share=0.5 fleet_traffic_over_the_api=true demo=true
-msg="comparison run finished" reason=settled steps=75 baseline_average_s=34.43 fleetflow_average_s=34.43 \
-    api_route_calls=122 api_report_calls=1010 api_route_failures=0 api_report_failures=0
-msg="comparison run reset" seed=5 steps=12
-```
-
-The `api_*` counts are what the trip metrics cannot tell you. Both arms finish their
-vehicles and report trip times even when every HTTP call to the API failed, because
-they are measured on whatever weights exist — so a broken wire looks like an ordinary
-run with ordinary numbers. A run whose calls did not land says so at `WARN`, in words,
-instead: `comparison run finished without sending any traffic through the api`. Only
-the first failure of each kind is logged with its detail, since a broken API fails on
-every vehicle of every tick; the totals are in the finish line.
-
-## Deployment
-
-FleetFlow targets **Google Cloud Run** with `max-instances=1` and `min-instances=1`.
-The checked-in multi-stage `Dockerfile` builds the console, embeds it in the Go
-binary, and starts the demo on `$PORT`. The image can be tested locally using the
-Docker commands above.
-
-**Cloud Run deployment is not complete** (TASK T58): there is no public URL or
-configured production PostgreSQL instance yet. A deployment must provide a
-`DATABASE_URL` for persistent fleet records and set both the minimum and maximum
-instance count to one. The single-instance limit is required because live
-congestion state is in memory; a second instance would hold a different view of
-the network. `min-instances=1` avoids a cold start, and the simulation advances
-only while a client holds `/api/stream` open.
-
-## License
-
-This project is licensed under the [Apache License, Version 2.0](LICENSE).
-Third-party software and map data notices are in [NOTICE](NOTICE).
+FleetFlow is an MVP in active development for Road To DevFest Jakarta 2026. It
+is not production-ready: live vehicle integrations, access control for the
+operator console, backups, multi-instance support, and a verified deployment
+remain outstanding.
