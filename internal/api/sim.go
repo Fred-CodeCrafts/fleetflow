@@ -24,7 +24,13 @@ const maxRunSteps = 200_000
 
 // maxSimVehicles bounds one run, so a single request cannot ask the process to
 // build an unbounded number of vehicles.
-const maxSimVehicles = 5000
+//
+// The bound is high because the network it runs on is: the bundled Jakarta graph
+// has 461,605 vehicles of capacity, and a run that never approaches it leaves
+// every edge at free flow, which makes the two arms identical and the comparison
+// say nothing. 60,000 is the smallest fleet measured to put real load on that
+// network. See DESIGN 3.1 for the arithmetic and docs/results.md for the numbers.
+const maxSimVehicles = 60000
 
 // Error codes for a start request the endpoint refuses.
 const (

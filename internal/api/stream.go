@@ -360,26 +360,98 @@ func (r *run) picture() runSnapshot {
 	}
 }
 
+// maxDrawnVehicles bounds how many vehicle markers one arm sends in a frame.
+//
+// A frame carries both arms, so this is half of what reaches a browser. The map
+// cannot usefully draw more: at a city zoom a marker is a pixel or two, and six
+// thousand of them already overlap. What a run is judged on is the congestion
+// picture and the metrics, and both stay exact — only the markers are sampled.
+//
+// It exists because a 60,000-vehicle run would otherwise put 120,000 records on
+// the wire five times a second, which is tens of megabytes a second and a
+// browser that cannot keep up. Sampling keeps the frame the same size whatever
+// the fleet, so the console behaves the same at 2,000 vehicles and at 60,000.
+const maxDrawnVehicles = 3000
+
 // vehicles places every vehicle of both arms that is still to be drawn: one that
 // has not left yet sits at its origin, and one on the road sits along its edge.
 // Finished and unroutable vehicles are left out; the counts in the metrics frame
 // are what report them.
 func (r *run) vehicles() []streamVehicle {
-	placed := make([]streamVehicle, 0, 2*len(r.fleetflow.Vehicles()))
+	placed := make([]streamVehicle, 0, 2*maxDrawnVehicles)
 	placed = append(placed, r.armVehicles(armBaseline, r.baseline)...)
 	return append(placed, r.armVehicles(armFleetFlow, r.fleetflow)...)
 }
 
 // armVehicles places one arm's vehicles.
+//
+// When the arm has more vehicles on the road than maxDrawnVehicles, the frame is
+// budgeted: the fleet gets at most half the budget, because the fleet is what the
+// comparison measures, and the remaining places go to background traffic on an
+// even stride. An even stride rather than the first N keeps the sample from being
+// every early-departing vehicle, which would draw the fleet bunched at the origin
+// instead of moving across the map.
+//
+// The budget is a hard cap. A fleet larger than half of it is sampled like
+// anything else: the metrics carry the true counts, and the map is a picture.
 func (r *run) armVehicles(arm string, s *sim.Sim) []streamVehicle {
 	vehicles := s.Vehicles()
-	placed := make([]streamVehicle, 0, len(vehicles))
 	occupancy := s.Occupancy()
+
+	// Count what is drawable first, so the stride is decided before placing.
+	drawable, drawableFleet := 0, 0
+	for _, v := range vehicles {
+		state := v.State()
+		if state != sim.VehiclePending && state != sim.VehicleRunning {
+			continue
+		}
+		drawable++
+		if v.IsFleet() {
+			drawableFleet++
+		}
+	}
+	if drawable <= maxDrawnVehicles {
+		return r.placeVehicles(arm, s, occupancy, vehicles, 0, 0)
+	}
+
+	fleetBudget := drawableFleet
+	if fleetBudget > maxDrawnVehicles/2 {
+		fleetBudget = maxDrawnVehicles / 2
+	}
+	backgroundBudget := maxDrawnVehicles - fleetBudget
+	backgroundTotal := drawable - drawableFleet
+	fleetStride, backgroundStride := 1, 1
+	if drawableFleet > fleetBudget && fleetBudget > 0 {
+		fleetStride = (drawableFleet + fleetBudget - 1) / fleetBudget
+	}
+	if backgroundTotal > backgroundBudget && backgroundBudget > 0 {
+		backgroundStride = (backgroundTotal + backgroundBudget - 1) / backgroundBudget
+	}
+	return r.placeVehicles(arm, s, occupancy, vehicles, fleetStride, backgroundStride)
+}
+
+// placeVehicles walks an arm's vehicles and places the ones the strides select.
+// A stride of zero means "take every vehicle of that kind", which is the case
+// when the arm is small enough to draw whole.
+func (r *run) placeVehicles(arm string, s *sim.Sim, occupancy *sim.Occupancy, vehicles []*sim.Vehicle, fleetStride, backgroundStride int) []streamVehicle {
+	placed := make([]streamVehicle, 0, min(len(vehicles), maxDrawnVehicles))
+	fleetSeen, backgroundSeen := 0, 0
 
 	for _, v := range vehicles {
 		state := v.State()
 		if state != sim.VehiclePending && state != sim.VehicleRunning {
 			continue
+		}
+		if v.IsFleet() {
+			fleetSeen++
+			if fleetStride > 0 && fleetSeen%fleetStride != 0 {
+				continue
+			}
+		} else {
+			backgroundSeen++
+			if backgroundStride > 0 && backgroundSeen%backgroundStride != 0 {
+				continue
+			}
 		}
 
 		vehicle := streamVehicle{
