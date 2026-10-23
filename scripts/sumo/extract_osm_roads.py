@@ -3,15 +3,16 @@ import json
 from pathlib import Path
 
 import osmium
-from shapely.geometry import Point, shape
+from shapely.geometry import LineString, shape
 from shapely.prepared import prep
 
 
 class RoadSelector(osmium.SimpleHandler):
     def __init__(self, boundary, buffer_degrees):
         super().__init__()
-        self.boundary = prep(boundary.buffer(buffer_degrees))
-        self.bounds = self.boundary.context.bounds
+        self.expanded_boundary = boundary.buffer(buffer_degrees)
+        self.boundary = prep(self.expanded_boundary)
+        self.bounds = self.expanded_boundary.bounds
         self.way_ids = set()
         self.node_ids = set()
 
@@ -20,20 +21,24 @@ class RoadSelector(osmium.SimpleHandler):
             return
 
         references = []
-        intersects = False
+        coordinates = []
         west, south, east, north = self.bounds
         for node in way.nodes:
             references.append(node.ref)
             if not node.location.valid():
                 continue
-            if (
-                west <= node.location.lon <= east
-                and south <= node.location.lat <= north
-                and self.boundary.covers(Point(node.location.lon, node.location.lat))
-            ):
-                intersects = True
+            coordinates.append((node.location.lon, node.location.lat))
 
-        if intersects:
+        if len(coordinates) < 2:
+            return
+        min_lon = min(point[0] for point in coordinates)
+        max_lon = max(point[0] for point in coordinates)
+        min_lat = min(point[1] for point in coordinates)
+        max_lat = max(point[1] for point in coordinates)
+        bbox_intersects = not (
+            max_lon < west or min_lon > east or max_lat < south or min_lat > north
+        )
+        if bbox_intersects and self.boundary.intersects(LineString(coordinates)):
             self.way_ids.add(way.id)
             self.node_ids.update(references)
 

@@ -16,6 +16,8 @@ OSM_FIXTURE = """<?xml version="1.0" encoding="UTF-8"?>
   <node id="3" lat="-6.10" lon="106.60"/>
   <node id="4" lat="-6.20" lon="106.20"/>
   <node id="5" lat="-6.10" lon="106.30"/>
+  <node id="6" lat="-6.15" lon="106.35"/>
+  <node id="7" lat="-6.15" lon="106.75"/>
   <way id="10">
     <nd ref="1"/><nd ref="2"/><nd ref="3"/>
     <tag k="highway" v="residential"/>
@@ -23,6 +25,10 @@ OSM_FIXTURE = """<?xml version="1.0" encoding="UTF-8"?>
   <way id="20">
     <nd ref="4"/><nd ref="5"/>
     <tag k="highway" v="residential"/>
+  </way>
+  <way id="30">
+    <nd ref="6"/><nd ref="7"/>
+    <tag k="highway" v="secondary"/>
   </way>
 </osm>
 """
@@ -74,8 +80,8 @@ class ExtractOSMRoadsTests(unittest.TestCase):
 
             result = ObjectIDs()
             result.apply_file(str(destination))
-            self.assertEqual(result.nodes, {1, 2, 3})
-            self.assertEqual(result.ways, {10})
+            self.assertEqual(result.nodes, {1, 2, 3, 6, 7})
+            self.assertEqual(result.ways, {10, 30})
 
     def test_rejects_a_different_osm_relation(self):
         with tempfile.TemporaryDirectory() as directory:
