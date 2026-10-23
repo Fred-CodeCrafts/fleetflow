@@ -40,8 +40,8 @@ AI-assisted decisions are not in the current scope.
   SUMO executable or invalid network is an error, never a successful mock run.
 - A run produces inspectable generated trips, vehicle locations, completed
   trips, route geometry, and ordered delivery events.
-- Label all run-derived movement and metrics as simulation output. Keep the
-  existing static map preview visibly distinct from both simulation and GPS.
+- Label all run-derived movement and metrics as simulation output, distinct
+  from real GPS.
 - Do not add baseline-versus-dynamic experiment comparisons or AI controls.
 
 ### Deliveries, dispatch, and trip history
@@ -86,8 +86,8 @@ AI-assisted decisions are not in the current scope.
   attribution.
 - SUMO trip routes and vehicle positions come from SUMO outputs. Real GPS mode
   displays only recent authenticated position reports received by the server.
-- Keep simulation playback, real GPS, and static illustrative preview visually
-  separate, explicitly labeled, and never silently substitute one for another.
+- Keep simulation playback and real GPS visually separate and explicitly
+  labeled; never silently substitute one for another.
 - OSRM route requests return route geometry, distance, and estimated duration.
   Clearly surface unavailable/no-route failures; do not use a home-grown
   fallback.
@@ -116,7 +116,7 @@ AI-assisted decisions are not in the current scope.
 - Manual trip creation or manual vehicle/driver dispatch in the scenario
   workflow.
 - Fabricated live GPS positions, synthetic points presented as real telemetry,
-  or unsupported emissions/savings claims.
+  static demo map markers, or unsupported emissions/savings claims.
 - FleetFlow-owned shortest-path routing.
 
 ## 6. Operational requirements
@@ -148,6 +148,6 @@ AI-assisted decisions are not in the current scope.
 6. Verify fuel/emissions are traceable SUMO estimates, clearly distinguished
    from real measured data and absent when output is unavailable.
 7. Confirm real GPS mode only shows authenticated fresh reports and remains
-   distinct from SUMO simulation and static map preview.
+   distinct from SUMO simulation.
 8. Confirm OSRM failures, invalid scenarios, database errors, and missing
    simulation inputs are visible and never return success-shaped fallbacks.

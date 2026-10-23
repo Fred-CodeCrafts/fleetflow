@@ -33,8 +33,8 @@ flowchart LR
   delivery history.
 - Fleet and driver detail pages display operational attributes and history.
   Scenario dispatch has no manual trip-creation or assignment action.
-- Map layers and labels keep SUMO movement, reported GPS, and static preview
-  samples distinct.
+- Map layers and labels keep SUMO movement distinct from reported GPS. There is
+  no static demo-marker mode.
 
 ### Go API and scenario coordinator
 

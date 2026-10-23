@@ -10,7 +10,7 @@ implementation caveats.
 - [x] MapLibre map, OpenFreeMap tiles, and visible map attribution.
 - [x] OSRM route client/API and Jakarta-region OSM data preparation workflow.
 - [x] Authenticated GPS ingestion with a separate live-GPS view.
-- [x] Clearly labeled static map preview, isolated from GPS reports.
+- [ ] Remove the legacy static map preview; replace it with SUMO run playback.
 - [x] PostgreSQL persistence for existing fleet, driver, and trip records.
 
 ## SUMO simulation and delivery operations
@@ -51,6 +51,6 @@ implementation caveats.
 - [ ] Run Go formatting, vet, build, and tests, preserving any user-owned local
   changes; run the console tests, typecheck, and production build.
 - [ ] Exercise a full scenario end to end on the verified DKI-wide network.
-- [ ] Verify real GPS, static preview, and SUMO map layers cannot be confused.
+- [ ] Verify real GPS and SUMO map layers cannot be confused.
 - [ ] Validate deployed SUMO runtime, database persistence, OSRM, attribution,
   and operational errors before production rollout.
