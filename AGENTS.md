@@ -2,7 +2,7 @@
 
 Instructions for AI coding agents (Claude Code, Copilot, Cursor, etc.) working in this repository.
 
-**Project:** FleetFlow, an open-source fleet navigation platform with dynamic weights.
+**Project:** FleetFlow, an open-source Jakarta fleet-operations console using OSRM routing and MapLibre.
 **Context:** Road To DevFest Jakarta 2026 submission. The git history is part of the evidence that this project was built from scratch after 11 October 2026, so it must be clean, frequent and honest.
 
 ---
@@ -105,7 +105,7 @@ Tests go in the same commit as the code they cover, or in the commit immediately
 - **No history rewriting:** do not use `git rebase`, `git commit --amend` on pushed commits, `git push --force`, or `git filter-branch`. Do not backdate commits or change author dates. The history must be an honest record. If you made a mistake, fix it in a new commit.
 - **No secrets:** never commit API keys, tokens, credentials, or `.env` files. Use environment variables and keep `.env.example` with placeholders.
 - **Deployment:** the final system must run on Cloud Run. Keep the Dockerfile working.
-- **Concurrency:** route queries must never block on weight updates (immutable metric snapshot swapped atomically). Run `go test -race ./...` before committing concurrency changes.
+- **Concurrency:** OSRM requests must respect request cancellation and deadlines; GPS location storage must remain race-safe. Run `go test -race ./...` before committing concurrency changes.
 
 ---
 
