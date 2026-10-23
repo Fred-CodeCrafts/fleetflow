@@ -30,6 +30,10 @@ func TestSimulationRunEndpoints(t *testing.T) {
 	}
 	defer service.Shutdown(context.Background())
 	server := testServer(t, WithSimulation(service))
+	ready := getJSON(t, server, "/readyz")
+	if ready.Code != http.StatusOK || decodeBody(t, ready)["simulation"] != "available" {
+		t.Fatalf("configured simulation readiness = %d %s", ready.Code, ready.Body.String())
+	}
 
 	created := postJSON(t, server, "/api/simulation/runs",
 		`{"seed":42,"vehicles":1,"departure_window_s":60}`)

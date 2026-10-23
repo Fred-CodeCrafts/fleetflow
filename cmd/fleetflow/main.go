@@ -24,6 +24,10 @@ import (
 	driverpostgres "fleetflow/internal/driver/postgres"
 	"fleetflow/internal/logging"
 	"fleetflow/internal/osrm"
+	"fleetflow/internal/simulation"
+	simulationmemory "fleetflow/internal/simulation/memory"
+	simulationpostgres "fleetflow/internal/simulation/postgres"
+	"fleetflow/internal/simulation/sumo"
 	"fleetflow/internal/store"
 	"fleetflow/internal/trip"
 	tripmemory "fleetflow/internal/trip/memory"
@@ -112,6 +116,7 @@ func main() {
 		api.WithRouter(router),
 		api.WithLogger(logger),
 	}
+	var simulationRepo simulation.Repository
 
 	if cfg.DatabaseDSN != "" {
 		// A database that is configured but unreachable stops the process: a
@@ -125,6 +130,7 @@ func main() {
 		defer pool.Close()
 
 		keys := auth.NewService(authpostgres.New(pool))
+		simulationRepo = simulationpostgres.New(pool)
 
 		// The record endpoints read and write through these. The pool is shared,
 		// so the process still owns exactly one.
@@ -143,6 +149,7 @@ func main() {
 		// out loud: nothing here survives a restart, and the deployed
 		// configuration always has a database.
 		keys := authmemory.New()
+		simulationRepo = simulationmemory.New()
 		opts = append(opts,
 			api.WithVehicles(vehicle.NewService(vehiclememory.New())),
 			api.WithDrivers(driver.NewService(drivermemory.New())),
@@ -150,6 +157,31 @@ func main() {
 			api.WithAPIKeys(auth.NewService(keys)),
 		)
 		logger.Warn("no database configured: fleet records and api keys are in memory and will be lost on restart")
+	}
+
+	if cfg.SumoRuntime.Network != "" {
+		runtime := cfg.SumoRuntime
+		runner, err := sumo.NewRunner(ctx, sumo.Toolchain{
+			Python:      runtime.Python,
+			RandomTrips: runtime.RandomTrips,
+			DuaRouter:   runtime.DuaRouter,
+			SUMO:        runtime.Binary,
+			Network:     runtime.Network,
+			WorkDir:     runtime.WorkDir,
+		})
+		if err != nil {
+			fatal(logger, "SUMO runtime configured but unusable", slog.String("error", err.Error()))
+		}
+		service, err := simulation.NewService(ctx, simulationRepo, runner, logger)
+		if err != nil {
+			fatal(logger, "could not initialize SUMO simulation service", slog.String("error", err.Error()))
+		}
+		opts = append(opts, api.WithSimulation(service))
+		logger.Info("SUMO scenario execution is configured",
+			slog.String("network", runtime.Network),
+			slog.String("binary", runtime.Binary))
+	} else {
+		logger.Warn("SUMO scenarios are disabled: SUMO_NETWORK is not set")
 	}
 
 	logger.Info("listening", slog.String("addr", cfg.Addr))

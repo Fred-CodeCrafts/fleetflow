@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 )
@@ -59,6 +61,19 @@ type Config struct {
 	// production deployment can keep the first and drop the second without a
 	// rebuild.
 	LogLevel string
+	// SumoRuntime contains the configured SUMO tool paths. An empty network
+	// disables scenario execution without affecting OSRM or real GPS.
+	SumoRuntime SumoRuntime
+}
+
+type SumoRuntime struct {
+	Home        string
+	Network     string
+	Python      string
+	RandomTrips string
+	DuaRouter   string
+	Binary      string
+	WorkDir     string
 }
 
 // Load reads configuration from getenv (normally os.Getenv) and validates it.
@@ -104,7 +119,66 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 	cfg.DatabaseDSN, cfg.DatabaseAddr = dsn, addr
 
+	sumoRuntime, err := loadSumoRuntime(getenv)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.SumoRuntime = sumoRuntime
+
 	return cfg, nil
+}
+
+func loadSumoRuntime(getenv func(string) string) (SumoRuntime, error) {
+	home := strings.TrimSpace(getenv("SUMO_HOME"))
+	network := strings.TrimSpace(getenv("SUMO_NETWORK"))
+	if network == "" {
+		return SumoRuntime{Home: home}, nil
+	}
+
+	extension := ""
+	if runtime.GOOS == "windows" {
+		extension = ".exe"
+	}
+	binary := strings.TrimSpace(getenv("SUMO_BINARY"))
+	duarouter := strings.TrimSpace(getenv("SUMO_DUAROUTER"))
+	randomTrips := strings.TrimSpace(getenv("SUMO_RANDOM_TRIPS"))
+	if home != "" {
+		if binary == "" {
+			binary = filepath.Join(home, "bin", "sumo"+extension)
+		}
+		if duarouter == "" {
+			duarouter = filepath.Join(home, "bin", "duarouter"+extension)
+		}
+		if randomTrips == "" {
+			randomTrips = filepath.Join(home, "tools", "randomTrips.py")
+		}
+	}
+	if binary == "" {
+		return SumoRuntime{}, fmt.Errorf("SUMO_BINARY or SUMO_HOME is required when SUMO_NETWORK is set")
+	}
+	if duarouter == "" {
+		return SumoRuntime{}, fmt.Errorf("SUMO_DUAROUTER or SUMO_HOME is required when SUMO_NETWORK is set")
+	}
+	if randomTrips == "" {
+		return SumoRuntime{}, fmt.Errorf("SUMO_RANDOM_TRIPS or SUMO_HOME is required when SUMO_NETWORK is set")
+	}
+
+	python := strings.TrimSpace(getenv("SUMO_PYTHON"))
+	if python == "" {
+		python = "python3"
+		if runtime.GOOS == "windows" {
+			python = "python"
+		}
+	}
+	return SumoRuntime{
+		Home:        home,
+		Network:     network,
+		Python:      python,
+		RandomTrips: randomTrips,
+		DuaRouter:   duarouter,
+		Binary:      binary,
+		WorkDir:     strings.TrimSpace(getenv("SUMO_WORK_DIR")),
+	}, nil
 }
 
 func validateOSRMURL(value string) error {

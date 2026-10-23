@@ -2,6 +2,8 @@ package config
 
 import (
 	"net/url"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -10,6 +12,36 @@ import (
 // environment.
 func env(values map[string]string) func(string) string {
 	return func(key string) string { return values[key] }
+}
+
+func TestLoadSumoRuntimeFromHome(t *testing.T) {
+	home := `C:\sumo`
+	runtimeConfig, err := loadSumoRuntime(env(map[string]string{
+		"SUMO_HOME":    home,
+		"SUMO_NETWORK": `C:\data\jakarta.net.xml`,
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	extension := ""
+	python := "python3"
+	if runtime.GOOS == "windows" {
+		extension = ".exe"
+		python = "python"
+	}
+	if runtimeConfig.Binary != filepath.Join(home, "bin", "sumo"+extension) ||
+		runtimeConfig.DuaRouter != filepath.Join(home, "bin", "duarouter"+extension) ||
+		runtimeConfig.RandomTrips != filepath.Join(home, "tools", "randomTrips.py") ||
+		runtimeConfig.Python != python {
+		t.Fatalf("SUMO runtime = %#v", runtimeConfig)
+	}
+}
+
+func TestLoadSumoRuntimeRequiresToolPaths(t *testing.T) {
+	_, err := loadSumoRuntime(env(map[string]string{"SUMO_NETWORK": "jakarta.net.xml"}))
+	if err == nil || !strings.Contains(err.Error(), "SUMO_BINARY") {
+		t.Fatalf("loadSumoRuntime() error = %v, want missing binary", err)
+	}
 }
 
 func TestLoad(t *testing.T) {

@@ -216,7 +216,11 @@ func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
-	body := map[string]any{"routing": "not_configured"}
+	simulationStatus := "not_configured"
+	if s.simulation != nil {
+		simulationStatus = "available"
+	}
+	body := map[string]any{"routing": "not_configured", "simulation": simulationStatus}
 	ready := false
 	if s.router != nil {
 		if checker, ok := s.router.(osrm.HealthChecker); ok {

@@ -202,6 +202,9 @@ func TestReadyz_WithoutDatabase(t *testing.T) {
 	if body["database"] != "not_configured" {
 		t.Errorf("database = %v, want not_configured", body["database"])
 	}
+	if body["simulation"] != "not_configured" {
+		t.Errorf("simulation = %v, want not_configured", body["simulation"])
+	}
 }
 
 func TestReadyz_DatabaseReachable(t *testing.T) {
