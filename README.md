@@ -22,11 +22,15 @@ bounding box, and builds the OSRM MLD data files. Allow several gigabytes of
 free disk space and time for preprocessing. The generated PBF and OSRM files
 stay under `data/osrm/`, which is ignored by Git.
 
-Requirements: Docker Desktop, PowerShell, Go 1.25.5+, and Node.js/npm.
+Requirements: Docker Desktop, SUMO, PowerShell, Go 1.25.5+, and Node.js/npm.
 
 ```powershell
 # From the repository root. First run downloads the OSM PBF and builds OSRM files.
 .\scripts\osrm\build-jakarta.ps1
+
+# Build a separate SUMO network whose extraction bounds include DKI Jakarta.
+# This reuses the Geofabrik Java PBF downloaded above.
+.\scripts\sumo\build-jakarta.ps1
 
 # Start OSRM after the data build has completed.
 docker compose --profile routing up -d osrm
@@ -37,6 +41,10 @@ npm ci
 npm run build
 Set-Location ..
 
+# Configure SUMO for the Go process.
+$env:SUMO_HOME = 'C:\Program Files (x86)\Eclipse\Sumo'
+$env:SUMO_NETWORK = (Resolve-Path '.\data\networks\generated\jakarta-dki.net.xml').Path
+
 # The Go app defaults to http://127.0.0.1:5000 for OSRM.
 go run ./cmd/fleetflow
 ```
@@ -45,12 +53,13 @@ Open `http://localhost:8080`. For console-only development, start the Go service
 in one terminal and run `npm run dev` from `console/` in another; Vite proxies
 API requests to port 8080.
 
-SUMO scenarios require a local SUMO installation and a `.net.xml` road network.
-Set `SUMO_HOME` and `SUMO_NETWORK` (and `SUMO_WORK_DIR` if desired) in the
-environment before starting FleetFlow. The tracked
-`data/networks/jakarta.net.xml` is a legacy central-Jakarta network; it has not
-been verified as covering all of DKI Jakarta and is suitable only for local
-toolchain validation. Do not describe it as whole-city coverage.
+SUMO scenarios require a local SUMO installation and the generated
+`data/networks/generated/jakarta-dki.net.xml`. The build clips the Geofabrik Java
+extract to a buffered rectangle containing the OpenStreetMap administrative
+bounds of DKI Jakarta (relation 6362934), including the Thousand Islands.
+Generated PBF/XML/network files are local data and are ignored by Git. The
+tracked `data/networks/jakarta.net.xml` remains a legacy central-Jakarta
+artifact and is not used by the app.
 
 Start a scenario from **Operations → SUMO Scenarios**, or call the API:
 
