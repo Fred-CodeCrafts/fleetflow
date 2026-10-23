@@ -3,6 +3,7 @@ import * as maplibregl from 'maplibre-gl'
 import maplibreWorkerURL from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { api, type Coordinate, type OSRMRoute, type VehicleLocation } from '../api/client'
+import { demoMapLocations } from './demoLocations'
 import { ErrorMessage, Panel } from '../screens/Shared'
 
 maplibregl.setWorkerUrl(maplibreWorkerURL)
@@ -35,11 +36,16 @@ function positionFeatures(positions: VehicleLocation[]): MapFeature[] {
   return positions.map((position) => pointFeature(position, position.vehicle_id, 'vehicle'))
 }
 
-export function RoutingMap({ route, selectedPoints, onPickPoint, compact = false }: {
+function demoPositionFeatures(): MapFeature[] {
+  return demoMapLocations.map(({ point, label }) => pointFeature(point, label, 'demo'))
+}
+
+export function RoutingMap({ route, selectedPoints, onPickPoint, compact = false, positionMode = 'live' }: {
   route?: OSRMRoute | null
   selectedPoints?: { from?: Coordinate; to?: Coordinate }
   onPickPoint?: (point: Coordinate) => void
   compact?: boolean
+  positionMode?: 'live' | 'demo'
 }) {
   const container = useRef<HTMLDivElement>(null)
   const map = useRef<maplibregl.Map | null>(null)
@@ -117,6 +123,30 @@ export function RoutingMap({ route, selectedPoints, onPickPoint, compact = false
           'circle-stroke-width': 2,
         },
       })
+      instance.addSource('demo-positions', { type: 'geojson', data: featureCollection([]) })
+      instance.addLayer({
+        id: 'demo-position-circles',
+        type: 'circle',
+        source: 'demo-positions',
+        paint: {
+          'circle-color': '#d05c48',
+          'circle-radius': 8,
+          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': 2,
+        },
+      })
+      instance.addLayer({
+        id: 'demo-position-labels',
+        type: 'symbol',
+        source: 'demo-positions',
+        layout: {
+          'text-field': ['get', 'label'],
+          'text-offset': [0, 1.4],
+          'text-size': 12,
+          'text-font': ['Noto Sans Regular'],
+        },
+        paint: { 'text-color': '#8f3024', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 },
+      })
       setLoaded(true)
     })
     instance.on('click', (event) => {
@@ -137,6 +167,11 @@ export function RoutingMap({ route, selectedPoints, onPickPoint, compact = false
   useEffect(() => {
     let disposed = false
     let timeout = 0
+    if (positionMode === 'demo') {
+      setLocationError('')
+      return () => { disposed = true }
+    }
+
     const refresh = async () => {
       try {
         const latest = await api.locations()
@@ -154,7 +189,7 @@ export function RoutingMap({ route, selectedPoints, onPickPoint, compact = false
       disposed = true
       window.clearTimeout(timeout)
     }
-  }, [])
+  }, [positionMode])
 
   useEffect(() => {
     const instance = map.current
@@ -173,13 +208,20 @@ export function RoutingMap({ route, selectedPoints, onPickPoint, compact = false
     ]
     waypointSource.setData(featureCollection(waypoints))
     const vehicleSource = instance.getSource('vehicle-positions') as maplibregl.GeoJSONSource
-    vehicleSource.setData(featureCollection(positionFeatures(positions)))
+    vehicleSource.setData(featureCollection(positionMode === 'live' ? positionFeatures(positions) : []))
+    const demoSource = instance.getSource('demo-positions') as maplibregl.GeoJSONSource
+    const demoFeatures = positionMode === 'demo' ? demoPositionFeatures() : []
+    demoSource.setData(featureCollection(demoFeatures))
     if (coordinates.length >= 2) {
       const bounds = coordinates.reduce(
         (box, point) => box.extend(point),
         new maplibregl.LngLatBounds(coordinates[0], coordinates[0]),
       )
       instance.fitBounds(bounds, { padding: 72, maxZoom: 15, duration: 500 })
+    } else if (positionMode === 'demo') {
+      const bounds = new maplibregl.LngLatBounds()
+      for (const { point } of demoMapLocations) bounds.extend([point.lon, point.lat])
+      instance.fitBounds(bounds, { padding: 72, maxZoom: 13, duration: 500 })
     } else if (waypoints.length) {
       const coordinates: [number, number][] = []
       const bounds = new maplibregl.LngLatBounds()
@@ -192,19 +234,26 @@ export function RoutingMap({ route, selectedPoints, onPickPoint, compact = false
       if (waypoints.length > 1) instance.fitBounds(bounds, { padding: 72, maxZoom: 15, duration: 500 })
       else instance.easeTo({ center: coordinates[0], zoom: 14 })
     }
-  }, [loaded, positions, route, selectedPoints])
+  }, [loaded, positionMode, positions, route, selectedPoints])
 
-  return <Panel title={compact ? 'Jakarta map' : 'Live fleet map'} action={
+  return <Panel title={compact ? 'Jakarta map' : positionMode === 'demo' ? 'Demo map preview' : 'Live fleet map'} action={
     <button className="button" onClick={() => map.current?.easeTo({ center: jakarta, zoom: 11, duration: 500 })}>Jakarta</button>
   }>
     {onPickPoint && <p className="help-text">Click the map to choose a location. OpenStreetMap roads are rendered by OpenFreeMap.</p>}
     <div ref={container} className={`network-map ${compact ? 'compact' : ''}`} aria-label="Map of Jakarta" />
     <div className="map-legend">
       <span><i className="legend-road route" /> OSRM driving route</span>
-      <span><i className="legend-road vehicle" /> Reported vehicle GPS</span>
-      {positions.length === 0 && <span>No recent GPS positions</span>}
+      {positionMode === 'demo' ?
+        <span><i className="legend-road demo-vehicle" /> Illustrative demo location</span> :
+        <span><i className="legend-road vehicle" /> Reported vehicle GPS</span>}
+      {positionMode === 'live' && positions.length === 0 && <span>No recent GPS positions</span>}
     </div>
-    <p className="map-disclaimer">Routes are calculated by OSRM. Vehicle markers appear only after a device sends a GPS position. Map data © OpenStreetMap contributors.</p>
+    <p className="map-disclaimer">
+      {positionMode === 'demo' ?
+        'Static illustrative demo points only; these are not device reports or real vehicles. ' :
+        'Vehicle markers show positions reported by connected devices. '}
+      Routes are calculated by OSRM. Map data © OpenStreetMap contributors.
+    </p>
     {mapError && <ErrorMessage>{mapError}</ErrorMessage>}
     {locationError && <ErrorMessage>{locationError}</ErrorMessage>}
   </Panel>
