@@ -99,7 +99,14 @@ export const navigation: NavBranch[] = [
         label: 'Trips',
         icon: 'orders',
         path: '/operations/trips',
-        keywords: ['orders', 'trips', 'dispatch', 'assign', 'planned', 'in progress', 'completed'],
+        keywords: ['orders', 'trips', 'history', 'SUMO', 'completed'],
+      },
+      {
+        id: 'operations.simulations',
+        label: 'SUMO Scenarios',
+        icon: 'simulation',
+        path: '/operations/simulations',
+        keywords: ['SUMO', 'scenario', 'seed', 'simulation', 'dispatch'],
       },
       {
         id: 'operations.routes',

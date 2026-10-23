@@ -15,6 +15,8 @@ describe('navigation registry', () => {
 
   it('routes fleet operations and excludes retired experiment pages', () => {
     expect(locate('/operations/trips')?.item.id).toBe('operations.orders')
+    expect(locate('/operations/simulations')?.item.id).toBe('operations.simulations')
+    expect(searchNav('seed')[0]?.id).toBe('operations.simulations')
     expect(searchNav('OSRM')[0]?.id).toBe('operations.routes')
     expect(locate('/operations/runs')).toBeNull()
     expect(searchNav('comparison')).toEqual([])
