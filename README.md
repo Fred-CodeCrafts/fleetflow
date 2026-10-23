@@ -44,6 +44,23 @@ Open `http://localhost:8080`. For console-only development, start the Go service
 in one terminal and run `npm run dev` from `console/` in another; Vite proxies
 API requests to port 8080.
 
+## Seed local demo records
+
+With the FleetFlow API running locally, seed sample vehicles, drivers, and
+planned trips:
+
+```powershell
+.\scripts\dev\seed-fleet.ps1
+```
+
+The seeder is idempotent: it reuses matching records on repeat runs. Seeded
+records are labeled `DEMO`; no GPS positions are created, so the live map stays
+empty until a vehicle reports a real position. Records use the running
+application's configured store, so a memory-backed local run loses them when
+the service restarts. This is a development convenience, not a production
+initialization command. Remote targets are refused unless `-AllowRemote` is
+explicitly provided; never use it against production.
+
 To run the Go app in a container while OSRM is running on the host, set
 `OSRM_URL=http://host.docker.internal:5000`. If both are services in the same
 Compose network, use `OSRM_URL=http://osrm:5000`.
