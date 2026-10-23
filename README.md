@@ -22,14 +22,16 @@ bounding box, and builds the OSRM MLD data files. Allow several gigabytes of
 free disk space and time for preprocessing. The generated PBF and OSRM files
 stay under `data/osrm/`, which is ignored by Git.
 
-Requirements: Docker Desktop, SUMO, PowerShell, Go 1.25.5+, and Node.js/npm.
+Requirements: Docker Desktop for OSRM, SUMO, Python, PowerShell, Go 1.25.5+,
+and Node.js/npm.
 
 ```powershell
 # From the repository root. First run downloads the OSM PBF and builds OSRM files.
 .\scripts\osrm\build-jakarta.ps1
 
 # Build a separate SUMO network whose extraction bounds include DKI Jakarta.
-# This reuses the Geofabrik Java PBF downloaded above.
+# Install its small PBF-reader dependency first; this downloads the Java PBF if needed.
+python -m pip install -r scripts/sumo/requirements.txt
 .\scripts\sumo\build-jakarta.ps1
 
 # Start OSRM after the data build has completed.
@@ -54,9 +56,11 @@ in one terminal and run `npm run dev` from `console/` in another; Vite proxies
 API requests to port 8080.
 
 SUMO scenarios require a local SUMO installation and the generated
-`data/networks/generated/jakarta-dki.net.xml`. The build clips the Geofabrik Java
-extract to a buffered rectangle containing the OpenStreetMap administrative
-bounds of DKI Jakarta (relation 6362934), including the Thousand Islands.
+`data/networks/generated/jakarta-dki.net.xml`. The build clips the Geofabrik
+Java extract with pyosmium to the OSM administrative polygon of DKI Jakarta
+(relation 6362934), buffered by about 2 km, including the Thousand Islands. It
+structurally validates the generated network. `-ValidateWithSumo` additionally
+loads it into SUMO and can require substantial memory for a full-city network.
 Generated PBF/XML/network files are local data and are ignored by Git. The
 tracked `data/networks/jakarta.net.xml` remains a legacy central-Jakarta
 artifact and is not used by the app.

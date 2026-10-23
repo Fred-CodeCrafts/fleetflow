@@ -19,10 +19,12 @@ implementation caveats.
   route it with `duarouter`, and produce tripinfo, geographic FCD, and emission
   XML using the retained Jakarta network. This smoke test only establishes the
   local toolchain; it does not validate network coverage or production setup.
-- [ ] Obtain and document a current OSM-derived road network covering all DKI
-  Jakarta; verify its extent against the administrative boundary, provenance,
-  license, connectivity, and representative routes. Keep source/generated data
-  out of Git.
+- [x] Obtain and document current OSM source data, provenance, licensing, and
+  a buffered network extraction based on the DKI administrative boundary. Keep
+  source and generated network data out of Git.
+- [ ] Validate network connectivity and representative SUMO routes on the DKI
+  network. The optional full-network SUMO load test is memory-intensive and has
+  not passed on the current 16 GB development machine.
 - [x] Add validated SUMO runtime/network configuration and explicit process
   failure reporting.
 - [x] Add seeded scenarios and a reproducible SUMO run lifecycle; capture
