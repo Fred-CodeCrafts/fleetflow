@@ -1,6 +1,7 @@
 package web
 
 import (
+	"errors"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,10 @@ import (
 )
 
 func TestBuiltConsoleAssetsAreEmbedded(t *testing.T) {
+	if !consoleBuilt(t) {
+		t.Skip("console assets are not built; run npm run build from console/")
+	}
+
 	found := false
 	err := fs.WalkDir(content, "dist", func(file string, entry fs.DirEntry, err error) error {
 		if err != nil {
@@ -37,6 +42,17 @@ func TestBuiltConsoleAssetsAreEmbedded(t *testing.T) {
 
 func TestHandlerServesConsoleAtRootAndClientRoutes(t *testing.T) {
 	handler := Handler()
+	if !consoleBuilt(t) {
+		for _, route := range []string{"/", "/operations/trips", "/settings/map"} {
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, route, nil))
+			if rec.Code != http.StatusServiceUnavailable {
+				t.Errorf("GET %s answered %d, want 503 before the console is built", route, rec.Code)
+			}
+		}
+		return
+	}
+
 	for _, route := range []string{"/", "/operations/trips", "/settings/map"} {
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, route, nil))
@@ -54,6 +70,10 @@ func TestHandlerServesConsoleAtRootAndClientRoutes(t *testing.T) {
 }
 
 func TestHandlerServesAssetsReferencedByViteIndex(t *testing.T) {
+	if !consoleBuilt(t) {
+		t.Skip("console assets are not built; run npm run build from console/")
+	}
+
 	index, err := content.ReadFile("dist/index.html")
 	if err != nil {
 		t.Fatalf("reading Vite index: %v", err)
@@ -75,6 +95,10 @@ func TestHandlerServesAssetsReferencedByViteIndex(t *testing.T) {
 }
 
 func TestHandlerServesModuleWorkerAsJavaScript(t *testing.T) {
+	if !consoleBuilt(t) {
+		t.Skip("console assets are not built; run npm run build from console/")
+	}
+
 	assets, err := fs.ReadDir(content, "dist/assets")
 	if err != nil {
 		t.Fatalf("reading embedded assets: %v", err)
@@ -94,6 +118,15 @@ func TestHandlerServesModuleWorkerAsJavaScript(t *testing.T) {
 		return
 	}
 	t.Fatal("no module worker found in embedded assets")
+}
+
+func consoleBuilt(t *testing.T) bool {
+	t.Helper()
+	_, err := fs.Stat(content, "dist/index.html")
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("checking embedded console entry: %v", err)
+	}
+	return err == nil
 }
 
 func TestHandlerDoesNotHideMissingAssets(t *testing.T) {

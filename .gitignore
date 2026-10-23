@@ -9,6 +9,8 @@ bin/
 /data/osrm/
 /console/node_modules/
 /console/tsconfig.tsbuildinfo
+/web/dist/*
+!/web/dist/.gitkeep
 
 # Test artifacts
 *.test

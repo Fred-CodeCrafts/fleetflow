@@ -13,7 +13,7 @@ import (
 
 // content is the Vite output. Rebuild console/ before compiling after a UI change.
 //
-//go:embed dist
+//go:embed all:dist
 var content embed.FS
 
 // Handler serves the embedded console and its fingerprinted assets.
@@ -51,6 +51,10 @@ func serve(w http.ResponseWriter, r *http.Request) {
 func writeAsset(w http.ResponseWriter, name, file string) {
 	body, err := content.ReadFile(file)
 	if err != nil {
+		if name == "index.html" && errors.Is(err, fs.ErrNotExist) {
+			http.Error(w, "console is not built; run npm run build from console/", http.StatusServiceUnavailable)
+			return
+		}
 		http.Error(w, "console asset unavailable", http.StatusInternalServerError)
 		return
 	}
