@@ -69,6 +69,15 @@ export function VehiclesPage() {
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not create vehicle.') }
   }
 
+  const assignDriver = async (driverId: string, vehicleId: string) => {
+    try {
+      await api.assignDriverVehicle(driverId, vehicleId)
+      await Promise.all([vehicles.reload(), drivers.reload()])
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not update the allocation.')
+    }
+  }
+
   return <Page eyebrow="Resources" title="Vehicles" description="Register fleet vehicles and review their specifications, maintenance, and operating status.">
     <Panel title="Add vehicle"><form className="form-row" onSubmit={create}>
       <label className="field">Name<input required placeholder="Vehicle identifier" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
@@ -99,7 +108,7 @@ export function VehiclesPage() {
     {error && <ErrorMessage>{error}</ErrorMessage>}</Panel>
     <Panel title="Vehicle register" action={<button className="button" onClick={() => void Promise.all([vehicles.reload(), drivers.reload()])}>Refresh</button>}>
       {vehicles.loading || drivers.loading ? <Loading /> : vehicles.error ? <ErrorMessage>{vehicles.error}</ErrorMessage> :
-        <Table headers={['Name', 'Registration', 'Model', 'Year', 'Color', 'Body type', 'Cargo capacity', 'Assigned driver', 'Status']}>{(vehicles.data ?? []).map((v) => {
+        <Table headers={['Name', 'Registration', 'Model', 'Year', 'Color', 'Body type', 'Cargo capacity', 'Allocation', 'Status']}>{(vehicles.data ?? []).map((v) => {
           const assignedDriver = (drivers.data ?? []).find((d) => d.vehicle_id === v.id)
           return (
             <tr
@@ -116,9 +125,23 @@ export function VehiclesPage() {
               <td>{unknown(v.body_type)}</td>
               <td>{v.capacity != null ? `${v.capacity} kg` : 'Unknown'}</td>
               <td>
-                {assignedDriver
-                  ? <Link to={`/resources/drivers/${encodeURIComponent(assignedDriver.id)}`}>{assignedDriver.name}</Link>
-                  : <span className="muted">Unassigned</span>}
+                <select
+                  aria-label={`Allocate a driver to ${v.name}`}
+                  value={assignedDriver?.id ?? ''}
+                  onChange={(e) => {
+                    const driverId = e.target.value
+                    if (driverId) void assignDriver(driverId, v.id)
+                    else if (assignedDriver) void assignDriver(assignedDriver.id, '')
+                  }}
+                  style={{ minWidth: '150px', padding: '3px 6px', fontSize: '12px' }}
+                >
+                  <option value="">Unallocated</option>
+                  {(drivers.data ?? []).map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}{d.vehicle_id && d.vehicle_id !== v.id ? ' (on another vehicle)' : ''}
+                    </option>
+                  ))}
+                </select>
               </td>
               <td><Status value={v.status} /></td>
             </tr>
@@ -134,15 +157,6 @@ export function DriversPage() {
   const vehicles = useLoad(api.vehicles)
   const [form, setForm] = useState(emptyDriver)
   const [error, setError] = useState('')
-
-  const handleAssignVehicle = async (driverId: string, vehicleId: string) => {
-    try {
-      await api.assignDriverVehicle(driverId, vehicleId)
-      await Promise.all([drivers.reload(), vehicles.reload()])
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Could not assign vehicle.')
-    }
-  }
 
   const create = async (event: FormEvent) => {
     event.preventDefault()
@@ -174,40 +188,6 @@ export function DriversPage() {
       </select></label>
       <button className="button primary">Add driver</button>
     </form>{error && <ErrorMessage>{error}</ErrorMessage>}</Panel>
-    <Panel title="Vehicle Fleet Allocation" action={<button className="button" type="button" onClick={() => void Promise.all([drivers.reload(), vehicles.reload()])}>Refresh</button>}>
-      {vehicles.loading || drivers.loading ? <Loading /> : vehicles.error ? <ErrorMessage>{vehicles.error}</ErrorMessage> :
-        drivers.error ? <ErrorMessage>{drivers.error}</ErrorMessage> :
-        <Table headers={['Vehicle', 'Registration', 'Model / Fuel', 'Status', 'Assigned Driver']}>{(vehicles.data ?? []).map((vehicle) => {
-          const current = drivers.data?.find((driver) => driver.vehicle_id === vehicle.id)
-          return <tr key={vehicle.id}>
-            <td><strong>{vehicle.name}</strong></td>
-            <td>{unknown(vehicle.registration)}</td>
-            <td>{vehicle.model || vehicle.type} {vehicle.fuel_type ? `· ${vehicle.fuel_type}` : ''}</td>
-            <td><Status value={vehicle.status} /></td>
-            <td>
-              <select
-                value={current?.id ?? ''}
-                onChange={(e) => {
-                  const targetDriverId = e.target.value
-                  if (!targetDriverId && current) {
-                    void handleAssignVehicle(current.id, '')
-                  } else if (targetDriverId) {
-                    void handleAssignVehicle(targetDriverId, vehicle.id)
-                  }
-                }}
-                style={{ minWidth: '150px', padding: '3px 6px', fontSize: '12px' }}
-              >
-                <option value="">Unassigned</option>
-                {(drivers.data ?? []).map((drv) => (
-                  <option key={drv.id} value={drv.id}>
-                    {drv.name} {drv.vehicle_id && drv.vehicle_id !== vehicle.id ? '(Has car)' : ''}
-                  </option>
-                ))}
-              </select>
-            </td>
-          </tr>
-        })}</Table>}
-    </Panel>
     <Panel title="Driver register">
       {drivers.loading ? <Loading /> : drivers.error ? <ErrorMessage>{drivers.error}</ErrorMessage> :
         <Table headers={['Name', 'Contract', 'Contact phone', 'License class', 'License expiry', 'Shift', 'Availability', 'Assigned car', 'Maintenance']}>{(drivers.data ?? []).map((d) => {
