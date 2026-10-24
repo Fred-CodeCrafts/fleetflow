@@ -27,6 +27,17 @@ export interface Driver {
   vehicle_id?: string
 }
 
+export interface OperationalTrip {
+  id: string
+  origin: string
+  destination: string
+  vehicle_id?: string
+  status: 'planned' | 'in_progress' | 'completed'
+  started_at?: string
+  finished_at?: string
+  duration_s?: number
+}
+
 export interface SimulationScenario {
   seed: number
   vehicles: number
@@ -174,6 +185,14 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   vehicles: async () => (await request<{ vehicles: Vehicle[] }>('/api/vehicles')).vehicles,
   drivers: async () => (await request<{ drivers: Driver[] }>('/api/drivers')).drivers,
+  trips: async () => (await request<{ trips: OperationalTrip[] }>('/api/trips')).trips,
+  createTrip: (trip: { origin: string; destination: string; vehicle_id?: string; status?: string }) =>
+    request<OperationalTrip>('/api/trips', { method: 'POST', body: JSON.stringify(trip) }),
+  updateTripStatus: (id: string, status: 'planned' | 'in_progress' | 'completed') =>
+    request<OperationalTrip>(`/api/trips/${encodeURIComponent(id)}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
   simulationRuns: async () => (await request<{ runs: SimulationRun[] }>('/api/simulation/runs')).runs,
   simulationRun: (id: string) =>
     request<SimulationRun>(`/api/simulation/runs/${encodeURIComponent(id)}`),
