@@ -22,7 +22,14 @@ func generateDeliveries(result *sumo.Result) error {
 		if trip.Status == sumo.TripCompleted && trip.ArrivalS == nil {
 			return fmt.Errorf("completed SUMO trip %q has no arrival time", trip.ID)
 		}
-		track, ok := tracks[trip.ID]
+		// A track is keyed by vehicle, so a trip that names its vehicle is
+		// matched on that. SUMO's own output has no separate vehicle field and
+		// its trip id is the vehicle id, which is why this falls back to the id.
+		key := trip.VehicleID
+		if key == "" {
+			key = trip.ID
+		}
+		track, ok := tracks[key]
 		if !ok || len(track.Positions) < 2 {
 			return fmt.Errorf("SUMO trip %q has no complete position trace for delivery stops", trip.ID)
 		}

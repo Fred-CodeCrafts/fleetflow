@@ -64,56 +64,71 @@ func DefaultPreseededRun() Run {
 
 	trips := []sumo.Trip{
 		{
-			ID:        "trip_tpk_kpg",
-			Status:    sumo.TripCompleted,
-			DepartS:   10,
-			DurationS: 850,
-			DistanceM: 8420,
-			CO2Kg:     1.82,
-			FuelKg:    0.58,
+			ID:          "trip_tpk_kpg",
+			VehicleID:   "B-9001-JKT",
+			Origin:      "Tanjung Priok Port Terminal",
+			Destination: "Kelapa Gading Commercial Hub",
+			Status:      sumo.TripCompleted,
+			DepartS:     10,
+			DurationS:   850,
+			DistanceM:   8420,
+			CO2Kg:       1.82,
+			FuelKg:      0.58,
 		},
 		{
-			ID:        "trip_plt_gld",
-			Status:    sumo.TripCompleted,
-			DepartS:   25,
-			DurationS: 620,
-			DistanceM: 5200,
-			CO2Kg:     1.15,
-			FuelKg:    0.37,
+			ID:          "trip_plt_gld",
+			VehicleID:   "B-9002-JKT",
+			Origin:      "Pluit Urban Logistics Depot",
+			Destination: "Glodok Commercial District",
+			Status:      sumo.TripCompleted,
+			DepartS:     25,
+			DurationS:   620,
+			DistanceM:   5200,
+			CO2Kg:       1.15,
+			FuelKg:      0.37,
 		},
 		{
-			ID:        "trip_hlm_sdr",
-			Status:    sumo.TripCompleted,
-			DepartS:   40,
-			DurationS: 1100,
-			DistanceM: 11350,
-			CO2Kg:     2.45,
-			FuelKg:    0.78,
+			ID:          "trip_hlm_sdr",
+			VehicleID:   "B-9003-JKT",
+			Origin:      "Halim Air Cargo Terminal",
+			Destination: "Sudirman Business Corridor",
+			Status:      sumo.TripCompleted,
+			DepartS:     40,
+			DurationS:   1100,
+			DistanceM:   11350,
+			CO2Kg:       2.45,
+			FuelKg:      0.78,
 		},
 		{
-			ID:        "trip_clk_sny",
-			Status:    sumo.TripCompleted,
-			DepartS:   60,
-			DurationS: 980,
-			DistanceM: 9140,
-			CO2Kg:     1.98,
-			FuelKg:    0.63,
+			ID:          "trip_clk_sny",
+			VehicleID:   "B-9004-JKT",
+			Origin:      "Cilandak Urban Fulfillment Hub",
+			Destination: "Senayan City Retail Center",
+			Status:      sumo.TripCompleted,
+			DepartS:     60,
+			DurationS:   980,
+			DistanceM:   9140,
+			CO2Kg:       1.98,
+			FuelKg:      0.63,
 		},
 		{
-			ID:        "trip_tmg_gni",
-			Status:    sumo.TripCompleted,
-			DepartS:   80,
-			DurationS: 540,
-			DistanceM: 4680,
-			CO2Kg:     0.94,
-			FuelKg:    0.30,
+			ID:          "trip_tmg_gni",
+			VehicleID:   "B-9005-JKT",
+			Origin:      "Tomang Regional Logistics Spine",
+			Destination: "Grand Indonesia Thamrin",
+			Status:      sumo.TripCompleted,
+			DepartS:     80,
+			DurationS:   540,
+			DistanceM:   4680,
+			CO2Kg:       0.94,
+			FuelKg:      0.30,
 		},
 	}
 
 	tracks := []sumo.Track{
 		// Vehicle 1: Isuzu Giga (Tanjung Priok Port -> Kelapa Gading Commercial)
 		{
-			VehicleID: "B-9012-JKT",
+			VehicleID: "B-9001-JKT",
 			Positions: []sumo.Position{
 				{TimeS: 0, Latitude: -6.1030, Longitude: 106.8833},
 				{TimeS: 60, Latitude: -6.1115, Longitude: 106.8872},
@@ -127,7 +142,7 @@ func DefaultPreseededRun() Run {
 		},
 		// Vehicle 2: Mitsubishi Fuso (Pluit Depot -> Glodok Commercial)
 		{
-			VehicleID: "B-9431-JKT",
+			VehicleID: "B-9002-JKT",
 			Positions: []sumo.Position{
 				{TimeS: 0, Latitude: -6.1245, Longitude: 106.7905},
 				{TimeS: 60, Latitude: -6.1280, Longitude: 106.7960},
@@ -139,7 +154,7 @@ func DefaultPreseededRun() Run {
 		},
 		// Vehicle 3: Toyota HiAce (Halim Logistics -> Sudirman Corridor)
 		{
-			VehicleID: "B-9204-JKT",
+			VehicleID: "B-9003-JKT",
 			Positions: []sumo.Position{
 				{TimeS: 0, Latitude: -6.2625, Longitude: 106.8911},
 				{TimeS: 60, Latitude: -6.2550, Longitude: 106.8800},
@@ -153,7 +168,7 @@ func DefaultPreseededRun() Run {
 		},
 		// Vehicle 4: Daihatsu Gran Max (Cilandak Hub -> Senayan City)
 		{
-			VehicleID: "B-9550-JKT",
+			VehicleID: "B-9004-JKT",
 			Positions: []sumo.Position{
 				{TimeS: 0, Latitude: -6.2921, Longitude: 106.8042},
 				{TimeS: 60, Latitude: -6.2810, Longitude: 106.8025},
@@ -166,7 +181,7 @@ func DefaultPreseededRun() Run {
 		},
 		// Vehicle 5: Honda PCX Electric (Tomang Spine -> Grand Indonesia Thamrin)
 		{
-			VehicleID: "B-9118-JKT",
+			VehicleID: "B-9005-JKT",
 			Positions: []sumo.Position{
 				{TimeS: 0, Latitude: -6.1750, Longitude: 106.7915},
 				{TimeS: 60, Latitude: -6.1775, Longitude: 106.7980},
@@ -182,7 +197,7 @@ func DefaultPreseededRun() Run {
 		{
 			ID:        "del_01",
 			TripID:    "trip_tpk_kpg",
-			VehicleID: "B-9012-JKT",
+			VehicleID: "B-9001-JKT",
 			Status:    sumo.DeliveryCompleted,
 			Stops: []sumo.DeliveryStop{
 				{ID: "stop_01", Order: 1, PackageID: "pkg_kpg_retail", Latitude: -6.1575, Longitude: 106.9080, TimeS: 420, Status: sumo.StopDelivered},
@@ -191,7 +206,7 @@ func DefaultPreseededRun() Run {
 		{
 			ID:        "del_02",
 			TripID:    "trip_plt_gld",
-			VehicleID: "B-9431-JKT",
+			VehicleID: "B-9002-JKT",
 			Status:    sumo.DeliveryCompleted,
 			Stops: []sumo.DeliveryStop{
 				{ID: "stop_02", Order: 1, PackageID: "pkg_gld_electronics", Latitude: -6.1432, Longitude: 106.8155, TimeS: 300, Status: sumo.StopDelivered},
@@ -200,7 +215,7 @@ func DefaultPreseededRun() Run {
 		{
 			ID:        "del_03",
 			TripID:    "trip_hlm_sdr",
-			VehicleID: "B-9204-JKT",
+			VehicleID: "B-9003-JKT",
 			Status:    sumo.DeliveryCompleted,
 			Stops: []sumo.DeliveryStop{
 				{ID: "stop_03", Order: 1, PackageID: "pkg_sdr_express", Latitude: -6.2150, Longitude: 106.8220, TimeS: 420, Status: sumo.StopDelivered},
@@ -209,7 +224,7 @@ func DefaultPreseededRun() Run {
 		{
 			ID:        "del_04",
 			TripID:    "trip_clk_sny",
-			VehicleID: "B-9550-JKT",
+			VehicleID: "B-9004-JKT",
 			Status:    sumo.DeliveryCompleted,
 			Stops: []sumo.DeliveryStop{
 				{ID: "stop_04", Order: 1, PackageID: "pkg_sny_parcels", Latitude: -6.2270, Longitude: 106.7970, TimeS: 360, Status: sumo.StopDelivered},
@@ -218,7 +233,7 @@ func DefaultPreseededRun() Run {
 		{
 			ID:        "del_05",
 			TripID:    "trip_tmg_gni",
-			VehicleID: "B-9118-JKT",
+			VehicleID: "B-9005-JKT",
 			Status:    sumo.DeliveryCompleted,
 			Stops: []sumo.DeliveryStop{
 				{ID: "stop_05", Order: 1, PackageID: "pkg_gni_grocery", Latitude: -6.1950, Longitude: 106.8215, TimeS: 300, Status: sumo.StopDelivered},
@@ -227,11 +242,11 @@ func DefaultPreseededRun() Run {
 	}
 
 	return Run{
-		ID:        PreseededRunID,
-		Status:    StatusCompleted,
-		Scenario:  sumo.Scenario{Seed: 101, Vehicles: 5, DepartureWindowS: 120},
-		CreatedAt: baseTime,
-		StartedAt: &baseTime,
+		ID:         PreseededRunID,
+		Status:     StatusCompleted,
+		Scenario:   sumo.Scenario{Seed: 101, Vehicles: 5, DepartureWindowS: 120},
+		CreatedAt:  baseTime,
+		StartedAt:  &baseTime,
 		FinishedAt: &finishTime,
 		Result: &sumo.Result{
 			SUMOVersion: "Eclipse SUMO 1.15.0 / Pre-seeded Multi-Hub Scenario",
@@ -253,7 +268,10 @@ func DefaultPreseededRun() Run {
 	}
 }
 
-var allJakartaHubs = []LogisticsHub{
+// JakartaHubs is the catalogue of places the scenario generator routes between:
+// ports, depots, cargo terminals and retail districts across Jakarta and its
+// western border. Trips name their origin and destination from this list.
+var JakartaHubs = []LogisticsHub{
 	{Name: "Tanjung Priok Port Terminal", Code: "HUB-TPK", Latitude: -6.1030, Longitude: 106.8833, Area: "North Jakarta"},
 	{Name: "Pluit Urban Logistics Depot", Code: "HUB-PLT", Latitude: -6.1245, Longitude: 106.7905, Area: "Northwest Jakarta"},
 	{Name: "Halim Air Cargo Terminal", Code: "HUB-HLM", Latitude: -6.2625, Longitude: 106.8911, Area: "East Jakarta"},
@@ -281,7 +299,7 @@ func GenerateSyntheticScenario(seed int64, vehicles int, departureWindowS int) s
 	baseTime := time.Date(2026, 10, 24, 8, 0, 0, 0, time.UTC)
 	finishTime := baseTime.Add(time.Duration(departureWindowS+1200) * time.Second)
 
-	hubCount := len(allJakartaHubs)
+	hubCount := len(JakartaHubs)
 	trips := make([]sumo.Trip, 0, vehicles)
 	tracks := make([]sumo.Track, 0, vehicles)
 	deliveries := make([]sumo.Delivery, 0, vehicles)
@@ -299,8 +317,8 @@ func GenerateSyntheticScenario(seed int64, vehicles int, departureWindowS int) s
 			destIdx = (origIdx + 1) % hubCount
 		}
 
-		from := allJakartaHubs[origIdx]
-		to := allJakartaHubs[destIdx]
+		from := JakartaHubs[origIdx]
+		to := JakartaHubs[destIdx]
 
 		vehID := fmt.Sprintf("B-%04d-JKT", 9001+i)
 		tripID := fmt.Sprintf("trip_%02d_%s_%s", i+1, strings.ToLower(from.Code[4:]), strings.ToLower(to.Code[4:]))
@@ -324,13 +342,16 @@ func GenerateSyntheticScenario(seed int64, vehicles int, departureWindowS int) s
 		co2Kg := math.Round((fuelKg*3.15)*1000) / 1000
 
 		trips = append(trips, sumo.Trip{
-			ID:        tripID,
-			Status:    sumo.TripCompleted,
-			DepartS:   departS,
-			DurationS: durS,
-			DistanceM: math.Round(distM),
-			CO2Kg:     co2Kg,
-			FuelKg:    fuelKg,
+			ID:          tripID,
+			VehicleID:   vehID,
+			Origin:      from.Name,
+			Destination: to.Name,
+			Status:      sumo.TripCompleted,
+			DepartS:     departS,
+			DurationS:   durS,
+			DistanceM:   math.Round(distM),
+			CO2Kg:       co2Kg,
+			FuelKg:      fuelKg,
 		})
 
 		// Build track positions (8 waypoints)

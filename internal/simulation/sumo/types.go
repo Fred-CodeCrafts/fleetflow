@@ -45,14 +45,26 @@ const (
 )
 
 type Trip struct {
-	ID        string     `json:"id"`
-	Status    TripStatus `json:"status"`
-	DepartS   float64    `json:"depart_s"`
-	ArrivalS  *float64   `json:"arrival_s,omitempty"`
-	DurationS float64    `json:"duration_s"`
-	DistanceM float64    `json:"distance_m"`
-	CO2Kg     float64    `json:"co2_kg"`
-	FuelKg    float64    `json:"fuel_kg"`
+	ID string `json:"id"`
+	// VehicleID is the fleet vehicle that made the trip. SUMO's tripinfo id is
+	// the vehicle id because the runner creates one trip per vehicle, so the
+	// parser copies it here; the synthetic generator sets it from the plate it
+	// assigned. It is what lets the console link a simulated trip to a fleet
+	// record instead of showing every trip as unassigned.
+	VehicleID string `json:"vehicle_id,omitempty"`
+	// Origin and Destination are the named places the trip ran between. SUMO
+	// itself only reports coordinates, so a real SUMO run leaves these empty
+	// rather than inventing names; the scenario generator fills them with the
+	// Jakarta hubs it routed between.
+	Origin      string     `json:"origin,omitempty"`
+	Destination string     `json:"destination,omitempty"`
+	Status      TripStatus `json:"status"`
+	DepartS     float64    `json:"depart_s"`
+	ArrivalS    *float64   `json:"arrival_s,omitempty"`
+	DurationS   float64    `json:"duration_s"`
+	DistanceM   float64    `json:"distance_m"`
+	CO2Kg       float64    `json:"co2_kg"`
+	FuelKg      float64    `json:"fuel_kg"`
 }
 
 type Position struct {
