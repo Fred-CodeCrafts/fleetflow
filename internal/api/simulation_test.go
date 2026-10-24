@@ -16,9 +16,16 @@ import (
 type immediateSUMOExecutor struct{}
 
 func (immediateSUMOExecutor) Run(context.Context, sumo.Scenario) (sumo.Result, error) {
+	arrival := 20.0
 	return sumo.Result{
 		SUMOVersion: "SUMO test",
-		Trips:       []sumo.Trip{{ID: "fleetflow0", Status: sumo.TripCompleted}},
+		Trips: []sumo.Trip{{
+			ID: "fleetflow0", Status: sumo.TripCompleted, ArrivalS: &arrival,
+		}},
+		Tracks: []sumo.Track{{VehicleID: "fleetflow0", Positions: []sumo.Position{
+			{TimeS: 0, Longitude: 106.8, Latitude: -6.2},
+			{TimeS: 10, Longitude: 106.81, Latitude: -6.21},
+		}}},
 	}, nil
 }
 
