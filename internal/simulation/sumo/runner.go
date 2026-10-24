@@ -118,7 +118,6 @@ func (r *Runner) Run(ctx context.Context, scenario Scenario) (Result, error) {
 		"--prefix", "fleetflow",
 		"--min-distance", strconv.Itoa(minTripDistanceM),
 		"--max-distance", strconv.Itoa(maxTripDistanceM),
-		"--no-validate",
 		"--vehicle-class", "passenger",
 	}
 	if _, err := r.runCommand(ctx, workDir, "generate seeded demand", r.tools.Python, args...); err != nil {
