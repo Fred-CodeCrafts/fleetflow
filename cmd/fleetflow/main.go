@@ -29,6 +29,9 @@ import (
 	simulationpostgres "fleetflow/internal/simulation/postgres"
 	"fleetflow/internal/simulation/sumo"
 	"fleetflow/internal/store"
+	"fleetflow/internal/trip"
+	tripmemory "fleetflow/internal/trip/memory"
+	trippostgres "fleetflow/internal/trip/postgres"
 	"fleetflow/internal/vehicle"
 	vehiclememory "fleetflow/internal/vehicle/memory"
 	vehiclepostgres "fleetflow/internal/vehicle/postgres"
@@ -135,6 +138,7 @@ func main() {
 			api.WithDatabaseCheck(pool.Ping),
 			api.WithVehicles(vehicle.NewService(vehiclepostgres.New(pool))),
 			api.WithDrivers(driver.NewService(driverpostgres.New(pool))),
+			api.WithTrips(trip.NewService(trippostgres.New(pool))),
 			api.WithAPIKeys(keys),
 		)
 		logger.Info("fleet records and api keys in postgres",
@@ -148,10 +152,12 @@ func main() {
 		simulationRepo = simulationmemory.New()
 		vehicleSvc := vehicle.NewService(vehiclememory.New())
 		driverSvc := driver.NewService(drivermemory.New())
-		seedMemoryFleet(ctx, vehicleSvc, driverSvc)
+		tripSvc := trip.NewService(tripmemory.New())
+		seedMemoryFleet(ctx, vehicleSvc, driverSvc, tripSvc)
 		opts = append(opts,
 			api.WithVehicles(vehicleSvc),
 			api.WithDrivers(driverSvc),
+			api.WithTrips(tripSvc),
 			api.WithAPIKeys(auth.NewService(keys)),
 		)
 		logger.Warn("no database configured: fleet records and api keys are in memory and will be lost on restart")
@@ -211,7 +217,7 @@ func fatal(logger *slog.Logger, msg string, attrs ...slog.Attr) {
 	os.Exit(1)
 }
 
-func seedMemoryFleet(ctx context.Context, vSvc *vehicle.Service, dSvc *driver.Service) {
+func seedMemoryFleet(ctx context.Context, vSvc *vehicle.Service, dSvc *driver.Service, tSvc *trip.Service) {
 	vehicles := []vehicle.CreateInput{
 		{Name: "B-9012-JKT", Type: "heavy_truck", Status: "on_trip", Registration: "B-9012-JKT", Make: "Isuzu", Model: "Giga FVM", Color: "White", FuelType: "diesel"},
 		{Name: "B-9431-JKT", Type: "box_truck", Status: "on_trip", Registration: "B-9431-JKT", Make: "Mitsubishi", Model: "Fuso Canter", Color: "Yellow", FuelType: "diesel"},
@@ -232,5 +238,16 @@ func seedMemoryFleet(ctx context.Context, vSvc *vehicle.Service, dSvc *driver.Se
 	}
 	for _, d := range drivers {
 		_, _ = dSvc.Create(ctx, d)
+	}
+
+	trips := []trip.CreateInput{
+		{Origin: "Tanjung Priok Port Terminal", Destination: "Kelapa Gading Commercial District", VehicleID: "B-9012-JKT", Status: "in_progress"},
+		{Origin: "Pluit Urban Logistics Depot", Destination: "Glodok Commercial Hub", VehicleID: "B-9431-JKT", Status: "in_progress"},
+		{Origin: "Halim Air Cargo Terminal", Destination: "Sudirman Business Corridor", VehicleID: "B-9204-JKT", Status: "in_progress"},
+		{Origin: "Cilandak Urban Fulfillment Hub", Destination: "Senayan City Retail Store", VehicleID: "B-9550-JKT", Status: "planned"},
+		{Origin: "Tomang Regional Logistics Spine", Destination: "Grand Indonesia Thamrin", VehicleID: "B-9118-JKT", Status: "planned"},
+	}
+	for _, tr := range trips {
+		_, _ = tSvc.Create(ctx, tr)
 	}
 }
