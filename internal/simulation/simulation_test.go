@@ -19,10 +19,17 @@ func (f executorFunc) Run(ctx context.Context, scenario sumo.Scenario) (sumo.Res
 }
 
 func TestStartPersistsCompletedSUMOResult(t *testing.T) {
+	arrival := 20.0
 	result := sumo.Result{
 		SUMOVersion: "SUMO 1.27.1",
 		Seed:        7,
-		Trips:       []sumo.Trip{{ID: "fleetflow0", Status: sumo.TripCompleted}},
+		Trips:       []sumo.Trip{{ID: "fleetflow0", Status: sumo.TripCompleted, ArrivalS: &arrival}},
+		Tracks: []sumo.Track{{VehicleID: "fleetflow0", Positions: []sumo.Position{
+			{TimeS: 0, Longitude: 106.8, Latitude: -6.2},
+			{TimeS: 5, Longitude: 106.81, Latitude: -6.21},
+			{TimeS: 10, Longitude: 106.82, Latitude: -6.22},
+			{TimeS: 15, Longitude: 106.83, Latitude: -6.23},
+		}}},
 	}
 	service, err := simulation.NewService(context.Background(), memory.New(), executorFunc(func(context.Context, sumo.Scenario) (sumo.Result, error) {
 		return result, nil
@@ -42,6 +49,10 @@ func TestStartPersistsCompletedSUMOResult(t *testing.T) {
 	}
 	if completed.StartedAt == nil || completed.FinishedAt == nil {
 		t.Fatalf("run timestamps = started %v, finished %v", completed.StartedAt, completed.FinishedAt)
+	}
+	if completed.Result == nil || len(completed.Result.Deliveries) != 1 ||
+		len(completed.Result.Deliveries[0].Stops) == 0 || len(completed.Result.Deliveries[0].Events) == 0 {
+		t.Fatalf("completed run has no generated delivery history: %#v", completed.Result)
 	}
 }
 

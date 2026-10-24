@@ -195,6 +195,11 @@ func (s *Service) execute(run Run) {
 	}
 
 	result, err := s.executor.Run(s.ctx, run.Scenario)
+	if err == nil {
+		if deliveryErr := generateDeliveries(&result); deliveryErr != nil {
+			err = fmt.Errorf("generate simulated delivery history: %w", deliveryErr)
+		}
+	}
 	finished := time.Now().UTC()
 	run.FinishedAt = &finished
 	if err != nil {

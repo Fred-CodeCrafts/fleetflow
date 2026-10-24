@@ -66,6 +66,62 @@ type Track struct {
 	Positions []Position `json:"positions"`
 }
 
+type DeliveryStatus string
+
+const (
+	DeliveryInProgress DeliveryStatus = "in_progress"
+	DeliveryCompleted  DeliveryStatus = "completed"
+)
+
+type StopStatus string
+
+const (
+	StopPending   StopStatus = "pending"
+	StopReached   StopStatus = "reached"
+	StopDelivered StopStatus = "delivered"
+)
+
+type PackageStatus string
+
+const (
+	PackageInTransit PackageStatus = "in_transit"
+	PackageDelivered PackageStatus = "delivered"
+)
+
+type DeliveryStop struct {
+	ID        string     `json:"id"`
+	Order     int        `json:"order"`
+	PackageID string     `json:"package_id"`
+	Latitude  float64    `json:"latitude"`
+	Longitude float64    `json:"longitude"`
+	TimeS     float64    `json:"time_s"`
+	Status    StopStatus `json:"status"`
+}
+
+type Package struct {
+	ID     string        `json:"id"`
+	StopID string        `json:"stop_id"`
+	Status PackageStatus `json:"status"`
+}
+
+type DeliveryEvent struct {
+	Sequence  int     `json:"sequence"`
+	TimeS     float64 `json:"time_s"`
+	Type      string  `json:"type"`
+	PackageID string  `json:"package_id,omitempty"`
+	StopID    string  `json:"stop_id,omitempty"`
+}
+
+type Delivery struct {
+	ID        string          `json:"id"`
+	TripID    string          `json:"trip_id"`
+	VehicleID string          `json:"vehicle_id"`
+	Status    DeliveryStatus  `json:"status"`
+	Packages  []Package       `json:"packages"`
+	Stops     []DeliveryStop  `json:"stops"`
+	Events    []DeliveryEvent `json:"events"`
+}
+
 type EmissionProvenance struct {
 	Model       string `json:"model"`
 	Class       string `json:"class"`
@@ -83,4 +139,5 @@ type Result struct {
 	Emissions   EmissionProvenance `json:"emissions"`
 	Trips       []Trip             `json:"trips"`
 	Tracks      []Track            `json:"tracks"`
+	Deliveries  []Delivery         `json:"deliveries"`
 }
