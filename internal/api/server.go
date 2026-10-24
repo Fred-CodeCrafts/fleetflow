@@ -145,6 +145,7 @@ func (s *Server) routes() {
 	s.mux.Handle("POST /api/simulation/runs", s.public(s.handleCreateSimulationRun))
 	s.mux.Handle("GET /api/simulation/runs", s.public(s.handleListSimulationRuns))
 	s.mux.Handle("GET /api/simulation/runs/{id}", s.public(s.handleGetSimulationRun))
+	s.mux.Handle("GET /api/emissions/summary", s.public(s.handleEmissionsSummary))
 
 	console := s.public(web.Handler().ServeHTTP)
 	s.mux.Handle("GET /{$}", console)
