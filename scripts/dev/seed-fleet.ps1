@@ -64,9 +64,13 @@ Invoke-FleetFlowApi -Method 'Get' -Path '/healthz' -Body $null | Out-Null
 $vehicleData = Invoke-FleetFlowApi -Method 'Get' -Path '/api/vehicles' -Body $null
 $vehicles = @($vehicleData.vehicles)
 $vehicleSeeds = @(
-    @{ name = 'DEMO - Jakarta Van 01'; type = 'van'; status = 'available' },
-    @{ name = 'DEMO - Jakarta Truck 01'; type = 'truck'; status = 'available' },
-    @{ name = 'DEMO - Jakarta Car 01'; type = 'car'; status = 'available' }
+    @{ name = 'B-9012-JKT'; registration = 'B-9012-JKT'; make = 'Isuzu'; model = 'Giga FVM Heavy Cargo'; type = 'truck'; status = 'available'; body_type = 'Heavy Cargo Box'; capacity = 14000; year = 2022; color = 'White' },
+    @{ name = 'B-9431-JKT'; registration = 'B-9431-JKT'; make = 'Mitsubishi'; model = 'Fuso Canter 136 HDL'; type = 'truck'; status = 'available'; body_type = 'Box Truck'; capacity = 4500; year = 2023; color = 'Yellow' },
+    @{ name = 'B-9204-JKT'; registration = 'B-9204-JKT'; make = 'Toyota'; model = 'HiAce Commuter Cargo'; type = 'van'; status = 'available'; body_type = 'Van'; capacity = 1200; year = 2023; color = 'Silver' },
+    @{ name = 'B-9550-JKT'; registration = 'B-9550-JKT'; make = 'Daihatsu'; model = 'Gran Max Blind Van'; type = 'van'; status = 'available'; body_type = 'Blind Van'; capacity = 800; year = 2024; color = 'White' },
+    @{ name = 'B-9118-JKT'; registration = 'B-9118-JKT'; make = 'Honda'; model = 'PCX Electric Cargo'; type = 'motorcycle'; status = 'available'; body_type = 'Motorcycle Cargo'; capacity = 60; year = 2024; color = 'Blue' },
+    @{ name = 'B-9672-JKT'; registration = 'B-9672-JKT'; make = 'Hino'; model = 'Dutro 130 HD Cargo'; type = 'truck'; status = 'available'; body_type = 'Box Truck'; capacity = 4500; year = 2023; color = 'Green' },
+    @{ name = 'B-9801-JKT'; registration = 'B-9801-JKT'; make = 'Wuling'; model = 'Formo Blind Van'; type = 'van'; status = 'available'; body_type = 'Blind Van'; capacity = 650; year = 2023; color = 'White' }
 )
 foreach ($seed in $vehicleSeeds) {
     $vehicle = Get-OrCreateRecord -Records $vehicles -Field 'name' -Value $seed.name `
@@ -77,8 +81,11 @@ foreach ($seed in $vehicleSeeds) {
 $driverData = Invoke-FleetFlowApi -Method 'Get' -Path '/api/drivers' -Body $null
 $drivers = @($driverData.drivers)
 $driverSeeds = @(
-    @{ name = 'DEMO - Driver 01'; contact = 'demo-driver-01@example.invalid' },
-    @{ name = 'DEMO - Driver 02'; contact = 'demo-driver-02@example.invalid' }
+    @{ name = 'Budi Santoso'; contact = '+62 812-3456-7890'; contact_phone = '+62 812-3456-7890'; license_class = 'B2 Umum'; shift_start = '07:00'; shift_end = '16:00'; availability = 'available'; contract_type = 'Full-time' },
+    @{ name = 'Agus Setiawan'; contact = '+62 813-9876-5432'; contact_phone = '+62 813-9876-5432'; license_class = 'B1'; shift_start = '08:00'; shift_end = '17:00'; availability = 'available'; contract_type = 'Contract' },
+    @{ name = 'Rian Hidayat'; contact = '+62 815-2233-4455'; contact_phone = '+62 815-2233-4455'; license_class = 'A'; shift_start = '08:00'; shift_end = '17:00'; availability = 'available'; contract_type = 'Full-time' },
+    @{ name = 'Eko Prasetyo'; contact = '+62 817-6677-8899'; contact_phone = '+62 817-6677-8899'; license_class = 'A'; shift_start = '06:00'; shift_end = '15:00'; availability = 'available'; contract_type = 'Contract' },
+    @{ name = 'Dimas Pratama'; contact = '+62 819-3344-5566'; contact_phone = '+62 819-3344-5566'; license_class = 'C'; shift_start = '09:00'; shift_end = '18:00'; availability = 'available'; contract_type = 'Freelance' }
 )
 foreach ($seed in $driverSeeds) {
     $driver = Get-OrCreateRecord -Records $drivers -Field 'name' -Value $seed.name `
@@ -86,6 +93,6 @@ foreach ($seed in $driverSeeds) {
     $drivers += $driver
 }
 
-Write-Output "Seeded demo fleet records at $BaseUrl."
-Write-Output 'Created or reused 3 demo vehicles and 2 demo drivers.'
+Write-Output "Seeded realistic fleet records at $BaseUrl."
+Write-Output "Created or verified $($vehicleSeeds.Count) fleet vehicles with cargo capacity and $($driverSeeds.Count) drivers with contract types."
 Write-Output 'No GPS positions were generated. DEMO records are sample data, not live fleet activity.'

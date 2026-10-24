@@ -219,13 +219,13 @@ func ptrInt(i int) *int             { return &i }
 
 func seedMemoryFleet(ctx context.Context, vSvc *vehicle.Service, dSvc *driver.Service, tSvc *trip.Service) {
 	vehicles := []vehicle.CreateInput{
-		{Name: "B-9012-JKT", Type: "truck", Status: "on_trip", Registration: "B-9012-JKT", Make: "Isuzu", Model: "Giga FVM Heavy Cargo", BodyType: "Heavy Cargo Box", FuelType: "Diesel", Capacity: ptrFloat(14000), Year: ptrInt(2022), Color: "White"},
-		{Name: "B-9431-JKT", Type: "truck", Status: "on_trip", Registration: "B-9431-JKT", Make: "Mitsubishi", Model: "Fuso Canter 136 HDL", BodyType: "Box Truck", FuelType: "Diesel", Capacity: ptrFloat(4500), Year: ptrInt(2023), Color: "Yellow"},
-		{Name: "B-9204-JKT", Type: "van", Status: "on_trip", Registration: "B-9204-JKT", Make: "Toyota", Model: "HiAce Commuter Cargo", BodyType: "Van", FuelType: "Diesel", Capacity: ptrFloat(1200), Year: ptrInt(2023), Color: "Silver"},
-		{Name: "B-9550-JKT", Type: "van", Status: "available", Registration: "B-9550-JKT", Make: "Daihatsu", Model: "Gran Max Blind Van", BodyType: "Blind Van", FuelType: "Petrol", Capacity: ptrFloat(800), Year: ptrInt(2024), Color: "White"},
-		{Name: "B-9118-JKT", Type: "motorcycle", Status: "available", Registration: "B-9118-JKT", Make: "Honda", Model: "PCX Electric Cargo", BodyType: "Motorcycle Cargo", FuelType: "Electric", Capacity: ptrFloat(60), Year: ptrInt(2024), Color: "Blue"},
-		{Name: "B-9672-JKT", Type: "truck", Status: "available", Registration: "B-9672-JKT", Make: "Hino", Model: "Dutro 130 HD Cargo", BodyType: "Box Truck", FuelType: "Diesel", Capacity: ptrFloat(4500), Year: ptrInt(2023), Color: "Green"},
-		{Name: "B-9801-JKT", Type: "van", Status: "available", Registration: "B-9801-JKT", Make: "Wuling", Model: "Formo Blind Van", BodyType: "Blind Van", FuelType: "Petrol", Capacity: ptrFloat(650), Year: ptrInt(2023), Color: "White"},
+		{Name: "B-9012-JKT", Type: "truck", Status: "on_trip", Registration: "B-9012-JKT", Make: "Isuzu", Model: "Giga FVM Heavy Cargo", BodyType: "Heavy Cargo Box", Capacity: ptrFloat(14000), Year: ptrInt(2022), Color: "White"},
+		{Name: "B-9431-JKT", Type: "truck", Status: "on_trip", Registration: "B-9431-JKT", Make: "Mitsubishi", Model: "Fuso Canter 136 HDL", BodyType: "Box Truck", Capacity: ptrFloat(4500), Year: ptrInt(2023), Color: "Yellow"},
+		{Name: "B-9204-JKT", Type: "van", Status: "on_trip", Registration: "B-9204-JKT", Make: "Toyota", Model: "HiAce Commuter Cargo", BodyType: "Van", Capacity: ptrFloat(1200), Year: ptrInt(2023), Color: "Silver"},
+		{Name: "B-9550-JKT", Type: "van", Status: "available", Registration: "B-9550-JKT", Make: "Daihatsu", Model: "Gran Max Blind Van", BodyType: "Blind Van", Capacity: ptrFloat(800), Year: ptrInt(2024), Color: "White"},
+		{Name: "B-9118-JKT", Type: "motorcycle", Status: "available", Registration: "B-9118-JKT", Make: "Honda", Model: "PCX Electric Cargo", BodyType: "Motorcycle Cargo", Capacity: ptrFloat(60), Year: ptrInt(2024), Color: "Blue"},
+		{Name: "B-9672-JKT", Type: "truck", Status: "available", Registration: "B-9672-JKT", Make: "Hino", Model: "Dutro 130 HD Cargo", BodyType: "Box Truck", Capacity: ptrFloat(4500), Year: ptrInt(2023), Color: "Green"},
+		{Name: "B-9801-JKT", Type: "van", Status: "available", Registration: "B-9801-JKT", Make: "Wuling", Model: "Formo Blind Van", BodyType: "Blind Van", Capacity: ptrFloat(650), Year: ptrInt(2023), Color: "White"},
 	}
 	for _, v := range vehicles {
 		_, _ = vSvc.Create(ctx, v)
