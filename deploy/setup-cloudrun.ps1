@@ -9,7 +9,8 @@
 param(
     [string]$ProjectId = $env:PROJECT_ID,
     [string]$Region = $(if ($env:REGION) { $env:REGION } else { "asia-southeast2" }),
-    [string]$DatabaseUrl = $env:DATABASE_URL
+    [string]$DatabaseUrl = $env:DATABASE_URL,
+    [string]$OsrmUrl = $(if ($env:OSRM_URL) { $env:OSRM_URL } else { "https://router.project-osrm.org" })
 )
 
 $ErrorActionPreference = 'Stop'
@@ -62,6 +63,7 @@ Write-Host "==> Deploying Cloud Run service '$serviceName'..." -ForegroundColor 
     --no-cpu-throttling `
     --port 8080 `
     --allow-unauthenticated `
+    --set-env-vars OSRM_URL=$OsrmUrl `
     --project $ProjectId `
     --quiet
 

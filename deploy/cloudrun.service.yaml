@@ -37,7 +37,7 @@ spec:
             - name: LOG_LEVEL
               value: "info"
             - name: OSRM_URL
-              value: "http://osrm.internal:5000"
+              value: "https://router.project-osrm.org"
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
