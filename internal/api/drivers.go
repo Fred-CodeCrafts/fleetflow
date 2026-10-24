@@ -9,21 +9,38 @@ import (
 // driverView is a driver as the API writes it. VehicleID is left out when the
 // driver holds no vehicle, so "unassigned" reads the same as "absent".
 type driverView struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Contact   string `json:"contact"`
-	VehicleID string `json:"vehicle_id,omitempty"`
+	ID            string  `json:"id"`
+	Name          string  `json:"name"`
+	Contact       string  `json:"contact"`
+	ContactPhone  *string `json:"contact_phone"`
+	LicenseClass  *string `json:"license_class"`
+	LicenseExpiry *string `json:"license_expiry"`
+	ShiftStart    *string `json:"shift_start"`
+	ShiftEnd      *string `json:"shift_end"`
+	Availability  *string `json:"availability"`
+	VehicleID     string  `json:"vehicle_id,omitempty"`
 }
 
 // viewOfDriver renders a stored driver for a response.
 func viewOfDriver(d driver.Driver) driverView {
-	return driverView{ID: d.ID, Name: d.Name, Contact: d.Contact, VehicleID: d.VehicleID}
+	return driverView{
+		ID: d.ID, Name: d.Name, Contact: d.Contact, ContactPhone: optionalText(d.ContactPhone),
+		LicenseClass: optionalText(d.LicenseClass), LicenseExpiry: optionalText(d.LicenseExpiry),
+		ShiftStart: optionalText(d.ShiftStart), ShiftEnd: optionalText(d.ShiftEnd),
+		Availability: optionalText(d.Availability), VehicleID: d.VehicleID,
+	}
 }
 
 // createDriverRequest is the body of POST /api/drivers (DESIGN 3.5).
 type createDriverRequest struct {
-	Name    string `json:"name"`
-	Contact string `json:"contact"`
+	Name          string `json:"name"`
+	Contact       string `json:"contact"`
+	ContactPhone  string `json:"contact_phone"`
+	LicenseClass  string `json:"license_class"`
+	LicenseExpiry string `json:"license_expiry"`
+	ShiftStart    string `json:"shift_start"`
+	ShiftEnd      string `json:"shift_end"`
+	Availability  string `json:"availability"`
 }
 
 // handleListDrivers answers GET /api/drivers.
@@ -59,7 +76,11 @@ func (s *Server) handleCreateDriver(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	created, err := s.drivers.Create(r.Context(), driver.CreateInput{Name: req.Name, Contact: req.Contact})
+	created, err := s.drivers.Create(r.Context(), driver.CreateInput{
+		Name: req.Name, Contact: req.Contact, ContactPhone: req.ContactPhone,
+		LicenseClass: req.LicenseClass, LicenseExpiry: req.LicenseExpiry,
+		ShiftStart: req.ShiftStart, ShiftEnd: req.ShiftEnd, Availability: req.Availability,
+	})
 	if err != nil {
 		writeError(w, r, err)
 		return
