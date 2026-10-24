@@ -55,6 +55,40 @@ export interface SimulatedTrack {
   positions: SimulatedPosition[]
 }
 
+export interface SimulatedDeliveryStop {
+  id: string
+  order: number
+  package_id: string
+  latitude: number
+  longitude: number
+  time_s: number
+  status: 'pending' | 'reached' | 'delivered'
+}
+
+export interface SimulatedPackage {
+  id: string
+  stop_id: string
+  status: 'in_transit' | 'delivered'
+}
+
+export interface SimulatedDeliveryEvent {
+  sequence: number
+  time_s: number
+  type: string
+  package_id?: string
+  stop_id?: string
+}
+
+export interface SimulatedDelivery {
+  id: string
+  trip_id: string
+  vehicle_id: string
+  status: 'in_progress' | 'completed'
+  packages: SimulatedPackage[]
+  stops: SimulatedDeliveryStop[]
+  events: SimulatedDeliveryEvent[]
+}
+
 export interface EmissionProvenance {
   model: string
   class: string
@@ -72,6 +106,7 @@ export interface SimulationResult {
   emissions?: EmissionProvenance
   trips: SimulatedTrip[]
   tracks: SimulatedTrack[]
+  deliveries?: SimulatedDelivery[]
 }
 
 export interface SimulationRun {

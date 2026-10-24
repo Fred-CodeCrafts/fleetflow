@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import * as maplibregl from 'maplibre-gl'
 import maplibreWorkerURL from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import { api, type Coordinate, type OSRMRoute, type SimulatedTrack, type VehicleLocation } from '../api/client'
+import { api, type Coordinate, type OSRMRoute, type SimulatedDeliveryStop, type SimulatedTrack, type VehicleLocation } from '../api/client'
 import { ErrorMessage, Panel } from '../screens/Shared'
 
 maplibregl.setWorkerUrl(maplibreWorkerURL)
@@ -53,13 +53,20 @@ function simulatedRouteFeatures(tracks: SimulatedTrack[]): MapFeature[] {
   })
 }
 
-export function RoutingMap({ route, selectedPoints, onPickPoint, compact = false, positionMode = 'live', simulationTracks = [] }: {
+function deliveryStopFeatures(stops: SimulatedDeliveryStop[]): MapFeature[] {
+  return stops.map((stop) =>
+    pointFeature({ lat: stop.latitude, lon: stop.longitude }, `Stop ${stop.order}`, 'delivery-stop'),
+  )
+}
+
+export function RoutingMap({ route, selectedPoints, onPickPoint, compact = false, positionMode = 'live', simulationTracks = [], simulationStops = [] }: {
   route?: OSRMRoute | null
   selectedPoints?: { from?: Coordinate; to?: Coordinate }
   onPickPoint?: (point: Coordinate) => void
   compact?: boolean
   positionMode?: 'live' | 'simulation'
   simulationTracks?: SimulatedTrack[]
+  simulationStops?: SimulatedDeliveryStop[]
 }) {
   const container = useRef<HTMLDivElement>(null)
   const map = useRef<maplibregl.Map | null>(null)
@@ -108,6 +115,30 @@ export function RoutingMap({ route, selectedPoints, onPickPoint, compact = false
         source: 'simulation-routes',
         layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: { 'line-color': '#e67700', 'line-width': 4, 'line-opacity': 0.9 },
+      })
+      instance.addSource('simulation-stops', { type: 'geojson', data: featureCollection([]) })
+      instance.addLayer({
+        id: 'simulation-stop-circles',
+        type: 'circle',
+        source: 'simulation-stops',
+        paint: {
+          'circle-color': '#ffffff',
+          'circle-radius': 8,
+          'circle-stroke-color': '#8a3ffc',
+          'circle-stroke-width': 3,
+        },
+      })
+      instance.addLayer({
+        id: 'simulation-stop-labels',
+        type: 'symbol',
+        source: 'simulation-stops',
+        layout: {
+          'text-field': ['get', 'label'],
+          'text-offset': [0, 1.3],
+          'text-size': 11,
+          'text-font': ['Noto Sans Regular'],
+        },
+        paint: { 'text-color': '#5825a4', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 },
       })
       instance.addSource('waypoints', { type: 'geojson', data: featureCollection([]) })
       instance.addLayer({
@@ -234,6 +265,9 @@ export function RoutingMap({ route, selectedPoints, onPickPoint, compact = false
     const simulationSource = instance.getSource('simulation-routes') as maplibregl.GeoJSONSource
     const simulationFeatures = positionMode === 'simulation' ? simulatedRouteFeatures(simulationTracks) : []
     simulationSource.setData(featureCollection(simulationFeatures))
+    const deliveryStopSource = instance.getSource('simulation-stops') as maplibregl.GeoJSONSource
+    const deliveryStops = positionMode === 'simulation' ? deliveryStopFeatures(simulationStops) : []
+    deliveryStopSource.setData(featureCollection(deliveryStops))
     const simulationPositionSource = instance.getSource('simulation-positions') as maplibregl.GeoJSONSource
     const simulationPositions = positionMode === 'simulation' ? simulatedPositionFeatures(simulationTracks) : []
     simulationPositionSource.setData(featureCollection(simulationPositions))
@@ -249,6 +283,9 @@ export function RoutingMap({ route, selectedPoints, onPickPoint, compact = false
       )
       const bounds = new maplibregl.LngLatBounds()
       for (const point of coordinates) bounds.extend(point)
+      for (const feature of deliveryStops) {
+        if (feature.geometry.type === 'Point') bounds.extend(feature.geometry.coordinates)
+      }
       instance.fitBounds(bounds, { padding: 72, maxZoom: 15, duration: 500 })
     } else if (waypoints.length) {
       const coordinates: [number, number][] = []
@@ -262,7 +299,7 @@ export function RoutingMap({ route, selectedPoints, onPickPoint, compact = false
       if (waypoints.length > 1) instance.fitBounds(bounds, { padding: 72, maxZoom: 15, duration: 500 })
       else instance.easeTo({ center: coordinates[0], zoom: 14 })
     }
-  }, [loaded, positionMode, positions, route, selectedPoints, simulationTracks])
+  }, [loaded, positionMode, positions, route, selectedPoints, simulationStops, simulationTracks])
 
   return <Panel title={compact ? 'Jakarta map' : positionMode === 'simulation' ? 'SUMO simulation map' : 'Live fleet map'} action={
     <button className="button" onClick={() => map.current?.easeTo({ center: jakarta, zoom: 11, duration: 500 })}>Jakarta</button>
@@ -271,7 +308,8 @@ export function RoutingMap({ route, selectedPoints, onPickPoint, compact = false
     <div ref={container} className={`network-map ${compact ? 'compact' : ''}`} aria-label="Map of Jakarta" />
     <div className="map-legend">
       {positionMode === 'simulation' ?
-        <span><i className="legend-road simulation-route" /> SUMO route and simulated positions</span> :
+        <><span><i className="legend-road simulation-route" /> SUMO route and simulated positions</span>
+          {simulationStops.length > 0 && <span><i className="legend-road delivery-stop" /> Generated delivery stops</span>}</> :
         <span><i className="legend-road vehicle" /> Reported vehicle GPS</span>}
       {route && <span><i className="legend-road route" /> OSRM driving route</span>}
       {positionMode === 'live' && positions.length === 0 && <span>No recent GPS positions</span>}

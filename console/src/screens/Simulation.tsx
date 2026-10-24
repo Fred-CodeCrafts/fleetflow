@@ -174,6 +174,7 @@ export function SimulationTripPage() {
   const selected = useSimulationRun(runID)
   const trip = selected.run?.result?.trips.find((item) => item.id === tripID)
   const track = selected.run?.result?.tracks.find((item) => item.vehicle_id === tripID)
+  const delivery = selected.run?.result?.deliveries?.find((item) => item.trip_id === tripID)
   const positions = track?.positions ?? []
   const route: SimulatedTrack[] = track ? [track] : []
 
@@ -195,7 +196,7 @@ export function SimulationTripPage() {
       <Metric label="Duration" value={`${formatNumber(trip.duration_s / 60, 1)} min`} />
       <Metric label="CO₂ estimate" value={`${formatNumber(trip.co2_kg, 3)} kg`} note="SUMO model output" />
     </div>
-    <RoutingMap positionMode="simulation" simulationTracks={route} />
+    <RoutingMap positionMode="simulation" simulationTracks={route} simulationStops={delivery?.stops ?? []} />
     <Panel title="Emission estimate provenance">
       {selected.run.result.emissions
         ? <p className="help-text">
@@ -216,6 +217,32 @@ export function SimulationTripPage() {
             <td>{formatNumber(position.time_s, 0)} s</td><td>{position.latitude.toFixed(5)}</td><td>{position.longitude.toFixed(5)}</td>
           </tr>)}
         </Table> : <p className="empty-state">SUMO did not emit a geographic position trace for this trip.</p>}
+    </Panel>
+    <Panel title="Generated delivery stops">
+      {delivery?.stops.length
+        ? <>
+          <p className="help-text">Seeded simulation stops inferred from the SUMO trace; these are not scanned or live package events.</p>
+          <Table headers={['Stop', 'Package', 'Simulation time', 'Latitude', 'Longitude', 'Status']}>
+            {delivery.stops.map((stop) => <tr key={stop.id}>
+              <td>{stop.order}</td><td>{stop.package_id}</td><td>{formatNumber(stop.time_s, 0)} s</td>
+              <td>{stop.latitude.toFixed(5)}</td><td>{stop.longitude.toFixed(5)}</td><td><Status value={stop.status} /></td>
+            </tr>)}
+          </Table>
+        </>
+        : <p className="empty-state">Delivery stop history is unavailable for this stored run.</p>}
+    </Panel>
+    <Panel title="Package event timeline">
+      {delivery?.events.length
+        ? <>
+          <p className="help-text">Events are ordered by simulation time and represent generated scenario history, not real scans.</p>
+          <Table headers={['#', 'Simulation time', 'Event', 'Package', 'Stop']}>
+            {delivery.events.map((event) => <tr key={`${event.sequence}-${event.type}`}>
+              <td>{event.sequence}</td><td>{formatNumber(event.time_s, 0)} s</td>
+              <td>{event.type.replaceAll('_', ' ')}</td><td>{event.package_id ?? '—'}</td><td>{event.stop_id ?? '—'}</td>
+            </tr>)}
+          </Table>
+        </>
+        : <p className="empty-state">Package event history is unavailable for this stored run.</p>}
     </Panel>
     <p className="help-text">Position samples, distance, duration, fuel, and emissions are simulation output, not real telemetry or measured activity.</p>
   </Page>
