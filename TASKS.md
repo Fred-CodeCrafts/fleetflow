@@ -37,9 +37,12 @@ implementation caveats.
 - [x] Add scenario/run monitoring and read-only generated trip detail screens;
   remove manual trip creation and driver assignment controls.
 - [ ] Add multi-stop route playback and package-event timelines.
-- [ ] Expand vehicle details with specifications and maintenance history; add
-  driver contact, license, shift, and availability without unnecessary
-  sensitive identity fields.
+- [x] Capture optional vehicle specifications and maintenance notes, and driver
+  contact, license, shift, and availability without collecting sensitive
+  identity fields; keep missing values explicitly unknown.
+- [x] Add individual vehicle and driver profile pages.
+- [ ] Link automatically dispatched scenario trips to fleet records and show
+  those records' associated trip history.
 - [ ] Record SUMO fuel/emissions model, units, and assumptions; separate
   simulated estimates from measured activity.
 - [ ] Package or delegate SUMO execution for durable Cloud Run deployment; test

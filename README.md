@@ -118,8 +118,9 @@ their attribution is displayed on the map.
   a connected device sends positions; it does not show static preview markers.
 - **Route Planner** sends the selected coordinates to OSRM and draws the returned
   route geometry, distance, and estimated duration.
-- **Vehicles** and **Drivers** manage fleet records and display current
-  allocations. Manual driver assignment is not exposed.
+- **Vehicles** and **Drivers** capture non-sensitive fleet profiles and display
+  current allocations. Each record links to its own detail page; manual driver
+  assignment is not exposed.
 - **General Settings** reports app health and the routing/map providers.
 
 Fuel and CO₂ values are SUMO HBEFA3 estimates for the explicitly assigned
@@ -127,8 +128,9 @@ Fuel and CO₂ values are SUMO HBEFA3 estimates for the explicitly assigned
 converted from milligrams to kilograms, and the model, class, units, source, and
 assumptions are stored with each run. This generic class is not a fleet-specific
 measurement or verified carbon saving. Automatic roster assignment, package
-entities and multi-stop event history, and full vehicle/driver profiles remain
-planned work.
+entities, automatic roster assignment, and multi-stop event history remain
+planned. Fleet profile pages do not show linked trip history until automatic
+dispatch records the vehicle and driver assigned to each scenario trip.
 
 ## API
 
