@@ -16,7 +16,6 @@ const initialVehicle = (models: VehicleModel[]) => {
     year: '',
     color: '',
     body_type: first?.body_type ?? '',
-    fuel_type: first?.fuel_type ?? '',
     capacity: first ? String(first.capacity_kg) : '',
   }
 }
@@ -30,14 +29,31 @@ const unknown = (value: string | number | null | undefined) => value ?? 'Unknown
 export function VehiclesPage() {
   const navigate = useNavigate()
   const vehicles = useLoad(api.vehicles)
+  const drivers = useLoad(api.drivers)
   const availableModels = getVehicleModels()
   const [form, setForm] = useState(() => initialVehicle(availableModels))
   const [error, setError] = useState('')
 
   const handleRowClick = (e: React.MouseEvent, vehicleName: string) => {
     const target = e.target as HTMLElement
-    if (target.closest('a') || target.closest('button') || target.closest('input')) return
+    if (target.closest('a') || target.closest('button') || target.closest('select') || target.closest('input')) return
     navigate(`/resources/maintenance?vehicle=${encodeURIComponent(vehicleName)}`)
+  }
+
+  const handleAssignDriver = async (vehicleId: string, driverId: string) => {
+    try {
+      if (driverId) {
+        await api.assignDriverVehicle(driverId, vehicleId)
+      } else {
+        const current = drivers.data?.find((d) => d.vehicle_id === vehicleId)
+        if (current) {
+          await api.assignDriverVehicle(current.id, '')
+        }
+      }
+      await Promise.all([vehicles.reload(), drivers.reload()])
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not assign driver to vehicle.')
+    }
   }
 
   const onSelectModel = (modelName: string) => {
@@ -48,7 +64,6 @@ export function VehiclesPage() {
         model: selected.name,
         type: selected.type,
         body_type: selected.body_type,
-        fuel_type: selected.fuel_type,
         capacity: String(selected.capacity_kg),
       }))
     } else {
@@ -89,42 +104,54 @@ export function VehiclesPage() {
       </label>
       <div className="field location-value">
         <span>Model specs</span>
-        <output>{form.body_type || '—'} · {form.fuel_type || '—'} · {form.type.toUpperCase()}</output>
+        <output>{form.body_type || '—'} · {form.type.toUpperCase()}</output>
       </div>
-      <label className="field">
-        Fuel type
-        <select value={form.fuel_type} onChange={(e) => setForm({ ...form, fuel_type: e.target.value })}>
-          <option value="Petrol">Petrol</option>
-          <option value="Diesel">Diesel</option>
-          <option value="Electric">Electric</option>
-          <option value="Hybrid">Hybrid</option>
-          <option value="CNG">CNG</option>
-        </select>
-      </label>
       <label className="field">Status<select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as 'available' | 'offline' })}>
         <option value="available">Available</option><option value="offline">Offline</option>
       </select></label>
       <button className="button primary">Add vehicle</button>
     </form>
-    <p className="help-text">Capacity indicates maximum payload weight in kilograms (kg). Body type and fuel type are pre-filled from the selected Vehicle Model and can be customized.</p>
+    <p className="help-text">Capacity indicates maximum payload weight in kilograms (kg). Body type is pre-filled from the selected Vehicle Model.</p>
     {error && <ErrorMessage>{error}</ErrorMessage>}</Panel>
-    <Panel title="Vehicle register" action={<button className="button" onClick={() => void vehicles.reload()}>Refresh</button>}>
-      {vehicles.loading ? <Loading /> : vehicles.error ? <ErrorMessage>{vehicles.error}</ErrorMessage> :
-        <Table headers={['Name', 'Registration', 'Model', 'Year', 'Color', 'Body / fuel', 'Cargo capacity', 'Maintenance history', 'Status']}>{(vehicles.data ?? []).map((v) =>
-          <tr
-            key={v.id}
-            onClick={(e) => handleRowClick(e, v.name)}
-            style={{ cursor: 'pointer' }}
-            title="Click row to view vehicle maintenance history"
-          ><td><Link to={`/resources/vehicles/${encodeURIComponent(v.id)}`}>{v.name}</Link></td><td>{unknown(v.registration)}</td><td>{v.model || v.make || 'Unknown'}</td>
-            <td>{unknown(v.year)}</td><td>{unknown(v.color)}</td><td>{v.body_type || v.fuel_type ? `${v.body_type ?? 'Unknown'} / ${v.fuel_type ?? 'Unknown'}` : 'Unknown'}</td>
-            <td>{v.capacity != null ? `${v.capacity} kg` : 'Unknown'}</td>
-            <td>
-              <Link to={`/resources/maintenance?vehicle=${encodeURIComponent(v.name)}`} title="View full maintenance log for this vehicle">
-                {v.maintenance_history ? `${v.maintenance_history} →` : 'View log →'}
-              </Link>
-            </td>
-            <td><Status value={v.status} /></td></tr>)}</Table>}
+    <Panel title="Vehicle register" action={<button className="button" onClick={() => void Promise.all([vehicles.reload(), drivers.reload()])}>Refresh</button>}>
+      {vehicles.loading || drivers.loading ? <Loading /> : vehicles.error ? <ErrorMessage>{vehicles.error}</ErrorMessage> :
+        <Table headers={['Name', 'Registration', 'Model', 'Year', 'Color', 'Body type', 'Cargo capacity', 'Assigned driver', 'Status']}>{(vehicles.data ?? []).map((v) => {
+          const assignedDriver = (drivers.data ?? []).find((d) => d.vehicle_id === v.id)
+          return (
+            <tr
+              key={v.id}
+              onClick={(e) => handleRowClick(e, v.name)}
+              style={{ cursor: 'pointer' }}
+              title="Click row to view vehicle maintenance history"
+            >
+              <td><Link to={`/resources/vehicles/${encodeURIComponent(v.id)}`}>{v.name}</Link></td>
+              <td>{unknown(v.registration)}</td>
+              <td>{v.model || v.make || 'Unknown'}</td>
+              <td>{unknown(v.year)}</td>
+              <td>{unknown(v.color)}</td>
+              <td>{unknown(v.body_type)}</td>
+              <td>{v.capacity != null ? `${v.capacity} kg` : 'Unknown'}</td>
+              <td onClick={(e) => e.stopPropagation()}>
+                <select
+                  value={assignedDriver?.id ?? ''}
+                  onChange={(e) => void handleAssignDriver(v.id, e.target.value)}
+                  style={{ minWidth: '140px', padding: '3px 6px', fontSize: '12px' }}
+                >
+                  <option value="">Unassigned</option>
+                  {(drivers.data ?? []).map((drv) => {
+                    const assignedToOther = drv.vehicle_id && drv.vehicle_id !== v.id
+                    return (
+                      <option key={drv.id} value={drv.id}>
+                        {drv.name} {assignedToOther ? '(Assigned)' : ''}
+                      </option>
+                    )
+                  })}
+                </select>
+              </td>
+              <td><Status value={v.status} /></td>
+            </tr>
+          )
+        })}</Table>}
       {!vehicles.loading && !vehicles.error && vehicles.data?.length === 0 && <p className="empty-state">No vehicles registered.</p>}
     </Panel>
   </Page>
@@ -211,29 +238,47 @@ export function DriversPage() {
     </Panel>
     <Panel title="Driver register">
       {drivers.loading ? <Loading /> : drivers.error ? <ErrorMessage>{drivers.error}</ErrorMessage> :
-        <Table headers={['Name', 'Contract', 'Contact phone', 'License class', 'License expiry', 'Shift', 'Availability', 'Assigned car']}>{(drivers.data ?? []).map((d) =>
-          <tr key={d.id}><td><Link to={`/resources/drivers/${encodeURIComponent(d.id)}`}>{d.name}</Link></td>
-            <td><span style={{ fontSize: '12px', background: '#e7f5ff', color: '#1c7ed6', padding: '2px 6px', borderRadius: '4px' }}>{unknown(d.contract_type)}</span></td>
-            <td>{unknown(d.contact_phone)}</td><td>{unknown(d.license_class)}</td>
-            <td>{unknown(d.license_expiry)}</td><td>{d.shift_start && d.shift_end ? `${d.shift_start} - ${d.shift_end}` : '—'}</td><td>{unknown(d.availability)}</td>
-            <td>
-              <select
-                value={d.vehicle_id ?? ''}
-                onChange={(e) => void handleAssignVehicle(d.id, e.target.value)}
-                style={{ minWidth: '130px', padding: '3px 6px', fontSize: '12px' }}
-              >
-                <option value="">Unassigned</option>
-                {(vehicles.data ?? []).map((v) => {
-                  const heldByOther = drivers.data?.some((other) => other.id !== d.id && other.vehicle_id === v.id)
-                  return (
-                    <option key={v.id} value={v.id} disabled={heldByOther}>
-                      {v.name} {heldByOther ? '(Assigned)' : ''}
-                    </option>
-                  )
-                })}
-              </select>
-            </td>
-          </tr>)}</Table>}
+        <Table headers={['Name', 'Contract', 'Contact phone', 'License class', 'License expiry', 'Shift', 'Availability', 'Assigned car', 'Maintenance']}>{(drivers.data ?? []).map((d) => {
+          const heldVehicle = vehicles.data?.find((v) => v.id === d.vehicle_id)
+          return (
+            <tr key={d.id}><td><Link to={`/resources/drivers/${encodeURIComponent(d.id)}`}>{d.name}</Link></td>
+              <td><span style={{ fontSize: '12px', background: '#e7f5ff', color: '#1c7ed6', padding: '2px 6px', borderRadius: '4px' }}>{unknown(d.contract_type)}</span></td>
+              <td>{unknown(d.contact_phone)}</td><td>{unknown(d.license_class)}</td>
+              <td>{unknown(d.license_expiry)}</td><td>{d.shift_start && d.shift_end ? `${d.shift_start} - ${d.shift_end}` : '—'}</td><td>{unknown(d.availability)}</td>
+              <td>
+                <select
+                  value={d.vehicle_id ?? ''}
+                  onChange={(e) => void handleAssignVehicle(d.id, e.target.value)}
+                  style={{ minWidth: '130px', padding: '3px 6px', fontSize: '12px' }}
+                >
+                  <option value="">Unassigned</option>
+                  {(vehicles.data ?? []).map((v) => {
+                    const heldByOther = drivers.data?.some((other) => other.id !== d.id && other.vehicle_id === v.id)
+                    return (
+                      <option key={v.id} value={v.id} disabled={heldByOther}>
+                        {v.name} {heldByOther ? '(Assigned)' : ''}
+                      </option>
+                    )
+                  })}
+                </select>
+              </td>
+              <td>
+                {heldVehicle ? (
+                  <Link
+                    className="button"
+                    style={{ padding: '2px 8px', fontSize: '11px' }}
+                    to={`/resources/maintenance?vehicle=${encodeURIComponent(heldVehicle.name)}`}
+                    title={`View maintenance notes for ${heldVehicle.name}`}
+                  >
+                    Notes →
+                  </Link>
+                ) : (
+                  <span className="muted">—</span>
+                )}
+              </td>
+            </tr>
+          )
+        })}</Table>}
       {!drivers.loading && !drivers.error && drivers.data?.length === 0 && <p className="empty-state">No drivers registered.</p>}
     </Panel>
   </Page>
@@ -257,22 +302,19 @@ export function VehicleDetailPage() {
         <tr><th scope="row">Year</th><td>{unknown(vehicle.year)}</td></tr>
         <tr><th scope="row">Color</th><td>{unknown(vehicle.color)}</td></tr>
         <tr><th scope="row">Body type</th><td>{unknown(vehicle.body_type)}</td></tr>
-        <tr><th scope="row">Fuel type</th><td>{unknown(vehicle.fuel_type)}</td></tr>
         <tr><th scope="row">Cargo payload capacity</th><td>{vehicle.capacity != null ? `${vehicle.capacity} kg` : 'Unknown'}</td></tr>
         <tr><th scope="row">Status</th><td><Status value={vehicle.status} /></td></tr>
       </Table>
     </Panel>
     <Panel
-      title="Maintenance history"
+      title="Maintenance log"
       action={
         <Link className="button" to={`/resources/maintenance?vehicle=${encodeURIComponent(vehicle.name)}`}>
-          Open maintenance log
+          Open maintenance page
         </Link>
       }
     >
-      {vehicle.maintenance_history
-        ? <p>{vehicle.maintenance_history}</p>
-        : <p className="empty-state">No maintenance history recorded in vehicle profile.</p>}
+      <p>Vehicle maintenance logs, workshop repairs, and service history are managed on the <Link to={`/resources/maintenance?vehicle=${encodeURIComponent(vehicle.name)}`}>Maintenance page</Link>.</p>
     </Panel>
     <Panel title="Scenario and trip history">
       <p className="empty-state">Vehicle-to-trip history will appear after automatic dispatch links generated trips to fleet records.</p>
@@ -309,6 +351,22 @@ export function DriverDetailPage() {
         <tr><th scope="row">Current vehicle</th><td>{assignedVehicle?.name ?? 'Unassigned'}</td></tr>
       </Table>
     </Panel>
+    {assignedVehicle ? (
+      <Panel
+        title="Assigned Vehicle Maintenance Notes"
+        action={
+          <Link className="button" to={`/resources/maintenance?vehicle=${encodeURIComponent(assignedVehicle.name)}`}>
+            Open maintenance log
+          </Link>
+        }
+      >
+        <p>Driver is currently assigned to <strong>{assignedVehicle.name}</strong> ({assignedVehicle.model || assignedVehicle.type}). Track maintenance notes, workshop inspection logs, and scheduled services on the <Link to={`/resources/maintenance?vehicle=${encodeURIComponent(assignedVehicle.name)}`}>Maintenance page</Link>.</p>
+      </Panel>
+    ) : (
+      <Panel title="Assigned Vehicle Maintenance Notes">
+        <p className="empty-state">No vehicle currently assigned. Assign a vehicle to track its maintenance notes.</p>
+      </Panel>
+    )}
     <Panel title="Scenario and trip history">
       <p className="empty-state">Driver-to-trip history will appear after automatic dispatch links generated trips to fleet records.</p>
     </Panel>
