@@ -50,9 +50,18 @@ func ByStatus(s Status) ListFilter { return ListFilter{Status: &s} }
 // travels as its wire name so that parsing and validation live in exactly one
 // place, this package, instead of being repeated in every handler.
 type CreateInput struct {
-	Name   string
-	Type   string
-	Status string
+	Name               string
+	Type               string
+	Status             string
+	Registration       string
+	Make               string
+	Model              string
+	Year               *int
+	Color              string
+	BodyType           string
+	FuelType           string
+	Capacity           *float64
+	MaintenanceHistory string
 }
 
 // Service applies the vehicle rules on top of a Repository.
@@ -65,7 +74,8 @@ func NewService(repo Repository) *Service { return &Service{repo: repo} }
 
 // Create validates in, generates an id and stores the new vehicle.
 func (s *Service) Create(ctx context.Context, in CreateInput) (Vehicle, error) {
-	v, err := New(in.Name, in.Type, in.Status)
+	v, err := NewProfile(in.Name, in.Type, in.Status, in.Registration, in.Make, in.Model,
+		in.Year, in.Color, in.BodyType, in.FuelType, in.Capacity, in.MaintenanceHistory)
 	if err != nil {
 		return Vehicle{}, err
 	}

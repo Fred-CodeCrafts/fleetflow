@@ -9,7 +9,9 @@
 package vehicle
 
 import (
+	"math"
 	"strings"
+	"time"
 
 	"fleetflow/internal/domain"
 )
@@ -17,8 +19,10 @@ import (
 // Error codes. They travel in API error bodies, so they are part of the public
 // contract and must stay stable (see domain.Error and DESIGN 3.8).
 const (
-	codeNameRequired  = "vehicle_name_required"
-	codeStatusUnknown = "vehicle_status_unknown"
+	codeNameRequired    = "vehicle_name_required"
+	codeStatusUnknown   = "vehicle_status_unknown"
+	codeYearInvalid     = "vehicle_year_invalid"
+	codeCapacityInvalid = "vehicle_capacity_invalid"
 )
 
 // Status is a vehicle's availability: "available", "on_trip" or "offline". It
@@ -74,10 +78,19 @@ func ParseStatus(name string) (Status, error) {
 // PRD accepts either. Type is free-form operator metadata (for example "van"),
 // not an enum, so the service does not constrain it.
 type Vehicle struct {
-	ID     string
-	Name   string
-	Type   string
-	Status Status
+	ID                 string
+	Name               string
+	Type               string
+	Status             Status
+	Registration       string
+	Make               string
+	Model              string
+	Year               *int
+	Color              string
+	BodyType           string
+	FuelType           string
+	Capacity           *float64
+	MaintenanceHistory string
 }
 
 // New validates the client-supplied fields and returns a Vehicle. The id is left
@@ -89,6 +102,12 @@ type Vehicle struct {
 // fields (name, type) are trimmed; the status is matched exactly, so a
 // mistyped token is reported instead of guessed at.
 func New(name, typ, status string) (Vehicle, error) {
+	return NewProfile(name, typ, status, "", "", "", nil, "", "", "", nil, "")
+}
+
+// NewProfile validates a vehicle and its optional profile fields. Empty profile
+// fields remain empty so storage and the API can represent them as unknown.
+func NewProfile(name, typ, status, registration, make, model string, year *int, color, bodyType, fuelType string, capacity *float64, maintenanceHistory string) (Vehicle, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return Vehicle{}, domain.Invalid(codeNameRequired, "vehicle name is required")
@@ -97,5 +116,34 @@ func New(name, typ, status string) (Vehicle, error) {
 	if err != nil {
 		return Vehicle{}, err
 	}
-	return Vehicle{Name: name, Type: strings.TrimSpace(typ), Status: st}, nil
+	if year != nil && (*year < 1886 || *year > time.Now().UTC().Year()+1) {
+		return Vehicle{}, domain.Invalid(codeYearInvalid, "vehicle year must be between 1886 and next year")
+	}
+	if capacity != nil && (*capacity <= 0 || math.IsNaN(*capacity) || math.IsInf(*capacity, 0)) {
+		return Vehicle{}, domain.Invalid(codeCapacityInvalid, "vehicle capacity must be a positive number")
+	}
+	return Vehicle{
+		Name: name, Type: strings.TrimSpace(typ), Status: st,
+		Registration: strings.TrimSpace(registration),
+		Make:         strings.TrimSpace(make), Model: strings.TrimSpace(model),
+		Year: cloneInt(year), Color: strings.TrimSpace(color),
+		BodyType: strings.TrimSpace(bodyType), FuelType: strings.TrimSpace(fuelType),
+		Capacity: cloneFloat(capacity), MaintenanceHistory: strings.TrimSpace(maintenanceHistory),
+	}, nil
+}
+
+func cloneInt(value *int) *int {
+	if value == nil {
+		return nil
+	}
+	copy := *value
+	return &copy
+}
+
+func cloneFloat(value *float64) *float64 {
+	if value == nil {
+		return nil
+	}
+	copy := *value
+	return &copy
 }

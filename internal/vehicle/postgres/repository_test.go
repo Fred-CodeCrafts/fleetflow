@@ -39,6 +39,7 @@ func TestCreateThenListRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
+
 	if stored != want {
 		t.Errorf("Create returned %+v, want %+v", stored, want)
 	}
@@ -49,6 +50,34 @@ func TestCreateThenListRoundTrips(t *testing.T) {
 	}
 	if len(list) != 1 || list[0] != want {
 		t.Errorf("List returned %+v, want just %+v", list, want)
+	}
+}
+
+func TestProfileFieldsRoundTrip(t *testing.T) {
+	repo, _ := newRepository(t)
+	year, capacity := 2022, 1250.5
+	want := vehicle.Vehicle{
+		ID: "profiled", Name: "Fleet van", Type: "van", Status: vehicle.StatusAvailable,
+		Registration: "B 1234 XYZ", Make: "Example", Model: "Transit", Year: &year,
+		Color: "white", BodyType: "van", FuelType: "diesel", Capacity: &capacity,
+		MaintenanceHistory: "2025-01 oil service",
+	}
+	if _, err := repo.Create(context.Background(), want); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	got, err := repo.List(context.Background(), vehicle.ListFilter{})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("List returned %d rows, want 1", len(got))
+	}
+	item := got[0]
+	if item.Registration != want.Registration || item.Make != want.Make || item.Model != want.Model ||
+		item.Year == nil || *item.Year != year || item.Color != want.Color || item.BodyType != want.BodyType ||
+		item.FuelType != want.FuelType || item.Capacity == nil || *item.Capacity != capacity ||
+		item.MaintenanceHistory != want.MaintenanceHistory {
+		t.Errorf("profile round trip = %+v, want %+v", item, want)
 	}
 }
 

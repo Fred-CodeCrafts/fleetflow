@@ -129,6 +129,33 @@ func TestListReturnsAFreshSlice(t *testing.T) {
 	}
 }
 
+func TestProfilePointersDoNotExposeStoredState(t *testing.T) {
+	repo := memory.New()
+	year, capacity := 2022, 1250.5
+	created, err := repo.Create(context.Background(), vehicle.Vehicle{
+		ID: "v1", Name: "Fleet van", Year: &year, Capacity: &capacity,
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	*created.Year = 1999
+	*created.Capacity = 0
+
+	list, err := repo.List(context.Background(), vehicle.ListFilter{})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	*list[0].Year = 2000
+	*list[0].Capacity = 0
+	again, err := repo.List(context.Background(), vehicle.ListFilter{})
+	if err != nil {
+		t.Fatalf("List after mutation: %v", err)
+	}
+	if *again[0].Year != year || *again[0].Capacity != capacity {
+		t.Errorf("stored profile changed through returned pointers: %+v", again[0])
+	}
+}
+
 func TestMethodsHonourACancelledContext(t *testing.T) {
 	repo := memory.New()
 	ctx, cancel := context.WithCancel(context.Background())
