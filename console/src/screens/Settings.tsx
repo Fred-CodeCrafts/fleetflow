@@ -7,10 +7,10 @@ export function GeneralSettingsPage() {
 
   useEffect(() => {
     Promise.all([
-      fetch('/healthz').then((response) => response.ok
+      fetch('/api/healthz').then((response) => response.ok
         ? response.text()
         : Promise.reject(new Error(`Health check returned ${response.status}`))),
-      fetch('/readyz').then(async (response) => {
+      fetch('/api/readyz').then(async (response) => {
         const body = await response.json() as { status?: string; error?: string }
         if (!response.ok) throw new Error(body.error ?? `Readiness check returned ${response.status}`)
         return body.status ?? 'ready'
