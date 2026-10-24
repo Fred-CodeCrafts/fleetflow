@@ -13,10 +13,23 @@ COPY . .
 COPY --from=console /src/web/dist ./web/dist
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/fleetflow ./cmd/fleetflow
 
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM debian:bookworm-slim
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates python3 sumo sumo-tools \
+    && test -x /usr/bin/sumo \
+    && test -x /usr/bin/duarouter \
+    && test -f /usr/share/sumo/tools/randomTrips.py \
+    && /usr/bin/sumo --version \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY --from=build --chown=nonroot:nonroot /out/fleetflow /fleetflow
+COPY --from=build --chown=65532:65532 /out/fleetflow /fleetflow
 ENV PORT=8080
 ENV ENV=production
+ENV SUMO_HOME=/usr/share/sumo
+ENV SUMO_BINARY=/usr/bin/sumo
+ENV SUMO_DUAROUTER=/usr/bin/duarouter
+ENV SUMO_RANDOM_TRIPS=/usr/share/sumo/tools/randomTrips.py
+ENV SUMO_PYTHON=/usr/bin/python3
 EXPOSE 8080
+USER 65532:65532
 ENTRYPOINT ["/fleetflow"]
