@@ -74,8 +74,9 @@ h1 { margin-bottom: 6px; font: 700 26px Inter,'Segoe UI',sans-serif; letter-spac
 .form-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
 .form-row input[type="file"] { max-width: 100%; }
 .field { display: grid; gap: 6px; min-width: 120px; color: #687579; font-size: 11px; font-weight: 600; }
-.field input, .field select, .palette-input input { min-height: 36px; padding: 0 10px; border: 1px solid #dce4e5; border-radius: 6px; outline: 0; color: var(--ink); background: white; font-size: 12px; }
-.field input:focus, .field select:focus, .palette-input input:focus { border-color: #73b99d; box-shadow: 0 0 0 3px #18846c15; }
+.field input, .field select, .field textarea, .palette-input input { min-height: 36px; padding: 0 10px; border: 1px solid #dce4e5; border-radius: 6px; outline: 0; color: var(--ink); background: white; font-size: 12px; }
+.field textarea { min-width: 220px; min-height: 86px; padding: 8px 10px; resize: vertical; }
+.field input:focus, .field select:focus, .field textarea:focus, .palette-input input:focus { border-color: #73b99d; box-shadow: 0 0 0 3px #18846c15; }
 .notice { padding: 10px 12px; border: 1px solid #f0d5bd; border-radius: 6px; color: #865727; background: #fff9f1; font-size: 12px; }
 .error { padding: 10px 12px; border: 1px solid #f0c6bf; border-radius: 6px; color: #9a392a; background: #fff6f3; font-size: 12px; }
 .success { padding: 10px 12px; border: 1px solid #c4e6d4; border-radius: 6px; color: #236a4c; background: #f2fbf6; font-size: 12px; }

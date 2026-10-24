@@ -3,12 +3,27 @@ export interface Vehicle {
   name: string
   type: string
   status: string
+  registration: string | null
+  make: string | null
+  model: string | null
+  year: number | null
+  color: string | null
+  body_type: string | null
+  fuel_type: string | null
+  capacity: number | null
+  maintenance_history: string | null
 }
 
 export interface Driver {
   id: string
   name: string
   contact: string
+  contact_phone: string | null
+  license_class: string | null
+  license_expiry: string | null
+  shift_start: string | null
+  shift_end: string | null
+  availability: string | null
   vehicle_id?: string
 }
 
@@ -140,8 +155,11 @@ export const api = {
   locations: async () => (await request<{ positions: VehicleLocation[] }>('/api/locations')).positions,
   reportLocation: (location: Pick<VehicleLocation, 'vehicle_id' | 'lat' | 'lon' | 'speed_mps'>) =>
     request<void>('/api/locations', { method: 'POST', body: JSON.stringify(location) }),
-  createVehicle: (vehicle: Pick<Vehicle, 'name' | 'type' | 'status'>) =>
+  createVehicle: (vehicle: Pick<Vehicle, 'name' | 'type' | 'status'> & Partial<Pick<Vehicle,
+    'registration' | 'make' | 'model' | 'year' | 'color' | 'body_type' | 'fuel_type' |
+    'capacity' | 'maintenance_history'>>) =>
     request<Vehicle>('/api/vehicles', { method: 'POST', body: JSON.stringify(vehicle) }),
-  createDriver: (driver: Pick<Driver, 'name' | 'contact'>) =>
+  createDriver: (driver: Pick<Driver, 'name'> & Partial<Pick<Driver,
+    'contact' | 'contact_phone' | 'license_class' | 'license_expiry' | 'shift_start' | 'shift_end' | 'availability'>>) =>
     request<Driver>('/api/drivers', { method: 'POST', body: JSON.stringify(driver) }),
 }
