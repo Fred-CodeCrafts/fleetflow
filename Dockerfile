@@ -23,6 +23,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build --chown=65532:65532 /out/fleetflow /fleetflow
+COPY --chown=65532:65532 data/networks/jakarta.net.xml /app/data/networks/jakarta.net.xml
 ENV PORT=8080
 ENV ENV=production
 ENV SUMO_HOME=/usr/share/sumo
@@ -30,6 +31,7 @@ ENV SUMO_BINARY=/usr/bin/sumo
 ENV SUMO_DUAROUTER=/usr/bin/duarouter
 ENV SUMO_RANDOM_TRIPS=/usr/share/sumo/tools/randomTrips.py
 ENV SUMO_PYTHON=/usr/bin/python3
+ENV SUMO_NETWORK=/app/data/networks/jakarta.net.xml
 EXPOSE 8080
 USER 65532:65532
 ENTRYPOINT ["/fleetflow"]
