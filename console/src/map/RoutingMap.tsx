@@ -19,12 +19,12 @@ const logisticsHubs = [
   { name: 'Tomang Regional Logistics Spine', code: 'HUB-TMG', lat: -6.1750, lon: 106.7915, area: 'West Jakarta' },
 ]
 
-const vehicleDetailsMap: Record<string, { model: string; driver: string; hub: string; dest: string }> = {
-  'B-9012-JKT': { model: 'Isuzu Giga FVM (Heavy Truck)', driver: 'Budi Santoso', hub: 'Tanjung Priok Port Terminal', dest: 'Kelapa Gading Commercial District' },
-  'B-9431-JKT': { model: 'Mitsubishi Fuso Canter (Box Truck)', driver: 'Agus Setiawan', hub: 'Pluit Urban Logistics Depot', dest: 'Glodok Commercial Hub' },
-  'B-9204-JKT': { model: 'Toyota HiAce Commuter (Van)', driver: 'Rian Hidayat', hub: 'Halim Air Cargo Terminal', dest: 'Sudirman Business Corridor' },
-  'B-9550-JKT': { model: 'Daihatsu Gran Max (Van)', driver: 'Eko Prasetyo', hub: 'Cilandak Fulfillment Hub', dest: 'Senayan City Retail Store' },
-  'B-9118-JKT': { model: 'Honda PCX Electric (Cargo Bike)', driver: 'Dimas Pratama', hub: 'Tomang Logistics Spine', dest: 'Grand Indonesia Thamrin' },
+const vehicleDetailsMap: Record<string, { model: string; driver: string; hub: string; dest: string; tripId: string }> = {
+  'B-9012-JKT': { model: 'Isuzu Giga FVM (Heavy Truck)', driver: 'Budi Santoso', hub: 'Tanjung Priok Port Terminal', dest: 'Kelapa Gading Commercial District', tripId: 'trip_tpk_kgd' },
+  'B-9431-JKT': { model: 'Mitsubishi Fuso Canter (Box Truck)', driver: 'Agus Setiawan', hub: 'Pluit Urban Logistics Depot', dest: 'Glodok Commercial Hub', tripId: 'trip_plt_gld' },
+  'B-9204-JKT': { model: 'Toyota HiAce Commuter (Van)', driver: 'Rian Hidayat', hub: 'Halim Air Cargo Terminal', dest: 'Sudirman Business Corridor', tripId: 'trip_hlm_sdr' },
+  'B-9550-JKT': { model: 'Daihatsu Gran Max (Van)', driver: 'Eko Prasetyo', hub: 'Cilandak Fulfillment Hub', dest: 'Senayan City Retail Store', tripId: 'trip_clk_sny' },
+  'B-9118-JKT': { model: 'Honda PCX Electric (Cargo Bike)', driver: 'Dimas Pratama', hub: 'Tomang Logistics Spine', dest: 'Grand Indonesia Thamrin', tripId: 'trip_tmg_gni' },
 }
 
 type PointGeometry = { type: 'Point'; coordinates: [number, number] }
@@ -114,7 +114,7 @@ function hubFeatures(): MapFeature[] {
   )
 }
 
-export function RoutingMap({ route, selectedPoints, onPickPoint, compact = false, positionMode = 'live', simulationTracks = [], simulationStops = [] }: {
+export function RoutingMap({ route, selectedPoints, onPickPoint, compact = false, positionMode = 'live', simulationTracks = [], simulationStops = [], runID }: {
   route?: OSRMRoute | null
   selectedPoints?: { from?: Coordinate; to?: Coordinate }
   onPickPoint?: (point: Coordinate) => void
@@ -122,6 +122,7 @@ export function RoutingMap({ route, selectedPoints, onPickPoint, compact = false
   positionMode?: 'live' | 'simulation'
   simulationTracks?: SimulatedTrack[]
   simulationStops?: SimulatedDeliveryStop[]
+  runID?: string
 }) {
   const container = useRef<HTMLDivElement>(null)
   const map = useRef<maplibregl.Map | null>(null)
@@ -517,10 +518,22 @@ export function RoutingMap({ route, selectedPoints, onPickPoint, compact = false
           </div>
         </div>
 
-        <div className="form-row" style={{ margin: 0, gap: '8px' }}>
-          <Link className="button primary" to="/operations/fleet">View in Fleet Status</Link>
-          <Link className="button" to={`/resources/maintenance?vehicle=${encodeURIComponent(selectedVehicleId)}`}>Maintenance History</Link>
-          <Link className="button" to="/operations/trips">All Trips</Link>
+        <div className="form-row" style={{ margin: 0, gap: '8px', flexWrap: 'wrap' }}>
+          <Link className="button primary" to={`/operations/fleet?vehicle=${encodeURIComponent(selectedVehicleId)}`}>
+            Fleet Status
+          </Link>
+          {runID && selectedVehicleInfo?.tripId ? (
+            <Link className="button" to={`/operations/trips/${encodeURIComponent(runID)}/${encodeURIComponent(selectedVehicleInfo.tripId)}`}>
+              Open Trip Details
+            </Link>
+          ) : (
+            <Link className="button" to={`/operations/trips?vehicle=${encodeURIComponent(selectedVehicleId)}`}>
+              All Trips
+            </Link>
+          )}
+          <Link className="button" to={`/resources/maintenance?vehicle=${encodeURIComponent(selectedVehicleId)}`}>
+            Maintenance History
+          </Link>
         </div>
       </div>
     )}

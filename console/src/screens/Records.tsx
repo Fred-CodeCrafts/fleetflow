@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { ErrorMessage, Loading, Page, Panel, Status, Table, useLoad } from './Shared'
 import { getVehicleModels, type VehicleModel } from './Models'
@@ -29,10 +29,17 @@ const emptyDriver = () => ({
 const unknown = (value: string | number | null | undefined) => value ?? 'Unknown'
 
 export function VehiclesPage() {
+  const navigate = useNavigate()
   const vehicles = useLoad(api.vehicles)
   const availableModels = getVehicleModels()
   const [form, setForm] = useState(() => initialVehicle(availableModels))
   const [error, setError] = useState('')
+
+  const handleRowClick = (e: React.MouseEvent, vehicleName: string) => {
+    const target = e.target as HTMLElement
+    if (target.closest('a') || target.closest('button') || target.closest('input')) return
+    navigate(`/resources/maintenance?vehicle=${encodeURIComponent(vehicleName)}`)
+  }
 
   const onSelectModel = (modelName: string) => {
     const selected = availableModels.find((m) => m.name === modelName)
@@ -96,7 +103,12 @@ export function VehiclesPage() {
     <Panel title="Vehicle register" action={<button className="button" onClick={() => void vehicles.reload()}>Refresh</button>}>
       {vehicles.loading ? <Loading /> : vehicles.error ? <ErrorMessage>{vehicles.error}</ErrorMessage> :
         <Table headers={['Name', 'Registration', 'Model', 'Year', 'Color', 'Body / fuel', 'Cargo capacity', 'Maintenance history', 'Status']}>{(vehicles.data ?? []).map((v) =>
-          <tr key={v.id}><td><Link to={`/resources/vehicles/${encodeURIComponent(v.id)}`}>{v.name}</Link></td><td>{unknown(v.registration)}</td><td>{v.model || v.make || 'Unknown'}</td>
+          <tr
+            key={v.id}
+            onClick={(e) => handleRowClick(e, v.name)}
+            style={{ cursor: 'pointer' }}
+            title="Click row to view vehicle maintenance history"
+          ><td><Link to={`/resources/vehicles/${encodeURIComponent(v.id)}`}>{v.name}</Link></td><td>{unknown(v.registration)}</td><td>{v.model || v.make || 'Unknown'}</td>
             <td>{unknown(v.year)}</td><td>{unknown(v.color)}</td><td>{v.body_type || v.fuel_type ? `${v.body_type ?? 'Unknown'} / ${v.fuel_type ?? 'Unknown'}` : 'Unknown'}</td>
             <td>{v.capacity != null ? `${v.capacity} kg` : 'Unknown'}</td>
             <td>

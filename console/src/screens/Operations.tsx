@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, type Coordinate, type OSRMRoute, type Vehicle } from '../api/client'
 import { RoutingMap } from '../map/RoutingMap'
 import { ErrorMessage, formatNumber, Loading, Metric, Page, Panel, Status, Table, useLoad } from './Shared'
@@ -17,7 +17,6 @@ export function LiveMapPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
-  const [viewMode, setViewMode] = useState<'live' | 'simulation'>('live')
 
   const selectedRun = useSimulationRun(selectedRunID)
 
@@ -29,7 +28,6 @@ export function LiveMapPage() {
 
   useEffect(() => {
     if (selectedRun.run?.status === 'completed' && selectedRun.run.result?.tracks?.length) {
-      setViewMode('simulation')
       setMessage(`Simulation ready: ${selectedRun.run.result.trips.length} active fleet routes across Jakarta logistics hubs.`)
     }
   }, [selectedRun.run?.status, selectedRun.run?.result?.tracks?.length, selectedRun.run?.result?.trips?.length])
@@ -61,29 +59,14 @@ export function LiveMapPage() {
       title="Live Fleet Map"
       description="Monitor live GPS positions reported by fleet vehicles, or run traffic simulations on the Jakarta street network."
     >
-      <Panel
-        title="Simulation"
-        action={
-          <div className="form-row" style={{ margin: 0 }}>
-            <button
-              className={`button ${viewMode === 'live' ? 'primary' : ''}`}
-              type="button"
-              onClick={() => setViewMode('live')}
-            >
-              Live GPS mode
-            </button>
-            <button
-              className={`button ${viewMode === 'simulation' ? 'primary' : ''}`}
-              type="button"
-              onClick={() => setViewMode('simulation')}
-              disabled={tracks.length === 0}
-            >
-              Simulation mode {tracks.length > 0 ? `(${tracks.length} tracks)` : ''}
-            </button>
+      <Panel title="Simulation Mode">
+        <form className="form-row" onSubmit={runSimulation} style={{ alignItems: 'flex-end', flexWrap: 'wrap', gap: '12px' }}>
+          <div className="field" style={{ minWidth: '150px' }}>
+            <span>Operating State</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', height: '36px', padding: '0 10px', background: '#e6fcf5', color: '#0ca678', borderRadius: '4px', fontWeight: 600, fontSize: '13px' }}>
+              ● Multi-Hub Scenario Active
+            </span>
           </div>
-        }
-      >
-        <form className="form-row" onSubmit={runSimulation}>
           <label className="field">
             Demand profile
             <select value={preset} onChange={(e) => setPreset(e.target.value as keyof typeof presets)}>
@@ -94,7 +77,7 @@ export function LiveMapPage() {
               ))}
             </select>
           </label>
-          <label className="field">
+          <label className="field" style={{ maxWidth: '100px' }}>
             Seed
             <input
               type="number"
@@ -120,15 +103,14 @@ export function LiveMapPage() {
       </Panel>
 
       <RoutingMap
-        positionMode={viewMode === 'simulation' ? 'simulation' : 'live'}
-        simulationTracks={viewMode === 'simulation' ? tracks : undefined}
-        simulationStops={viewMode === 'simulation' ? (selectedRun.run?.result?.deliveries?.flatMap((d) => d.stops) ?? []) : undefined}
+        runID={selectedRunID}
+        positionMode="simulation"
+        simulationTracks={tracks}
+        simulationStops={selectedRun.run?.result?.deliveries?.flatMap((d) => d.stops) ?? []}
       />
 
       <p className="muted">
-        {viewMode === 'simulation'
-          ? `Displaying simulated tracks on the map. Switch to Live GPS mode to monitor connected vehicle devices.`
-          : 'Live GPS mode: waiting for connected fleet vehicles to report positions. Run a simulation to visualize traffic on the network.'}
+        Multi-hub simulation mode: displaying animated vehicle positions and logistics routes across Jakarta. Click on any vehicle marker or route line on the map to inspect vehicle details, maintenance history, and trip logs.
       </p>
     </Page>
   )
@@ -193,9 +175,19 @@ export function RoutePlannerPage() {
 }
 
 export function FleetStatusPage() {
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const highlightVehicle = searchParams.get('vehicle')
   const vehicles = useLoad(api.vehicles)
   const drivers = useLoad(api.drivers)
   const allVehicles: Vehicle[] = vehicles.data ?? []
+
+  const handleRowClick = (e: React.MouseEvent, vehicleName: string) => {
+    const target = e.target as HTMLElement
+    if (target.closest('a') || target.closest('button')) return
+    navigate(`/resources/maintenance?vehicle=${encodeURIComponent(vehicleName)}`)
+  }
+
   return <Page eyebrow="Operations" title="Fleet Status" description="Real-time vehicle availability, driver allocations, and operational mission readiness across the Jakarta fleet.">
     <div className="metric-grid">
       <Metric label="Total Fleet" value={String(allVehicles.length)} />
@@ -206,26 +198,38 @@ export function FleetStatusPage() {
     <Panel title="Fleet Operational Status" action={<button className="button" onClick={() => void vehicles.reload()}>Refresh</button>}>
       {vehicles.loading ? <Loading /> : vehicles.error ? <ErrorMessage>{vehicles.error}</ErrorMessage> :
         <Table headers={['Vehicle', 'Model / Type', 'Status', 'Assigned Driver', 'Payload Capacity', 'Actions']}>
-          {allVehicles.map((vehicle) => (
-            <tr key={vehicle.id}>
-              <td>
-                <Link to={`/resources/vehicles/${encodeURIComponent(vehicle.id)}`}>
-                  <strong>{vehicle.name}</strong>
-                </Link>
-                {vehicle.registration && <div className="muted"><small>{vehicle.registration}</small></div>}
-              </td>
-              <td>{vehicle.model || vehicle.make || vehicle.type}</td>
-              <td><Status value={vehicle.status} /></td>
-              <td>{drivers.data?.find((driver) => driver.vehicle_id === vehicle.id)?.name ?? 'Unassigned'}</td>
-              <td>{vehicle.capacity != null ? `${vehicle.capacity} kg` : '—'}</td>
-              <td>
-                <div className="form-row" style={{ margin: 0, gap: '6px' }}>
-                  <Link className="button" to="/operations">Track on Map</Link>
-                  <Link className="button" to={`/resources/maintenance?vehicle=${encodeURIComponent(vehicle.name)}`}>Maintenance</Link>
-                </div>
-              </td>
-            </tr>
-          ))}
+          {allVehicles.map((vehicle) => {
+            const isHighlighted = highlightVehicle && (highlightVehicle === vehicle.name || highlightVehicle === vehicle.id)
+            return (
+              <tr
+                key={vehicle.id}
+                onClick={(e) => handleRowClick(e, vehicle.name)}
+                style={{
+                  cursor: 'pointer',
+                  backgroundColor: isHighlighted ? '#e6fcf5' : undefined,
+                  outline: isHighlighted ? '2px solid #0ca678' : undefined,
+                }}
+                title="Click row to view vehicle maintenance history"
+              >
+                <td>
+                  <Link to={`/resources/vehicles/${encodeURIComponent(vehicle.id)}`}>
+                    <strong>{vehicle.name}</strong>
+                  </Link>
+                  {vehicle.registration && <div className="muted"><small>{vehicle.registration}</small></div>}
+                </td>
+                <td>{vehicle.model || vehicle.make || vehicle.type}</td>
+                <td><Status value={vehicle.status} /></td>
+                <td>{drivers.data?.find((driver) => driver.vehicle_id === vehicle.id)?.name ?? 'Unassigned'}</td>
+                <td>{vehicle.capacity != null ? `${vehicle.capacity} kg` : '—'}</td>
+                <td>
+                  <div className="form-row" style={{ margin: 0, gap: '6px' }}>
+                    <Link className="button" to="/operations">Map</Link>
+                    <Link className="button" to={`/resources/maintenance?vehicle=${encodeURIComponent(vehicle.name)}`}>Maintenance</Link>
+                  </div>
+                </td>
+              </tr>
+            )
+          })}
         </Table>}
       {!vehicles.loading && !vehicles.error && allVehicles.length === 0 && <p className="empty-state">No vehicles in fleet.</p>}
     </Panel>
