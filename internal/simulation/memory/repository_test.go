@@ -17,6 +17,12 @@ func TestRepositoryStoresIsolatedRunResults(t *testing.T) {
 		CreatedAt: time.Now().UTC(),
 		Result: &sumo.Result{
 			Tracks: []sumo.Track{{VehicleID: "v1", Positions: []sumo.Position{{Longitude: 106.8, Latitude: -6.2}}}},
+			Deliveries: []sumo.Delivery{{
+				ID:       "delivery-1",
+				Packages: []sumo.Package{{ID: "package-1", Status: sumo.PackageDelivered}},
+				Stops:    []sumo.DeliveryStop{{ID: "stop-1", Status: sumo.StopDelivered}},
+				Events:   []sumo.DeliveryEvent{{Sequence: 1, Type: "package_delivered"}},
+			}},
 		},
 	}
 	if err := repo.Create(context.Background(), run); err != nil {
@@ -28,12 +34,24 @@ func TestRepositoryStoresIsolatedRunResults(t *testing.T) {
 		t.Fatal(err)
 	}
 	found.Result.Tracks[0].Positions[0].Longitude = 0
+	found.Result.Deliveries[0].Packages[0].Status = sumo.PackageInTransit
+	found.Result.Deliveries[0].Stops[0].Status = sumo.StopPending
+	found.Result.Deliveries[0].Events[0].Type = "tampered"
 	again, err := repo.Get(context.Background(), run.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got := again.Result.Tracks[0].Positions[0].Longitude; got != 106.8 {
 		t.Fatalf("stored position changed through returned value: longitude = %v", got)
+	}
+	if got := again.Result.Deliveries[0].Packages[0].Status; got != sumo.PackageDelivered {
+		t.Errorf("stored package changed through returned value: status = %q", got)
+	}
+	if got := again.Result.Deliveries[0].Stops[0].Status; got != sumo.StopDelivered {
+		t.Errorf("stored stop changed through returned value: status = %q", got)
+	}
+	if got := again.Result.Deliveries[0].Events[0].Type; got != "package_delivered" {
+		t.Errorf("stored event changed through returned value: type = %q", got)
 	}
 }
 

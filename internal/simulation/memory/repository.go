@@ -100,6 +100,16 @@ func clone(run simulation.Run) simulation.Run {
 			Positions: append([]sumo.Position(nil), track.Positions...),
 		}
 	}
+	result.Deliveries = make([]sumo.Delivery, len(run.Result.Deliveries))
+	for i, delivery := range run.Result.Deliveries {
+		result.Deliveries[i] = sumo.Delivery{
+			ID: delivery.ID, TripID: delivery.TripID, VehicleID: delivery.VehicleID,
+			Status:   delivery.Status,
+			Packages: append([]sumo.Package(nil), delivery.Packages...),
+			Stops:    append([]sumo.DeliveryStop(nil), delivery.Stops...),
+			Events:   append([]sumo.DeliveryEvent(nil), delivery.Events...),
+		}
+	}
 	run.Result = &result
 	return run
 }

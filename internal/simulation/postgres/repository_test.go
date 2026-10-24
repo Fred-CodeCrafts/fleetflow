@@ -43,6 +43,16 @@ func TestRepositoryPersistsRunAndReturnsDetailedResult(t *testing.T) {
 			Assumptions: "test assumptions",
 		},
 		Trips: []sumo.Trip{{ID: "fleetflow0", Status: sumo.TripCompleted}},
+		Deliveries: []sumo.Delivery{{
+			ID: "delivery_42_fleetflow0", TripID: "fleetflow0", VehicleID: "fleetflow0",
+			Status:   sumo.DeliveryCompleted,
+			Packages: []sumo.Package{{ID: "package-1", StopID: "stop-1", Status: sumo.PackageDelivered}},
+			Stops: []sumo.DeliveryStop{{
+				ID: "stop-1", Order: 1, PackageID: "package-1", Latitude: -6.2, Longitude: 106.8,
+				TimeS: 50, Status: sumo.StopDelivered,
+			}},
+			Events: []sumo.DeliveryEvent{{Sequence: 1, TimeS: 50, Type: "package_delivered", PackageID: "package-1", StopID: "stop-1"}},
+		}},
 	}
 	if err := repo.Update(ctx, run); err != nil {
 		t.Fatal(err)
@@ -54,7 +64,8 @@ func TestRepositoryPersistsRunAndReturnsDetailedResult(t *testing.T) {
 	}
 	if found.Status != simulation.StatusCompleted || found.Result == nil ||
 		found.Result.SUMOVersion != run.Result.SUMOVersion || found.Result.Emissions != run.Result.Emissions ||
-		len(found.Result.Trips) != 1 {
+		len(found.Result.Trips) != 1 || len(found.Result.Deliveries) != 1 ||
+		found.Result.Deliveries[0].Events[0].Type != "package_delivered" {
 		t.Fatalf("Get() returned incomplete run: %#v", found)
 	}
 	list, err := repo.List(ctx)
