@@ -13,7 +13,7 @@ export function Layout() {
   const branches = visibleBranches(() => true)
 
   useEffect(() => {
-    const check = () => fetch('/healthz').then((r) => setApiOnline(r.ok)).catch(() => setApiOnline(false))
+    const check = () => fetch('/api/healthz').then((r) => setApiOnline(r.ok)).catch(() => setApiOnline(false))
     check()
     const timer = window.setInterval(check, 15000)
     return () => window.clearInterval(timer)
