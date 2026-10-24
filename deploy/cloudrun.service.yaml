@@ -1,0 +1,74 @@
+# Cloud Run service specification for FleetFlow production deployment.
+#
+# Deploy with:
+#   gcloud run services replace deploy/cloudrun.service.yaml --region asia-southeast2
+# Or using gcloud run deploy:
+#   gcloud run deploy fleetflow --image gcr.io/$PROJECT_ID/fleetflow:latest --region asia-southeast2
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: fleetflow
+  labels:
+    cloud.googleapis.com/location: asia-southeast2
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "10"
+        # CPU allocation remains active between requests so SUMO simulation
+        # executions running in background goroutines are not throttled.
+        run.googleapis.com/cpu-throttling: "false"
+        run.googleapis.com/execution-environment: "gen2"
+    spec:
+      containerConcurrency: 80
+      timeoutSeconds: 300
+      containers:
+        - image: gcr.io/PROJECT_ID/fleetflow:latest
+          resources:
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          env:
+            - name: ENV
+              value: "production"
+            - name: PORT
+              value: "8080"
+            - name: LOG_LEVEL
+              value: "info"
+            - name: OSRM_URL
+              value: "http://osrm.internal:5000"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: fleetflow-database-url
+                  key: latest
+            - name: SUMO_NETWORK
+              value: "/app/data/networks/jakarta.net.xml"
+            - name: SUMO_HOME
+              value: "/usr/share/sumo"
+            - name: SUMO_BINARY
+              value: "/usr/bin/sumo"
+            - name: SUMO_DUAROUTER
+              value: "/usr/bin/duarouter"
+            - name: SUMO_RANDOM_TRIPS
+              value: "/usr/share/sumo/tools/randomTrips.py"
+            - name: SUMO_PYTHON
+              value: "/usr/bin/python3"
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 2
+            periodSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8080
+            periodSeconds: 10
