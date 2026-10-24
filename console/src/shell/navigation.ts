@@ -164,6 +164,30 @@ export const navigation: NavBranch[] = [
     ],
   },
   {
+    id: 'sustainability',
+    label: 'Sustainability',
+    icon: 'emissions',
+    path: '/sustainability',
+    keywords: ['green', 'emissions', 'co2', 'fuel', 'carbon', 'environment', 'sustainability'],
+    requiresVisibleChildren: true,
+    children: [
+      {
+        id: 'sustainability.dashboard',
+        label: 'Green Dashboard',
+        icon: 'emissions',
+        path: '/sustainability',
+        keywords: ['green dashboard', 'emissions', 'co2', 'fuel', 'carbon', 'intensity', 'overview'],
+      },
+      {
+        id: 'sustainability.emissions',
+        label: 'Emissions',
+        icon: 'analytics',
+        path: '/sustainability/emissions',
+        keywords: ['emissions', 'ledger', 'per run', 'per vehicle', 'co2', 'g/km'],
+      },
+    ],
+  },
+  {
     id: 'settings',
     label: 'Settings',
     icon: 'settings',
