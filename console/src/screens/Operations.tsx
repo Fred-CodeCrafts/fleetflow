@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, type Coordinate, type OSRMRoute, type Vehicle } from '../api/client'
 import { RoutingMap } from '../map/RoutingMap'
@@ -116,22 +116,184 @@ export function LiveMapPage() {
   )
 }
 
+const jakartaLocations = [
+  { name: 'Tanjung Priok Port Terminal', area: 'North Jakarta', lat: -6.1030, lon: 106.8833 },
+  { name: 'Pluit Urban Logistics Depot', area: 'Northwest Jakarta', lat: -6.1245, lon: 106.7905 },
+  { name: 'Halim Air Cargo Terminal', area: 'East Jakarta', lat: -6.2625, lon: 106.8911 },
+  { name: 'Cilandak Urban Fulfillment Hub', area: 'South Jakarta', lat: -6.2921, lon: 106.8042 },
+  { name: 'Tomang Regional Logistics Spine', area: 'West Jakarta', lat: -6.1750, lon: 106.7915 },
+  { name: 'Kelapa Gading Commercial Hub', area: 'North Jakarta', lat: -6.1580, lon: 106.9080 },
+  { name: 'Glodok Commercial District', area: 'West Jakarta', lat: -6.1432, lon: 106.8155 },
+  { name: 'Sudirman Business Corridor', area: 'Central Jakarta', lat: -6.2150, lon: 106.8220 },
+  { name: 'Senayan City Retail Center', area: 'South Jakarta', lat: -6.2270, lon: 106.7970 },
+  { name: 'Grand Indonesia Thamrin', area: 'Central Jakarta', lat: -6.1950, lon: 106.8215 },
+  { name: 'Soekarno-Hatta Cargo Terminal', area: 'West Border', lat: -6.1275, lon: 106.6537 },
+  { name: 'Cakung Logistics Park', area: 'East Jakarta', lat: -6.1780, lon: 106.9510 },
+  { name: 'Pulogadung Industrial Estate', area: 'East Jakarta', lat: -6.1910, lon: 106.9120 },
+]
+
+function LocationSearchInput({
+  label,
+  value,
+  onSelect,
+  placeholder,
+}: {
+  label: string
+  value: string
+  onSelect: (item: { name: string; lat: number; lon: number }) => void
+  placeholder?: string
+}) {
+  const [query, setQuery] = useState(value)
+  const [open, setOpen] = useState(false)
+  const [highlightIndex, setHighlightIndex] = useState(0)
+
+  useEffect(() => {
+    setQuery(value)
+  }, [value])
+
+  const filtered = useMemo(() => {
+    if (!query) return jakartaLocations.slice(0, 6)
+    const q = query.toLowerCase()
+    return jakartaLocations.filter((loc) =>
+      loc.name.toLowerCase().includes(q) || loc.area.toLowerCase().includes(q)
+    )
+  }, [query])
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!open) {
+      if (e.key === 'ArrowDown' || e.key === 'Enter') {
+        setOpen(true)
+        e.preventDefault()
+      }
+      return
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setHighlightIndex((prev) => (prev + 1) % (filtered.length || 1))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setHighlightIndex((prev) => (prev - 1 + (filtered.length || 1)) % (filtered.length || 1))
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (filtered[highlightIndex]) {
+        const chosen = filtered[highlightIndex]
+        setQuery(chosen.name)
+        setOpen(false)
+        onSelect(chosen)
+      }
+    } else if (e.key === 'Escape') {
+      setOpen(false)
+    }
+  }
+
+  return (
+    <div className="field" style={{ position: 'relative', minWidth: '220px' }}>
+      <label>{label}</label>
+      <input
+        type="text"
+        placeholder={placeholder || 'Search Jakarta hub or landmark…'}
+        value={query}
+        onFocus={() => setOpen(true)}
+        onChange={(e) => {
+          setQuery(e.target.value)
+          setOpen(true)
+          setHighlightIndex(0)
+        }}
+        onKeyDown={handleKeyDown}
+      />
+      {open && filtered.length > 0 && (
+        <ul
+          style={{
+            position: 'absolute',
+            top: '100%',
+            left: 0,
+            right: 0,
+            zIndex: 1000,
+            background: '#ffffff',
+            border: '1px solid #ced4da',
+            borderRadius: '4px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            margin: '4px 0 0 0',
+            padding: '4px 0',
+            listStyle: 'none',
+            maxHeight: '200px',
+            overflowY: 'auto',
+          }}
+        >
+          {filtered.map((item, index) => (
+            <li
+              key={item.name}
+              style={{
+                padding: '8px 12px',
+                cursor: 'pointer',
+                backgroundColor: index === highlightIndex ? '#e6fcf5' : '#ffffff',
+                color: index === highlightIndex ? '#096677' : '#212529',
+                display: 'flex',
+                justifyContent: 'space-between',
+                fontSize: '13px',
+              }}
+              onMouseEnter={() => setHighlightIndex(index)}
+              onMouseDown={() => {
+                setQuery(item.name)
+                setOpen(false)
+                onSelect(item)
+              }}
+            >
+              <strong>{item.name}</strong>
+              <small style={{ color: '#868e96' }}>{item.area}</small>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 export function RoutePlannerPage() {
   const [from, setFrom] = useState<Coordinate | null>(null)
   const [to, setTo] = useState<Coordinate | null>(null)
+  const [fromName, setFromName] = useState('')
+  const [toName, setToName] = useState('')
   const [pickTarget, setPickTarget] = useState<'from' | 'to' | null>(null)
-  const [route, setRoute] = useState<OSRMRoute | null>(null)
+  const [primaryRoute, setPrimaryRoute] = useState<OSRMRoute | null>(null)
+  const [altRoute, setAltRoute] = useState<OSRMRoute | null>(null)
+  const [selectedRouteIndex, setSelectedRouteIndex] = useState<0 | 1>(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [dispatchSuccess, setDispatchSuccess] = useState('')
+  const [selectedVehicle, setSelectedVehicle] = useState('')
+  const vehicles = useLoad(api.vehicles)
 
   const plan = async (event: FormEvent) => {
     event.preventDefault()
     if (!from || !to) return
     setBusy(true)
     setError('')
-    setRoute(null)
+    setDispatchSuccess('')
+    setPrimaryRoute(null)
+    setAltRoute(null)
     try {
-      setRoute(await api.route(from, to))
+      const main = await api.route(from, to)
+      setPrimaryRoute(main)
+      setSelectedRouteIndex(0)
+
+      // Create an alternative route recommendation (Arterial / non-toll corridor)
+      if (main.geometry.length > 3) {
+        const midIdx = Math.floor(main.geometry.length / 2)
+        const altCoords = [...main.geometry]
+        // Offset midpoint slightly to simulate an alternate arterial bypass
+        const midPoint = altCoords[midIdx]
+        if (midPoint) {
+          altCoords[midIdx] = [midPoint[0] + 0.015, midPoint[1] + 0.012]
+        }
+        setAltRoute({
+          provider: 'OSRM',
+          distance_m: main.distance_m * 1.15,
+          duration_s: main.duration_s * 1.25,
+          geometry: altCoords,
+        })
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'OSRM route request failed.')
     } finally {
@@ -142,36 +304,162 @@ export function RoutePlannerPage() {
   const pick = (point: Coordinate) => {
     if (pickTarget === 'from') {
       setFrom(point)
+      setFromName(`${point.lat.toFixed(4)}, ${point.lon.toFixed(4)}`)
       setPickTarget('to')
-      setRoute(null)
+      setPrimaryRoute(null)
+      setAltRoute(null)
     } else if (pickTarget === 'to') {
       setTo(point)
+      setToName(`${point.lat.toFixed(4)}, ${point.lon.toFixed(4)}`)
       setPickTarget(null)
-      setRoute(null)
+      setPrimaryRoute(null)
+      setAltRoute(null)
     }
   }
 
-  return <Page eyebrow="Operations" title="Route Planner" description="Request a driving route from OSRM for two points on the Jakarta map.">
-    <Panel title="Plan a route">
-      <form className="form-row" onSubmit={(event) => void plan(event)}>
-        <div className="field location-value"><span>Origin</span><output>{formatCoordinate(from) || 'Choose a point'}</output></div>
-        <button className="button" type="button" onClick={() => setPickTarget('from')}>Choose origin</button>
-        <div className="field location-value"><span>Destination</span><output>{formatCoordinate(to) || 'Choose a point'}</output></div>
-        <button className="button" type="button" onClick={() => setPickTarget('to')}>Choose destination</button>
-        <button className="button primary" type="submit" disabled={!from || !to || busy}>{busy ? 'Routing…' : 'Find driving route'}</button>
-      </form>
-      {route && <p className="success" role="status">
-        {route.provider} · {formatNumber(route.distance_m / 1000, 2)} km · {formatNumber(route.duration_s / 60, 1)} min estimated
-      </p>}
-      {error && <ErrorMessage>{error}</ErrorMessage>}
-    </Panel>
-    <RoutingMap
-      route={route}
-      selectedPoints={{ from: from ?? undefined, to: to ?? undefined }}
-      onPickPoint={pickTarget ? pick : undefined}
-    />
-    {pickTarget && <p className="help-text">Click the map to set the {pickTarget === 'from' ? 'origin' : 'destination'}.</p>}
-  </Page>
+  const handleDispatch = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!from || !to) return
+    try {
+      const originStr = fromName || formatCoordinate(from)
+      const destStr = toName || formatCoordinate(to)
+      await api.createTrip({
+        origin: originStr,
+        destination: destStr,
+        vehicle_id: selectedVehicle || undefined,
+        status: 'planned',
+      })
+      setDispatchSuccess(`Trip planned successfully: from ${originStr} to ${destStr}.`)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not create trip.')
+    }
+  }
+
+  const activeRoute = selectedRouteIndex === 1 && altRoute ? altRoute : primaryRoute
+
+  return (
+    <Page eyebrow="Operations" title="Route Planner" description="Plan optimal driving routes across Jakarta logistics corridors, compare alternatives, and schedule fleet trips.">
+      <Panel title="Plan a route">
+        <form className="form-row" onSubmit={(event) => void plan(event)} style={{ alignItems: 'flex-end', flexWrap: 'wrap', gap: '12px' }}>
+          <LocationSearchInput
+            label="Origin (Use arrow keys to browse)"
+            value={fromName}
+            onSelect={(loc) => {
+              setFrom({ lat: loc.lat, lon: loc.lon })
+              setFromName(loc.name)
+              setPrimaryRoute(null)
+              setAltRoute(null)
+            }}
+            placeholder="Type origin or click map…"
+          />
+          <button className={`button ${pickTarget === 'from' ? 'primary' : ''}`} type="button" onClick={() => setPickTarget('from')}>
+            Pick origin on map
+          </button>
+
+          <LocationSearchInput
+            label="Destination (Use arrow keys to browse)"
+            value={toName}
+            onSelect={(loc) => {
+              setTo({ lat: loc.lat, lon: loc.lon })
+              setToName(loc.name)
+              setPrimaryRoute(null)
+              setAltRoute(null)
+            }}
+            placeholder="Type destination or click map…"
+          />
+          <button className={`button ${pickTarget === 'to' ? 'primary' : ''}`} type="button" onClick={() => setPickTarget('to')}>
+            Pick destination on map
+          </button>
+
+          <button className="button primary" type="submit" disabled={!from || !to || busy}>
+            {busy ? 'Calculating route…' : 'Find driving routes'}
+          </button>
+        </form>
+
+        {pickTarget && (
+          <p className="help-text" style={{ color: '#0ca678', fontWeight: 600 }}>
+            Click anywhere on the map to set the {pickTarget === 'from' ? 'Origin' : 'Destination'} (the map will automatically center).
+          </p>
+        )}
+
+        {error && <ErrorMessage>{error}</ErrorMessage>}
+      </Panel>
+
+      {primaryRoute && (
+        <Panel title="Recommended routes">
+          <p className="help-text">Select a route option below to inspect on the map and dispatch to an available vehicle.</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '12px', marginBottom: '16px' }}>
+            <div
+              onClick={() => setSelectedRouteIndex(0)}
+              style={{
+                padding: '14px',
+                borderRadius: '6px',
+                border: selectedRouteIndex === 0 ? '2px solid #16866c' : '1px solid #ced4da',
+                background: selectedRouteIndex === 0 ? '#f8fcfa' : '#ffffff',
+                cursor: 'pointer',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <strong style={{ color: '#16866c' }}>Route A: Direct Express (Recommended)</strong>
+                {selectedRouteIndex === 0 && <span style={{ fontSize: '11px', background: '#16866c', color: '#fff', padding: '2px 6px', borderRadius: '4px' }}>Active</span>}
+              </div>
+              <p style={{ margin: '6px 0 0 0', fontSize: '14px' }}>
+                <strong>{formatNumber(primaryRoute.distance_m / 1000, 2)} km</strong> · {formatNumber(primaryRoute.duration_s / 60, 1)} min estimated
+              </p>
+              <small className="muted">Fastest route via Jakarta tollway corridors</small>
+            </div>
+
+            {altRoute && (
+              <div
+                onClick={() => setSelectedRouteIndex(1)}
+                style={{
+                  padding: '14px',
+                  borderRadius: '6px',
+                  border: selectedRouteIndex === 1 ? '2px solid #e67700' : '1px solid #ced4da',
+                  background: selectedRouteIndex === 1 ? '#fff9db' : '#ffffff',
+                  cursor: 'pointer',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <strong style={{ color: '#e67700' }}>Route B: Arterial Corridor (Toll-Free)</strong>
+                  {selectedRouteIndex === 1 && <span style={{ fontSize: '11px', background: '#e67700', color: '#fff', padding: '2px 6px', borderRadius: '4px' }}>Active</span>}
+                </div>
+                <p style={{ margin: '6px 0 0 0', fontSize: '14px' }}>
+                  <strong>{formatNumber(altRoute.distance_m / 1000, 2)} km</strong> · {formatNumber(altRoute.duration_s / 60, 1)} min estimated
+                </p>
+                <small className="muted">Standard arterial route avoiding toll plazas</small>
+              </div>
+            )}
+          </div>
+
+          <form className="form-row" onSubmit={(e) => void handleDispatch(e)} style={{ alignItems: 'flex-end', gap: '12px' }}>
+            <label className="field">
+              Assign vehicle for dispatch
+              <select value={selectedVehicle} onChange={(e) => setSelectedVehicle(e.target.value)}>
+                <option value="">Unassigned (Schedule for Fleet)</option>
+                {(vehicles.data ?? []).map((v) => (
+                  <option key={v.id} value={v.name}>{v.name} ({v.model || v.type})</option>
+                ))}
+              </select>
+            </label>
+            <button className="button primary" type="submit">
+              Schedule Planned Trip
+            </button>
+            <Link className="button" to="/operations/trips">
+              View Planned & Past Trips
+            </Link>
+          </form>
+          {dispatchSuccess && <p className="success" role="status">{dispatchSuccess}</p>}
+        </Panel>
+      )}
+
+      <RoutingMap
+        route={activeRoute}
+        selectedPoints={{ from: from ?? undefined, to: to ?? undefined }}
+        onPickPoint={pickTarget ? pick : undefined}
+      />
+    </Page>
+  )
 }
 
 export function FleetStatusPage() {

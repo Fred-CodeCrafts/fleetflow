@@ -326,7 +326,10 @@ export function RoutingMap({ route, selectedPoints, onPickPoint, compact = false
     })
     instance.on('click', (event) => {
       const handler = pickHandler.current
-      if (handler) handler({ lat: event.lngLat.lat, lon: event.lngLat.lng })
+      if (handler) {
+        handler({ lat: event.lngLat.lat, lon: event.lngLat.lng })
+        instance.easeTo({ center: [event.lngLat.lng, event.lngLat.lat], duration: 450 })
+      }
     })
     instance.on('error', (event) => {
       if (event.error) setMapError(`Map tiles could not be loaded: ${event.error.message}`)
