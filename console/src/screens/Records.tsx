@@ -40,22 +40,6 @@ export function VehiclesPage() {
     navigate(`/resources/maintenance?vehicle=${encodeURIComponent(vehicleName)}`)
   }
 
-  const handleAssignDriver = async (vehicleId: string, driverId: string) => {
-    try {
-      if (driverId) {
-        await api.assignDriverVehicle(driverId, vehicleId)
-      } else {
-        const current = drivers.data?.find((d) => d.vehicle_id === vehicleId)
-        if (current) {
-          await api.assignDriverVehicle(current.id, '')
-        }
-      }
-      await Promise.all([vehicles.reload(), drivers.reload()])
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Could not assign driver to vehicle.')
-    }
-  }
-
   const onSelectModel = (modelName: string) => {
     const selected = availableModels.find((m) => m.name === modelName)
     if (selected) {
@@ -131,22 +115,10 @@ export function VehiclesPage() {
               <td>{unknown(v.color)}</td>
               <td>{unknown(v.body_type)}</td>
               <td>{v.capacity != null ? `${v.capacity} kg` : 'Unknown'}</td>
-              <td onClick={(e) => e.stopPropagation()}>
-                <select
-                  value={assignedDriver?.id ?? ''}
-                  onChange={(e) => void handleAssignDriver(v.id, e.target.value)}
-                  style={{ minWidth: '140px', padding: '3px 6px', fontSize: '12px' }}
-                >
-                  <option value="">Unassigned</option>
-                  {(drivers.data ?? []).map((drv) => {
-                    const assignedToOther = drv.vehicle_id && drv.vehicle_id !== v.id
-                    return (
-                      <option key={drv.id} value={drv.id}>
-                        {drv.name} {assignedToOther ? '(Assigned)' : ''}
-                      </option>
-                    )
-                  })}
-                </select>
+              <td>
+                {assignedDriver
+                  ? <Link to={`/resources/drivers/${encodeURIComponent(assignedDriver.id)}`}>{assignedDriver.name}</Link>
+                  : <span className="muted">Unassigned</span>}
               </td>
               <td><Status value={v.status} /></td>
             </tr>
@@ -246,21 +218,9 @@ export function DriversPage() {
               <td>{unknown(d.contact_phone)}</td><td>{unknown(d.license_class)}</td>
               <td>{unknown(d.license_expiry)}</td><td>{d.shift_start && d.shift_end ? `${d.shift_start} - ${d.shift_end}` : '—'}</td><td>{unknown(d.availability)}</td>
               <td>
-                <select
-                  value={d.vehicle_id ?? ''}
-                  onChange={(e) => void handleAssignVehicle(d.id, e.target.value)}
-                  style={{ minWidth: '130px', padding: '3px 6px', fontSize: '12px' }}
-                >
-                  <option value="">Unassigned</option>
-                  {(vehicles.data ?? []).map((v) => {
-                    const heldByOther = drivers.data?.some((other) => other.id !== d.id && other.vehicle_id === v.id)
-                    return (
-                      <option key={v.id} value={v.id} disabled={heldByOther}>
-                        {v.name} {heldByOther ? '(Assigned)' : ''}
-                      </option>
-                    )
-                  })}
-                </select>
+                {heldVehicle
+                  ? <Link to={`/resources/vehicles/${encodeURIComponent(heldVehicle.id)}`}>{heldVehicle.name}</Link>
+                  : <span className="muted">Unassigned</span>}
               </td>
               <td>
                 {heldVehicle ? (
