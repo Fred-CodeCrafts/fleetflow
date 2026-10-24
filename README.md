@@ -1,124 +1,246 @@
 # FleetFlow
 
-> An open-source fleet navigation platform with dynamic weights.
+FleetFlow is a fleet operations console for Jakarta. Operators run repeatable
+SUMO scenarios and inspect generated vehicle trips, routes, position history,
+and modeled fuel/emissions. The console also manages fleet records, routes
+requests through OSRM, and keeps real GPS reports separate from simulation data.
 
-FleetFlow coordinates fleet vehicle routing in real time by dynamically re-weighting road networks based on live observed speeds, preventing fleets from congesting their own routes.
+The console uses MapLibre GL with OpenFreeMap tiles. FleetFlow does not generate
+real traffic or present simulated positions and emissions as measured fleet
+data. It does not run baseline-versus-dynamic comparisons or include AI controls.
 
-## Overview
+## Routing, map, and simulation data
 
-Traditional navigation systems and static shortest-path routers direct vehicles along the exact same optimal corridors, often causing self-induced congestion when multiple fleet vehicles share the road network. FleetFlow solves this by:
+Route calculations are delegated to the OSRM driving profile. The application
+does not run its own shortest-path implementation. The map is rendered from
+OpenFreeMap; the local OSRM service routes over a Jakarta/Jabodetabek extract of
+OpenStreetMap roads.
 
-1. **Ingesting live speed reports** from fleet vehicles.
-2. **Smoothing congestion states** using exponential moving averages per edge.
-3. **Decaying stale road weights** toward free-flow conditions when roads lack recent reports.
-4. **Publishing immutable metric snapshots** via atomic pointer swaps so route queries (Dijkstra) never block on weight updates.
-5. **Evaluating side by side** against a static baseline router using a deterministic mesoscopic simulator and an embedded live dashboard.
+The first-time dataset setup downloads Geofabrik's Java PBF (about 856 MB at the
+time this workflow was added), clips it to a buffered Jakarta metropolitan
+bounding box, and builds the OSRM MLD data files. Allow several gigabytes of
+free disk space and time for preprocessing. The generated PBF and OSRM files
+stay under `data/osrm/`, which is ignored by Git.
+
+Requirements: Windows with PowerShell, Docker Desktop, Go 1.25.5+, Node.js/npm,
+Python, and a local SUMO installation with `sumo`, `duarouter`, `netconvert`,
+and `tools\randomTrips.py` available. Initial OSM downloads are large; allow
+several gigabytes of free disk space for preprocessing.
+
+### One-time data setup
+
+Run from the FleetFlow repository root:
+
+```powershell
+# Download and prepare the OSRM Jakarta road extract.
+.\scripts\osrm\build-jakarta.ps1
+
+# Install the PBF reader and create the DKI SUMO network.
+python -m pip install -r scripts/sumo/requirements.txt
+.\scripts\sumo\build-jakarta.ps1
+```
+
+These generated datasets are local-only, ignored by Git, and are not included
+in the application image. The DKI network passes structural validation; full
+city SUMO route/connectivity validation has not been completed.
+
+### Start local services
+
+1. Create a local environment file and start PostgreSQL:
+
+   ```powershell
+   if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+   docker compose up -d postgres
+   docker compose --profile tools run --rm migrate
+   ```
+
+   If you change credentials in `.env`, use the same values for the Go process
+   below. PowerShell does not automatically load `.env`.
+
+2. Start OSRM after its data build has completed:
+
+   ```powershell
+   docker compose --profile routing up -d osrm
+   ```
+
+3. In a second terminal, start the Go API from the repository root. Adjust
+   `SUMO_HOME` if SUMO is installed elsewhere:
+
+   ```powershell
+   $env:OSRM_URL = 'http://127.0.0.1:5000'
+   $env:SUMO_HOME = 'C:\Program Files (x86)\Eclipse\Sumo'
+   $env:SUMO_NETWORK = (Resolve-Path '.\data\networks\generated\jakarta-dki.net.xml').Path
+   $env:POSTGRES_HOST = '127.0.0.1'
+   $env:POSTGRES_PORT = '5432'
+   $env:POSTGRES_DATABASE = 'fleetflow'
+   $env:POSTGRES_USER = 'fleetflow'
+   $env:POSTGRES_PASSWORD = 'change-me'
+   go run ./cmd/fleetflow
+   ```
+
+   The database values match `.env.example`. Use your local values if you
+   changed them. To develop without SUMO, leave `SUMO_NETWORK` unset.
+
+4. In a third terminal, start the console:
+
+   ```powershell
+   Set-Location -LiteralPath '.\console'
+   npm ci
+   npm run dev
+   ```
+
+   Open the local URL printed by Vite (normally `http://localhost:5173`). Vite
+   proxies API calls to port 8080. To serve the production console from Go,
+   run `npm run build` in `console\` before starting the Go process, then open
+   `http://localhost:8080`.
+
+5. Optionally seed development fleet records from the repository root:
+
+   ```powershell
+   .\scripts\dev\seed-fleet.ps1
+   ```
+
+   Start a scenario from **Operations → SUMO Scenarios**. The live GPS map
+   remains empty until a device submits authenticated real position reports.
+
+SUMO scenarios require the generated `data/networks/generated/jakarta-dki.net.xml`.
+The build clips the Geofabrik
+Java extract with pyosmium to the OSM administrative polygon of DKI Jakarta
+(relation 6362934), buffered by about 2 km, including the Thousand Islands. It
+structurally validates the generated network. `-ValidateWithSumo` additionally
+loads it into SUMO and can require substantial memory for a full-city network.
+Generated PBF/XML/network files are local data and are ignored by Git. The
+tracked `data/networks/jakarta.net.xml` remains a legacy central-Jakarta
+artifact and is not used by the app.
+
+Start a scenario from **Operations → SUMO Scenarios**, or call the API:
+
+```sh
+curl -sS -X POST http://localhost:8080/api/simulation/runs \
+  -H "Content-Type: application/json" \
+  -d '{"seed":42,"vehicles":20,"departure_window_s":300}'
+```
+
+Scenario output is generated by SUMO and is separate from authenticated GPS
+reports. Run metadata/results persist when PostgreSQL is configured; an
+in-memory local run loses them when the process restarts. Delivery stops and
+package events are generated from simulation traces; they are not real scans.
+
+## Seed local demo records
+
+With the FleetFlow API running locally, seed sample vehicles and drivers:
+
+```powershell
+.\scripts\dev\seed-fleet.ps1
+```
+
+The seeder is idempotent: it reuses matching records on repeat runs. Seeded
+records are labeled `DEMO`; it creates no trips or GPS positions. The live map
+stays empty until a vehicle reports a real position. Records use the running
+application's configured store, so a memory-backed local run loses them when
+the service restarts. This is a development convenience, not a production
+initialization command. Remote targets are refused unless `-AllowRemote` is
+explicitly provided; never use it against production.
+
+To run the Go app in a container while OSRM is running on the host, set
+`OSRM_URL=http://host.docker.internal:5000`. If both are services in the same
+Compose network, use `OSRM_URL=http://osrm:5000`.
+
+The Java extract includes Jakarta and surrounding routes; the configured
+bounding box is a routing buffer, not an official administrative border. To
+change coverage, update the `--bbox` in `scripts/osrm/build-jakarta.ps1` and
+rebuild the dataset with `-Force`.
+
+OpenStreetMap data is licensed under ODbL. Attribution: © OpenStreetMap
+contributors. OpenFreeMap basemap tiles require an internet connection and
+their attribution is displayed on the map.
+
+## Operations
+
+- **SUMO Scenarios** starts seeded simulations and shows their progress and
+  generated position traces.
+- **Trips** is read-only history from simulation runs. Trip details show the
+  vehicle's sampled simulated route, generated delivery stops, and ordered
+  package-event timeline when available. These seeded events are simulation
+  output, not live package scans.
+- **Live Map** shows only recently reported GPS locations. It starts empty until
+  a connected device sends positions; it does not show static preview markers.
+- **Route Planner** sends the selected coordinates to OSRM and draws the returned
+  route geometry, distance, and estimated duration.
+- **Vehicles** and **Drivers** capture non-sensitive fleet profiles and display
+  current allocations. Each record links to its own detail page; manual driver
+  assignment is not exposed.
+- **General Settings** reports app health and the routing/map providers.
+
+Fuel and CO₂ values are SUMO HBEFA3 estimates for the explicitly assigned
+`HBEFA3/PC_G_EU4` Euro 4 gasoline passenger-car class. SUMO tripinfo values are
+converted from milligrams to kilograms, and the model, class, units, source, and
+assumptions are stored with each run. This generic class is not a fleet-specific
+measurement or verified carbon saving. Automatic fleet dispatch,
+time-controlled route playback, and trip history on individual fleet records
+are not yet implemented.
+
+## API
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /healthz` | Process liveness |
+| `GET /readyz` | OSRM availability and database readiness |
+| `POST /api/route` | Route coordinates with OSRM; returns GeoJSON coordinates, distance, and duration |
+| `GET /api/locations` | Recent GPS positions |
+| `POST /api/locations` | Submit a vehicle GPS position (API key required) |
+| `GET /api/vehicles`, `POST /api/vehicles` | Vehicle records |
+| `GET /api/drivers`, `POST /api/drivers` | Driver records |
+| `POST /api/simulation/runs` | Start a seeded SUMO scenario |
+| `GET /api/simulation/runs` | List scenario runs |
+| `GET /api/simulation/runs/{id}` | Inspect run status and results |
+
+Example route request:
+
+```json
+{
+  "from": { "lat": -6.2088, "lon": 106.8456 },
+  "to": { "lat": -6.1754, "lon": 106.8272 }
+}
+```
+
+Example authenticated vehicle position:
+
+```sh
+curl -sS -X POST http://localhost:8080/api/locations \
+  -H "Authorization: Bearer $FLEETFLOW_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"vehicle_id":"van-17","lat":-6.2088,"lon":106.8456,"speed_mps":8.5}'
+```
+
+Issue an API key with `go run ./cmd/fleetflow -issue-key "vehicle integration"`.
+Key issuance requires PostgreSQL; plaintext is printed once and only its hash
+is stored.
+
+## Persistence
+
+Fleet records use PostgreSQL when `DATABASE_URL` or the `POSTGRES_*` settings
+are configured. Without a database, records and API keys use in-memory stores
+and are lost when the service restarts. Simulation runs use PostgreSQL JSONB
+when configured, or in-memory storage otherwise. Start the local database with
+`docker compose up -d`; apply migrations with
+`docker compose --profile tools run --rm migrate`.
+
+Copy `.env.example` to `.env` for the Compose database values. Set `OSRM_URL`
+in the environment of the Go process; local shell processes do not load `.env`
+automatically.
 
 ## Status
 
-**MVP in active development** for the **Road To DevFest Jakarta 2026** competition.
+FleetFlow is an MVP in active development for Road To DevFest Jakarta 2026.
 
-- **Initial Commit:** 17 October 2026
-- **Target Deployment:** Google Cloud Run (single instance, in-memory state)
-- **License:** Apache License 2.0
+### Cloud Run Production Deployment
 
-## Background & Originality Notice
+FleetFlow supports containerized deployment to Google Cloud Run in `asia-southeast2` (Jakarta):
 
-FleetFlow builds conceptually on academic research and an earlier thesis prototype (`sumo-routing`). However:
-- **All code in this repository is written fresh from scratch starting 17 October 2026.**
-- No code, files, or text were copied from earlier prototypes or third-party repositories (`sumo-routing`, `fleetbase`).
-- The earlier thesis prototype serves solely as background conceptual motivation.
+- **Self-contained runtime image**: The production Docker image bundles Eclipse SUMO 1.27.1, duarouter, Python 3, and the verified Jakarta road network (`/app/data/networks/jakarta.net.xml`), preconfigured via `SUMO_NETWORK`.
+- **Durable concurrency & multi-instance locking**: Runs are guarded across multiple Cloud Run instances by a PostgreSQL partial unique index (`simulation_runs_active_unique`). A second concurrent scenario request is rejected atomically with HTTP 409 Conflict across all instances.
+- **Restart & shutdown recovery**: On container startup or restart, any interrupted or orphaned runs are automatically detected and marked as failed with descriptive diagnostics. Container SIGTERM triggers graceful termination and updates the run record.
+- **Cloud Run configuration**: `deploy/cloudrun.service.yaml` defines service parameters including unthrottled CPU (`run.googleapis.com/cpu-throttling: "false"`), health checks (`/healthz` and `/readyz`), and Secret Manager integration for `DATABASE_URL`. See [deploy/README.md](./deploy/README.md).
 
-## Project Architecture
-
-FleetFlow is designed as a single, self-contained Go binary:
-
-- `cmd/fleetflow`: Server entrypoint, flag parsing, and wiring.
-- `internal/graph`: Road network topology, parsing, and derived capacity/free-flow metrics.
-- `internal/weights`: Per-edge state, moving-average smoothing, hold-and-decay logic, and BPR-inspired cost calculations.
-- `internal/engine`: Customizer goroutine, atomic metric snapshots, and Dijkstra shortest-path router behind an interface.
-- `internal/sim`: Deterministic mesoscopic simulator with background traffic, fleet vehicles, and hysteresis rerouting.
-- `internal/api`: HTTP endpoints (`/healthz`, `/api/reports`, `/api/route`, `/api/sim/start`, `/api/stream`, `/api/metrics`).
-- `web`: Embedded real-time dual-canvas dashboard served via `go:embed`.
-
-## Quick Start (Local Development)
-
-### Prerequisites
-
-- [Go](https://golang.org/) 1.25+
-- [Git](https://git-scm.com/)
-
-### Running Locally
-
-```bash
-# Clone the repository
-git clone https://github.com/Fred-CodeCrafts/fleetflow.git
-cd fleetflow
-
-# Run the service
-go run ./cmd/fleetflow
-```
-
-Once running, open `http://localhost:8080` in your browser to view the operator dashboard.
-
-## API Endpoints
-
-- `GET /healthz` - Health check and liveness probe
-- `POST /api/reports` - Ingest vehicle speed reports (requires an API key)
-- `POST /api/route` - Query route between origin and destination (requires an API key)
-- `POST /api/sim/start` - Start simulation run with specified seed & parameters
-- `POST /api/sim/reset` - Stop and reset simulation
-- `GET /api/stream` - Server-Sent Events (SSE) telemetry stream for the dashboard
-- `GET /api/metrics` - Real-time metrics and comparative statistics
-
-### API keys
-
-The two ingest endpoints require a key, because they are the ones an outside system
-calls. Issue one with the service's own command; it stores the key, prints it once,
-and exits without serving:
-
-```sh
-go run ./cmd/fleetflow -issue-key "dispatch integration"
-# flf_9Qx...   <- the only time this is shown
-```
-
-Only the SHA-256 digest is stored, so the key cannot be read back afterwards, and it
-is never written to a log. Present it as a bearer token:
-
-```sh
-# submit a vehicle report
-curl -sS -X POST http://localhost:8080/api/reports \
-  -H "Authorization: Bearer $FLEETFLOW_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"vehicle_id":"v1","edge_id":"e_AB","speed_mps":13.9}'
-
-# ask for a route
-curl -sS -X POST http://localhost:8080/api/route \
-  -H "Authorization: Bearer $FLEETFLOW_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"from_node":"A","to_node":"D"}'
-
-# ask for a route and price the path already being driven, so the two costs
-# come from one snapshot and can be compared
-curl -sS -X POST http://localhost:8080/api/route \
-  -H "Authorization: Bearer $FLEETFLOW_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"from_node":"A","to_node":"D","current_edges":["e_AB","e_BD"]}'
-# {"edges":["e_AC","e_CD"],"cost_s":46.1,"metric_version":3,"current_cost_s":72.0}
-```
-
-`current_edges` must be a chain that starts at `from_node`; anything else returns
-`400` and computes nothing.
-
-A missing or wrong key returns `401` with `{"code":"unauthenticated"}` and does
-nothing else: no report reaches the weights, and no route is computed. The fleet
-record endpoints (`/api/vehicles`, `/api/drivers`, `/api/trips`) stay open, because
-they belong to the dashboard.
-
-## Deployment
-
-FleetFlow is containerized with a multi-stage Dockerfile and deployed to **Google Cloud Run** with `max-instances=1` and `min-instances=1`.
-
-## License
-
-This project is licensed under the [Apache License, Version 2.0](LICENSE).
+Remaining planned features include automatic roster dispatch, time-controlled playback, and linked trip history; see [TASKS.md](./TASKS.md).

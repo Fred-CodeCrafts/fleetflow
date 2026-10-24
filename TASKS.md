@@ -1,271 +1,64 @@
-# TASKS.md
+# FleetFlow delivery checklist
 
-Task list for FleetFlow. `PRD.md` is the source of truth; this file, `DESIGN.md`, and `AGENTS.md` follow it.
+[PRD.md](./PRD.md) defines the simulation-led product direction;
+[DESIGN.md](./DESIGN.md) records the intended architecture and its current
+implementation caveats.
 
-**How to use this file**
-- One task = one commit (or a few tiny ones). Do them in order.
-- Tick the box in the same commit that completes the task.
-- The suggested commit message is in `code`. Adjust it if the change differs.
-- "Done when" is the check before you tick the box.
-- Deadline: **24 Oct** (deployed). Showcase: **27 Oct**.
+## Existing foundation
 
-Legend: 🔴 must-have · 🟡 should-have · 🟢 could-have
+- [x] React/TypeScript operator console and Go API.
+- [x] MapLibre map, OpenFreeMap tiles, and visible map attribution.
+- [x] OSRM route client/API and Jakarta-region OSM data preparation workflow.
+- [x] Authenticated GPS ingestion with a separate live-GPS view.
+- [x] Remove the legacy static map preview; show SUMO scenario playback instead.
+- [x] PostgreSQL persistence for existing fleet, driver, and trip records.
 
----
+## SUMO simulation and delivery operations
 
-## Day 1 (Sat 17 Oct): Repo and graph
+- [x] Verify local SUMO 1.27.1 can generate seeded demand with `randomTrips.py`,
+  route it with `duarouter`, and produce tripinfo, geographic FCD, and emission
+  XML using the retained Jakarta network. This smoke test only establishes the
+  local toolchain; it does not validate network coverage or production setup.
+- [x] Obtain and document current OSM source data, provenance, licensing, and
+  a buffered network extraction based on the DKI administrative boundary. Keep
+  source and generated network data out of Git.
+- [x] Validate network connectivity and representative SUMO routes on the Jakarta
+  network with duarouter and representative trip sampling.
+- [x] Add validated SUMO runtime/network configuration and explicit process
+  failure reporting.
+- [x] Add seeded scenarios and a reproducible SUMO run lifecycle; capture
+  SUMO version/seed and persist run state.
+- [x] Persist scenario results, generated trips, and SUMO position traces.
+- [x] Persist ordered generated delivery stops and package events in each
+  simulation run's existing JSONB result and cover the memory repository.
+- [ ] Generate scenario delivery demand and automatically assign compatible
+  available vehicles and drivers; explain unassigned deliveries.
+- [x] Add scenario/run monitoring and read-only generated trip detail screens;
+  remove manual trip creation and driver assignment controls.
+- [x] Show generated stop markers, ordered delivery stops, and a chronological
+  package-event timeline on trip details.
+- [ ] Add time-controlled simulation route playback with a moving vehicle
+  marker.
+- [x] Capture optional vehicle specifications and maintenance notes, and driver
+  contact, license, shift, and availability without collecting sensitive
+  identity fields; keep missing values explicitly unknown.
+- [x] Add individual vehicle and driver profile pages.
+- [ ] Link automatically dispatched scenario trips to fleet records and show
+  those records' associated trip history.
+- [ ] Record SUMO fuel/emissions model, units, and assumptions; separate
+  simulated estimates from measured activity.
+- [x] Package SUMO execution for durable Cloud Run deployment; test
+  recovery and multi-instance concurrency locks across API restarts.
 
-- [x] 🔴 **T01** Init repo, add `LICENSE` (Apache-2.0 or MIT)
-  `chore: initialize repository with license`
-  Done when: `git log` shows this as the first commit, dated on or after 11 Oct, no other code in it.
-- [x] 🔴 **T02** Add `AGENTS.md`, `DESIGN.md`, `TASKS.md`
-  `docs: add agent rules, design and task list`
-- [x] 🔴 **T03** Add README skeleton (what it is, status, planned run steps, background note about thesis prototype)
-  `docs: add README skeleton`
-  Done when: README says the earlier prototype is background only and no code was copied.
-- [x] 🔴 **T04** Add `.gitignore` and `.env.example`
-  `chore: add gitignore and env example`
-- [x] 🔴 **T05** `go mod init`, add `cmd/fleetflow/main.go` that prints a startup line
-  `chore: initialize go module and main entrypoint`
-  Done when: `go build ./...` passes.
-- [x] 🔴 **T06** Add `internal/graph` types (`Node`, `Edge`, `Graph`)
-  `feat(graph): add node, edge and graph types`
-- [x] 🔴 **T07** Add JSON loader with validation (missing nodes, bad lengths)
-  `feat(graph): load graph from json with validation`
-  Done when: loader test covers a valid file and two invalid ones.
-- [x] 🔴 **T08** Compute derived values (`free_flow_s`, `capacity`) on load
-  `feat(graph): derive free-flow time and capacity per edge`
-- [x] 🔴 **T09** Add a tiny hand-made test graph in `data/` for tests
-  `test(graph): add small test graph fixture`
-- [x] 🔴 **T10** Add generated grid-city graph script (fallback map)
-  `feat(scripts): generate grid city graph`
-  Done when: running the script writes `data/graph.json` that loads without errors.
+## Validation and rollout
 
-## Day 2 (Sun 18 Oct): Weight store
-
-- [x] 🔴 **T11** Add `EdgeState` struct with per-edge `RWMutex`
-  `feat(weights): add per-edge state struct`
-- [x] 🔴 **T12** Add congestion measure `rho = clamp(1 - v/v_free, 0, 1)` with tests
-  `feat(weights): add congestion measure from observed speed`
-- [x] 🔴 **T13** Add moving-average update on report, with tests
-  `feat(weights): smooth congestion with moving average`
-- [x] 🔴 **T14** Add cost function `free_flow * (1 + alpha * rho^beta)`, with tests
-  `feat(weights): add edge cost function`
-- [x] 🔴 **T15** Add decay with hold time, with tests (no report → decays; recent report → does not)
-  `feat(weights): decay stale edges toward free-flow`
-- [x] 🔴 **T16** Add parameter struct with defaults and validation
-  `feat(weights): add tunable parameters with defaults`
-- [x] 🔴 **T17** Add concurrent report test run with `-race`
-  `test(weights): add race test for concurrent reports`
-  Done when: `go test -race ./internal/weights` passes.
-
-## Day 3 (Mon 19 Oct): Engine and router
-
-- [x] 🔴 **T18** Add immutable `Metric` type (costs slice plus version)
-  `feat(engine): add immutable metric snapshot`
-- [x] 🔴 **T19** Add Dijkstra with binary heap over a given metric, with tests on the fixture graph
-  `feat(engine): add dijkstra router`
-  Done when: known shortest paths on the fixture graph match expected results.
-- [x] 🔴 **T20** Add `Router` interface so another algorithm can replace Dijkstra
-  `refactor(engine): put router behind an interface`
-- [x] 🔴 **T21** Add customizer: read all edge costs into a fresh metric
-  `feat(engine): build metric snapshot from edge state`
-- [x] 🔴 **T22** Publish metric with `atomic.Pointer` and load once per query
-  `feat(engine): publish active metric with atomic pointer`
-- [x] 🔴 **T23** Add periodic customization loop with clean shutdown
-  `feat(engine): run customization on an interval`
-- [x] 🔴 **T24** Add baseline engine (weights disabled, fixed free-flow metric)
-  `feat(engine): add static baseline mode`
-- [x] 🔴 **T25** Add race test: queries during customization and reports
-  `test(engine): add race test for queries during customization`
-  Done when: `go test -race ./...` passes.
-- [x] 🟡 **T26** Record customization time and metric age
-  `feat(engine): track customization time and metric age`
-
-## Day 4 (Tue 20 Oct): Simulator
-
-- [x] 🔴 **T27** Add seeded demand generator (origin-destination pairs and departure times)
-  `feat(sim): add seeded demand generator`
-  Done when: same seed gives identical demand in a test.
-- [x] 🔴 **T28** Add vehicle type and edge occupancy tracking
-  `feat(sim): add vehicles and edge occupancy`
-- [x] 🔴 **T29** Add edge speed model from occupancy
-  `feat(sim): add occupancy-based edge speed model`
-- [x] 🔴 **T30** Add simulation step: move vehicles along routes, finish trips
-  `feat(sim): advance vehicles each step`
-- [x] 🔴 **T31** Add background vehicles with static routes
-  `feat(sim): add background vehicles with static routes`
-- [x] 🔴 **T32** Add fleet vehicles that request routes and send reports
-  `feat(sim): add fleet vehicles using the engine`
-- [x] 🔴 **T33** Add rerouting policy (interval plus hysteresis threshold)
-  `feat(sim): add rerouting with hysteresis`
-- [x] 🔴 **T34** Add trip metrics (average, p95, route changes, saturated edges, utilization std dev)
-  `feat(sim): collect trip and congestion metrics`
-- [ ] 🟡 **T34a** Add time lost versus free-flow time and fleet vs. background trip times (US-6 fairness check)
-  `feat(sim): add time lost and fairness metrics`
-  Done when: both numbers reach the metrics endpoint and are labelled as a fairness check, not a headline result.
-- [x] 🔴 **T35** Run baseline and FleetFlow on the same seed in tests
-  `test(sim): compare baseline and dynamic runs on same seed`
-  Done when: both runs finish and produce metrics. (Whether FleetFlow wins comes later, in tuning.)
-
-## Day 5 (Wed 21 Oct): API and streaming
-
-- [x] 🔴 **T36** Add HTTP server with `GET /healthz`
-  `feat(api): add server and health endpoint`
-- [x] 🔴 **T36a** Add `GET /readyz`, env-validated config, and graceful shutdown
-  `feat(api): add readiness, config validation and graceful shutdown`
-  Done when: bad env fails fast with a clear error; `/readyz` reports graph loaded and DB reachable when configured; SIGTERM stops the customizer and simulation and drains requests.
-- [x] 🔴 **T36b** Add typed domain errors, request limits, request IDs, timeouts and rate limits
-  `feat(api): add typed errors, validation and limits`
-  Done when: domain errors map to status codes in one place; oversized/invalid input is rejected at the handler; logs carry a request ID; public endpoints have timeouts and rate limits.
-- [x] 🔴 **T36c** Add CI that builds, vets, lints, formats and tests (including `-race`) on every push
-  `ci: add build, vet and test workflow`
-  Done when: a push runs build, vet, lint, a `gofmt` check and `go test -race ./...`, and fails on any finding (US-8). Done early so it guards every later commit.
-- [x] 🔴 **T36d** Guard the routing core boundary with a test
-  `test: guard the routing core boundary`
-  Done when: a test fails if `graph`, `weights` or `engine` import an HTTP or database package, so the hot path cannot reach the database by accident (US-5, US-12).
-- [x] 🔴 **T37** Add `POST /api/reports`
-  `feat(api): add report endpoint`
-  Done when: reports write to the weight store only and never touch PostgreSQL.
-- [x] 🔴 **T38** Add `POST /api/route`
-  `feat(api): add route endpoint`
-  Done when: a query returns the ordered edges and cost from the current weights, and an unreachable destination returns a clear error (US-5). Hot path reads the engine snapshot only and never touches PostgreSQL.
-- [x] 🔴 **T39** Add fleet records in PostgreSQL: vehicles, drivers, trips (handler → service → repository per entity + `internal/store` migrations + API)
-  `feat(fleet): add vehicles, drivers and trips with persistence`
-  Done when: every entity follows handler → service → repository with the interface in the service package and `postgres/` + `memory/` behind it; vehicle create/list with validation, driver create and assign/unassign with one-vehicle enforcement, trip create/assign with availability rules in one transaction; records survive a server restart; concurrent double-assign is rejected; schema changes come from versioned migrations; pooling and indexes on filtered FK/status columns; unit tests use `memory/`, integration tests use real Postgres.
-- [x] 🔴 **T39a** Drive trip and vehicle status from the run (planned to in progress to completed)
-  `feat(fleet): update trip and vehicle status from the simulation`
-  Done when: assigning a trip marks the vehicle on trip, finishing it frees the vehicle, and the trip list shows both transitions.
-- [ ] 🟡 **T39b** Save and list finished comparison runs (US-9)
-  `feat(fleet): save and list comparison runs`
-  Done when: a finished run is stored with its seed and metrics and is still viewable after a server restart.
-- [x] 🔴 **T40** Add API key auth on `POST /api/reports` and `POST /api/route` (`internal/auth`)
-  `feat(auth): require api key on reports and route`
-  Done when: missing or wrong key returns 401 and does nothing, keys are stored hashed and never logged, and the README shows an example request for each endpoint.
-- [x] 🔴 **T40a** Send simulated reports and route requests through the public API (US-7)
-  `feat(sim): report through the public api`
-  Done when: the simulator's fleet service is an HTTP client against `/api/reports` and `/api/route`, so simulated traffic takes the same validated path as an external client, and a seeded run stays deterministic (reports are sent synchronously). Needs T37 and T40.
-- [ ] 🔴 **T41** Add `POST /api/sim/start` and `POST /api/sim/reset`
-  `feat(api): add simulation control endpoints`
-- [ ] 🔴 **T42** Add `GET /api/metrics`
-  `feat(api): add metrics endpoint`
-- [ ] 🔴 **T42a** Measure and report route query latency (p50, p99) (US-6)
-  `feat(engine): measure route query latency`
-  Done when: a query records its duration without taking a lock or blocking, and the metrics endpoint reports p50 and p99 next to the customization time.
-- [ ] 🔴 **T43** Add `GET /api/stream` (Server-Sent Events) for positions, congestion and metrics
-  `feat(api): stream simulation state over sse`
-  Done when: each vehicle is labeled simulated or live.
-- [ ] 🔴 **T44** Run simulation only while a stream client is connected
-  `feat(api): tie simulation loop to open stream`
-  Done when: closing the browser tab stops the simulation (needed for default Cloud Run CPU behavior).
-- [ ] 🟡 **T45** Add API handler tests for bad input (including bad reports and bad keys)
-  `test(api): cover invalid requests`
-- [ ] 🟡 **T46** Document the reports format and reject invalid/out-of-range values (US-14, should)
-  `docs(api): document reports format and validation`
-  Done when: format is documented, bad values get a clear error, and the dashboard labels simulated vs. live.
-
-## Day 6 (Thu 22 Oct): Dashboard
-
-- [ ] 🔴 **T47** Add `web/` with static page, embedded via `go:embed`
-  `feat(web): serve embedded dashboard page`
-- [ ] 🔴 **T48** Add fleet views: vehicles, drivers, trips, trip history and saved runs
-  `feat(web): add fleet management views`
-  Done when: dispatcher can manage vehicles/drivers/trips and review history from the dashboard.
-- [ ] 🔴 **T49** Draw road graph on canvas
-  `feat(web): draw road network on canvas`
-- [ ] 🔴 **T50** Connect to SSE stream and draw vehicles
-  `feat(web): render vehicles from stream`
-- [ ] 🔴 **T51** Color edges by congestion
-  `feat(web): color roads by congestion`
-- [ ] 🔴 **T52** Show two panels side by side (Baseline, FleetFlow)
-  `feat(web): add side-by-side comparison panels`
-- [ ] 🔴 **T53** Add metrics strip (average trip time, p95, saturated %, route changes, query latency)
-  `feat(web): show comparison metrics`
-  Done when: the strip states how capacity is derived (lanes and length), so the saturation figure is not a black box (US-6).
-- [ ] 🔴 **T54** Add controls: start, reset, seed, vehicles, fleet share
-  `feat(web): add simulation controls`
-  Done when: start loads a ready-made demo scenario, so one click shows a run (US-7).
-- [ ] 🔴 **T55** Auto-reconnect on stream drop, label each vehicle simulated or live
-  `feat(web): reconnect stream automatically`
-- [ ] 🟡 **T56** Mobile-friendly layout and basic styling pass
-  `style(web): improve layout and styling`
-
-## Day 7 (Fri 23 Oct): Deploy and tune
-
-- [ ] 🔴 **T57** Add multi-stage `Dockerfile` that listens on `$PORT`
-  `build: add dockerfile`
-  Done when: `docker run -p 8080:8080` serves the dashboard locally.
-- [ ] 🔴 **T58** Deploy to **Cloud Run** (`max-instances=1`, `min-instances=1`) with PostgreSQL connected
-  `docs: add cloud run deployment steps`
-  Done when: the public URL loads, a demo run completes, and fleet records survive a restart. Put the URL in the README. Record the Postgres hosting choice and cost.
-- [ ] 🟡 **T59** Add `fly.toml` and test a Fly preview deploy
-  `build: add fly.io config for preview deploys`
-- [ ] 🔴 **T60** Tune parameters (alpha, beta, gamma, lambda, delta, hold, threshold) until the demo scenario shows a clear, honest difference
-  `chore(weights): tune default parameters from experiments`
-  Done when: results are recorded in `docs/results.md` with seeds, including any cases where FleetFlow does not win.
-- [ ] 🟡 **T61** Add multi-seed batch script that prints mean and spread
-  `feat(scripts): add multi-seed comparison script`
-- [ ] 🟡 **T62** Test several fleet shares (for example 25%, 50%, 100%)
-  `docs: record results across fleet shares`
-- [ ] 🟡 **T63** Add `NOTICE` with attributions (OpenStreetMap data if used, libraries)
-  `docs: add notice with third-party attributions`
-
-## Day 8 (Sat 24 Oct): Ship
-
-- [ ] 🔴 **T64** Final README: what it is, screenshot or GIF, run locally, deploy, limitations, license, attribution, API key example requests
-  `docs: finalize readme`
-  Done when: the README calls the project "production-shaped architecture, MVP feature set" and never claims it is production-ready (US-8).
-- [ ] 🔴 **T65** Verify a fresh clone builds and runs from the README steps only
-  `docs: fix setup steps found during clean-clone check`
-- [ ] 🔴 **T66** Run `go vet`, `gofmt`, `go test -race ./...` and fix findings
-  `chore: fix lint and race findings`
-- [ ] 🔴 **T67** Tag release `v0.1.0`
-  `chore: release v0.1.0`
-- [ ] 🔴 **T68** Confirm deployed Cloud Run link works from another network or device
-
-## 25 to 27 Oct: Pitch and submission
-
-- [ ] 🔴 **T69** Write the project summary (500 words maximum)
-- [ ] 🔴 **T70** Record the demo video (3 minutes maximum): problem, side-by-side run, result, how it works
-- [ ] 🔴 **T71** Build the presentation deck (PDF plus PPT/Keynote backup on a flash drive)
-- [ ] 🔴 **T72** Record the backup presentation video (15 minutes maximum): technology, business model, future plan
-- [ ] 🔴 **T73** Prepare for Q&A (see list below) and rehearse the live demo with a backup device
-
----
-
-## Stretch (only if everything above is done)
-
-- [ ] 🟢 **S1** Post-sprint roadmap items from PRD section 9 (in order): real-fleet pilot, driver GPS web app, map matching, organizations and roles + tenant separation, key rotation/revocation, persisted congestion state + multi-instance plan, CCH router, Fleetbase adapter, backups + runbook, retention/consent
-- [ ] 🟢 **S2** OSM-based Jakarta extract replacing the generated grid
-- [ ] 🟢 **S3** ADK agent that suggests parameter settings
-- [ ] 🟢 **S4** Optional SUMO adapter
-
-## Cut order if time runs short
-
-1. S1 to S4 (all stretch work)
-2. T56 (dashboard polish)
-3. T59 (Fly preview)
-4. T61 and T62 (batch script and fleet-share sweep)
-5. T34a and T39b (fairness metrics and saved runs; both should-have)
-6. T46 (US-14 reports docs; demote to could if tight)
-
-**Never cut:** fleet records in Postgres (T39, T39a, T48), API keys (T40), simulated traffic on the public API (T40a), route query latency (T42a), the side-by-side dashboard (T52, T53), the Cloud Run deployment (T58), and the honest results record (T60).
-
----
-
-## Questions to prepare for
-
-- Why not just use Fleetbase or Google Maps? (They decide who goes where or optimize each vehicle separately. FleetFlow coordinates which roads the fleet uses.)
-- What is the evidence? (Simulation only, across several seeds, including where it does not help.)
-- What happens when avoided roads stop reporting? (Hold time, slow decay and hysteresis, and the route-change metric to detect it.)
-- What would real deployment need? (Real GPS ingestion via the reports API, validated capacity data, PostgreSQL, UU PDP review before any pilot.)
-- How do outside systems authenticate? (API key on reports and route; 401 on missing or wrong key; keys stored hashed.)
-- Is the project new? (Yes: new repo with a visible history starting after 11 Oct. The earlier thesis prototype is background only and nothing was copied.)
-
----
-
-## Rules that apply to every task
-
-- Commit in small steps and never rewrite history (see `AGENTS.md`).
-- Do not copy code from `../sumo-routing/` or `../fleetbase/`.
-- Keep the build green: `go build ./...` and `go test ./...` before each commit.
+- [ ] Add focused Go tests for scenario validation, deterministic inputs,
+  assignment eligibility, run failure handling, output parsing, and event order.
+- [ ] Add focused API and console tests for read-only trip flow, generated
+  history, clear source labels, and unavailable-data states.
+- [ ] Run Go formatting, vet, build, and tests, preserving any user-owned local
+  changes; run the console tests, typecheck, and production build.
+- [ ] Exercise a full scenario end to end on the verified DKI-wide network.
+- [ ] Verify real GPS and SUMO map layers cannot be confused.
+- [x] Validate deployed SUMO runtime, database persistence, OSRM, attribution,
+  and Cloud Run production deployment configuration.

@@ -77,7 +77,11 @@ func decodeError(err error) error {
 		if typeErr.Field != "" {
 			return domain.Invalid(codeBadFieldType, "field %q must be of type %s", typeErr.Field, typeErr.Type)
 		}
-		return domain.Invalid(codeBadFieldType, "value must be of type %s", typeErr.Type)
+		// A mismatch on the whole value names the target type, and every target
+		// here is a struct in this package, so the raw text would tell a client
+		// it sent an array "where api.routeRequest belongs". Name the shape
+		// instead: it is what the client has to change, and it leaks nothing.
+		return domain.Invalid(codeBadFieldType, "request body must be a JSON object")
 	}
 
 	var syntaxErr *json.SyntaxError

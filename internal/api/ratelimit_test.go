@@ -115,7 +115,7 @@ func TestRateLimitMiddleware_RefusesPastTheBurst(t *testing.T) {
 
 	serve := func() *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, "/api/reports", nil)
+		req := httptest.NewRequest(http.MethodPost, "/api/route", nil)
 		req.RemoteAddr = "203.0.113.9:5555"
 		h.ServeHTTP(rec, req)
 		return rec
@@ -154,7 +154,7 @@ func TestRateLimitMiddleware_AttributesByForwardedClient(t *testing.T) {
 
 	send := func(forwarded string) int {
 		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, "/api/reports", nil)
+		req := httptest.NewRequest(http.MethodPost, "/api/route", nil)
 		// Two different clients behind the same proxy socket.
 		req.RemoteAddr = "10.0.0.1:5555"
 		req.Header.Set("X-Forwarded-For", forwarded)
@@ -174,9 +174,8 @@ func TestRateLimitMiddleware_AttributesByForwardedClient(t *testing.T) {
 	}
 }
 
-// TestWithRateLimit_ReplacesTheAllowance covers the option the in-process
-// simulator needs: it calls the public endpoints and must be able to do so
-// without throttling itself.
+// TestWithRateLimit_ReplacesTheAllowance verifies that a configured limit is
+// applied to requests served by the API.
 func TestWithRateLimit_ReplacesTheAllowance(t *testing.T) {
 	s := testServer(t,
 		WithVehicles(vehicle.NewService(vehiclememory.New())),

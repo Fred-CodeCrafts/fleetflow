@@ -7,7 +7,6 @@ import (
 
 	"fleetflow/internal/auth"
 	"fleetflow/internal/domain"
-	"fleetflow/internal/engine"
 )
 
 // refusedError is a request the transport refused before any domain rule saw it:
@@ -35,40 +34,6 @@ type errorBody struct {
 	RequestID string `json:"request_id,omitempty"`
 }
 
-// engineFailure describes what one of the routing core's sentinels means over
-// HTTP: the status, and the code and message a client may see.
-type engineFailure struct {
-	err     error
-	status  int
-	code    string
-	message string
-}
-
-// engineFailures is the one table mapping the routing core's errors to a
-// response. The core defines its own sentinels and must stay free of transport
-// concerns, so both the status and the body are decided here rather than by
-// teaching the hot path about either (DESIGN 3.8).
-//
-// An unknown node is the client's bad input, so it is a 400; a pair of real nodes
-// with no route between them is a well-formed query whose answer does not exist,
-// so it is a 404.
-var engineFailures = []engineFailure{
-	{engine.ErrEdgeNotFound, http.StatusNotFound, "edge_not_found", "the edge does not exist in the graph"},
-	{engine.ErrNoMetric, http.StatusServiceUnavailable, "no_metric", "no metric is published yet"},
-	{engine.ErrUnknownNode, http.StatusBadRequest, "unknown_node", "the node does not exist in the graph"},
-	{engine.ErrNoPath, http.StatusNotFound, "no_path", "no route connects the two nodes"},
-}
-
-// engineFailureFor finds the entry for err, following any wrapping.
-func engineFailureFor(err error) (engineFailure, bool) {
-	for _, f := range engineFailures {
-		if errors.Is(err, f.err) {
-			return f, true
-		}
-	}
-	return engineFailure{}, false
-}
-
 // statusFor is the one place that turns a failure into an HTTP status code. Every
 // handler reports failures through writeError, so the same failure cannot be
 // reported two different ways by two endpoints (DESIGN 3.8).
@@ -77,11 +42,6 @@ func statusFor(err error) int {
 	var refused *refusedError
 	if errors.As(err, &refused) {
 		return refused.status
-	}
-
-	// The routing core's sentinels get their status from the shared table.
-	if f, ok := engineFailureFor(err); ok {
-		return f.status
 	}
 
 	// A rejected API key is a 401 rather than the 404 its domain Kind would
@@ -122,9 +82,6 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		// A refusal was written for the client, so its own wording is what should
 		// be returned.
 		code, message = refused.code, refused.message
-	} else if f, ok := engineFailureFor(err); ok {
-		// The routing core's sentinels get their wording from the shared table.
-		code, message = f.code, f.message
 	} else if publicCode, publicMessage, ok := domain.Public(err); ok {
 		code, message = publicCode, publicMessage
 	} else {
@@ -132,7 +89,7 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		// database or driver detail, so the detail goes to the log and the client
 		// gets a generic message.
 		code, message = "internal", "internal server error"
-		slog.ErrorContext(r.Context(), "request failed",
+		loggerFromContext(r.Context()).ErrorContext(r.Context(), "request failed",
 			slog.String("request_id", requestIDFrom(r.Context())),
 			slog.String("method", r.Method),
 			slog.String("path", r.URL.Path),

@@ -2,7 +2,7 @@
 
 Instructions for AI coding agents (Claude Code, Copilot, Cursor, etc.) working in this repository.
 
-**Project:** FleetFlow, an open-source fleet navigation platform with dynamic weights.
+**Project:** FleetFlow, an open-source Jakarta fleet-operations console using OSRM routing and MapLibre.
 **Context:** Road To DevFest Jakarta 2026 submission. The git history is part of the evidence that this project was built from scratch after 11 October 2026, so it must be clean, frequent and honest.
 
 ---
@@ -81,12 +81,31 @@ Tests go in the same commit as the code they cover, or in the commit immediately
 - **Originality:** all code in this repo must be written new for this project.
   - Do **not** copy files or code from `../sumo-routing/` (thesis prototype) or `../fleetbase/`.
   - Do **not** paste thesis text into the repo.
-  - Reading them for ideas is fine. Write the implementation fresh.
+  - **Build to their architecture; do not copy their files.** Read `../fleetbase/`
+    and `../sumo-routing/` to learn their information architecture, page layout,
+    navigation, interaction patterns, visual design, naming and feature set, then
+    write this repo's version yourself. A screen that follows their layout,
+    hierarchy, flow and look is the goal, not a compromise: same structure, same
+    behaviour, same idiom, our implementation.
+  - **The only prohibition is verbatim reuse.** Do not paste their source files,
+    templates, stylesheets or assets into this repo, and do not vendor their
+    packages. Writing a similar screen from scratch is not copying; shipping a
+    file of theirs is.
+  - **Why the line sits there:** Fleetbase is AGPL-3.0 and this repo is Apache-2.0,
+    so copied front-end code would attach AGPL obligations to the whole console
+    and break the license. Reproducing an architecture from observation is not a
+    derivative work; pasting a component is.
+  - **No attribution is owed for studying a reference.** AGPL-3.0's attribution and
+    notice duties (sections 4, 5 and 13) attach only when you convey the Program
+    or a work based on it. Learning a layout from `../fleetbase/` and writing your
+    own implementation conveys nothing, so do **not** add a credit line, a `NOTICE`
+    entry or a commit-body acknowledgement for it. Credit is owed for third-party
+    code and data you actually ship, not for reference material you read.
 - **Third-party code and data:** only add dependencies with licenses compatible with this repo's license. Record attribution in `README.md` or `NOTICE` (for example OpenStreetMap data, ODbL).
 - **No history rewriting:** do not use `git rebase`, `git commit --amend` on pushed commits, `git push --force`, or `git filter-branch`. Do not backdate commits or change author dates. The history must be an honest record. If you made a mistake, fix it in a new commit.
 - **No secrets:** never commit API keys, tokens, credentials, or `.env` files. Use environment variables and keep `.env.example` with placeholders.
 - **Deployment:** the final system must run on Cloud Run. Keep the Dockerfile working.
-- **Concurrency:** route queries must never block on weight updates (immutable metric snapshot swapped atomically). Run `go test -race ./...` before committing concurrency changes.
+- **Concurrency:** OSRM requests must respect request cancellation and deadlines; GPS location storage must remain race-safe. Run `go test -race ./...` before committing concurrency changes.
 
 ---
 
@@ -114,10 +133,32 @@ actually been run and passed.
 
 ---
 
-## 6. When to push
+## 6. Branches and pushing
 
-- Push after every few commits, and always at the end of a session.
-- Use a short-lived branch for anything experimental (`feat/<name>`), then merge into `main` with a normal merge. Do not squash away the small commits.
+Three levels, and a change lands on the lowest one it belongs to and moves up only
+when it is meant to:
+
+- **`main` — stable.** The released version: what is deployed and what a judge
+  clones. Only a release lands here, and always as a merge from `dev`, tagged
+  (`v0.1.0`, T67). Work does not happen on `main`.
+- **`dev` — development.** The integration branch. Every change reaches `dev` first,
+  and a release is `dev` merged into `main` with a normal merge.
+- **Feature branches — named after the change, like the commit types.** Branch from
+  `dev` and name it for the kind of work: `feat/dynamic-weights`,
+  `fix/decay-underflow`, `refactor/route-seam`, `docs/branch-model`, `test/...`,
+  `chore/...`. A feature branch is short-lived — one piece of work — and is merged
+  back into `dev` with a normal merge, then deleted. Do not squash away the small
+  commits: the history is evidence (section 1).
+
+Parallel workers each get their own worktree and feature branch, and their merges
+into `dev` are serialized, one at a time (section 8).
+
+**Pushing**
+
+- Push after every few commits, and always at the end of a session: `git push origin dev`.
+- `git push origin --all` pushes every branch; `git push origin --tags` pushes tags.
+- Never force-push, and never rebase or amend a pushed branch (section 4). A mistake
+  is fixed in a new commit; published history is not edited.
 
 ---
 
@@ -168,8 +209,8 @@ consequences of it.
 
 - **Parallel workers get their own worktree and branch.** A branch can be checked out in
   only one worktree, and merges into a shared branch must be serialized: merge workers
-  one at a time. `dev` is an integration branch from the branch-merge trial; it is not
-  part of the release path — `main` is.
+  one at a time. `dev` is the integration branch every change lands on first, and
+  `main` is the stable, released branch (section 6).
 - **The history is evidence (section 1), so keep scaffolding out of it.** A scratch
   ledger or experiment artifact is deleted in its own commit, never left behind.
 - **Verification debt, honestly recorded.** `internal/driver` and `internal/trip` were

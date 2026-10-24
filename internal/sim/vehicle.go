@@ -56,6 +56,12 @@ type Vehicle struct {
 	// actually entered, which is the baseline the fairness check measures time
 	// lost against.
 	freeFlowS float64
+
+	// distanceM accumulates the length of the edges this trip has entered, so a
+	// completed trip knows how far it drove. It is charged in enterEdge, next to
+	// freeFlowS and for the same reason: a reroute changes the route, and the
+	// distance must follow the route actually taken.
+	distanceM float64
 }
 
 // newVehicle creates a pending vehicle for the given trip.
@@ -106,9 +112,11 @@ func (v *Vehicle) TripDuration() (float64, bool) {
 	return v.arriveS - v.departS, true
 }
 
-// currentEdge returns the edge index the vehicle is driving, or -1 when it is not
-// on the network.
-func (v *Vehicle) currentEdge() int {
+// CurrentEdge returns the index in the graph's edge slice of the edge the
+// vehicle is driving, or -1 when it is not on the network. The API needs it to
+// place the vehicle: a vehicle is somewhere along an edge, and where that edge
+// runs is the graph's business, not the simulator's.
+func (v *Vehicle) CurrentEdge() int {
 	if v.state != VehicleRunning || v.leg >= len(v.route) {
 		return -1
 	}

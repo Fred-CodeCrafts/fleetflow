@@ -1,14 +1,24 @@
 # Local development database for FleetFlow.
 #
-# Fleet records (vehicles, drivers, trips, saved runs, hashed API keys) live in
-# PostgreSQL; live congestion state stays in memory on the single instance, so
-# this service is dev-only and is never part of the deployed binary.
+# Fleet records (vehicles, drivers, trips, and hashed API keys) live in
+# PostgreSQL when configured. OSRM runs as a separate routing service.
 #
 # Values come from .env (gitignored). See .env.example for the key list.
 #   docker compose up -d
 #   docker compose down          # keep the volume
 #   docker compose down -v       # drop the data too
 services:
+  osrm:
+    image: osrm/osrm-backend:v5.27.1
+    container_name: fleetflow-osrm
+    profiles: ["routing"]
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data/osrm:/data:ro
+    command: ["osrm-routed", "--algorithm", "mld", "/data/jakarta-metro.osrm"]
+
   postgres:
     image: postgres:17-alpine
     container_name: fleetflow-postgres

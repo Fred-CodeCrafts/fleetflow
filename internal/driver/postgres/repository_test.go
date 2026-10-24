@@ -51,6 +51,7 @@ func TestCreateThenListRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
+
 	if stored != want {
 		t.Errorf("Create returned %+v, want %+v", stored, want)
 	}
@@ -72,6 +73,39 @@ func TestCreateThenListRoundTrips(t *testing.T) {
 	}
 	if len(list) != 2 || list[0].ID != "d1" || list[1].ID != "d2" {
 		t.Errorf("List returned %+v, want d1 then d2", list)
+	}
+}
+
+func TestProfileFieldsRoundTripAndSurviveAssignment(t *testing.T) {
+	repo, pool := newRepository(t)
+	mustVehicle(t, pool, "v1")
+	want := driver.Driver{
+		ID: "d1", Name: "Ada Lovelace", ContactPhone: "+62 812-3456-7890",
+		LicenseClass: "B1", LicenseExpiry: "2027-05-31",
+		ShiftStart: "08:30", ShiftEnd: "17:45", Availability: "available",
+	}
+	mustCreate(t, repo, want)
+
+	got, err := repo.List(context.Background())
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(got) != 1 || got[0].ContactPhone != want.ContactPhone ||
+		got[0].LicenseClass != want.LicenseClass || got[0].LicenseExpiry != want.LicenseExpiry ||
+		got[0].ShiftStart != want.ShiftStart || got[0].ShiftEnd != want.ShiftEnd ||
+		got[0].Availability != want.Availability {
+		t.Fatalf("profile round trip = %+v, want %+v", got, want)
+	}
+
+	assigned, err := repo.Assign(context.Background(), "d1", "v1")
+	if err != nil {
+		t.Fatalf("Assign: %v", err)
+	}
+	if assigned.ContactPhone != want.ContactPhone || assigned.LicenseClass != want.LicenseClass ||
+		assigned.LicenseExpiry != want.LicenseExpiry || assigned.ShiftStart != want.ShiftStart ||
+		assigned.ShiftEnd != want.ShiftEnd ||
+		assigned.Availability != want.Availability {
+		t.Errorf("Assign dropped profile data: %+v", assigned)
 	}
 }
 

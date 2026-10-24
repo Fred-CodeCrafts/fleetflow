@@ -109,7 +109,7 @@ func TestStep_CarriesLeftoverTimeOntoTheNextEdge(t *testing.T) {
 
 	s.Step()
 
-	if got := v.currentEdge(); got != 1 {
+	if got := v.CurrentEdge(); got != 1 {
 		t.Fatalf("currentEdge() = %d, want 1", got)
 	}
 	// e_BC is 50 m and 4 of its 5 seconds are done.
@@ -163,5 +163,45 @@ func TestStep_StuckVehicleStaysPut(t *testing.T) {
 	}
 	if got := v.Progress(g.Edges[0].LengthM); got != 0 {
 		t.Errorf("Progress() = %f, want 0", got)
+	}
+}
+
+// A vehicle on an empty network drives every edge at free-flow speed, so its trip
+// costs exactly the free-flow time of the route it drove and nothing is lost
+// against it. This is the number the fairness check reports (T34a), and it only
+// holds while a departure is stamped at the clock time of the step before the one
+// it moves in: stamping it after that step credited every trip with a full step
+// of travel its departure time did not cover, and every completed trip came out
+// exactly one step short of free flow.
+//
+// It goes through the real departure path rather than placing a vehicle by hand,
+// because that is where the offset lived.
+func TestStep_ATripOnAnEmptyNetworkLosesNoTime(t *testing.T) {
+	g := openGraph(t)
+	cfg := DefaultConfig()
+	cfg.Vehicles = 8
+	cfg.FleetShare = 0 // all background traffic, so nothing reports and no weight moves
+	cfg.WindowS = 0    // everybody leaves when the run starts
+	cfg.StepS = 1
+
+	s, err := New(g, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error creating simulation: %v", err)
+	}
+	// The longest route here is A->B->C, fifteen seconds.
+	for i := 0; i < 30; i++ {
+		s.Step()
+	}
+
+	m := s.Collect()
+	if m.CompletedTrips == 0 {
+		t.Fatal("no trip completed, so there is nothing to check")
+	}
+	if m.Fairness.MeanBackgroundTripS <= 0 {
+		t.Fatal("no trip covered any road, which would make the check vacuous")
+	}
+	if math.Abs(m.Fairness.MeanTimeLostS) > 1e-9 {
+		t.Errorf("MeanTimeLostS = %v on an empty network, want no time lost",
+			m.Fairness.MeanTimeLostS)
 	}
 }

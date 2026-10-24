@@ -11,16 +11,19 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 )
 
 // Defaults used when the matching environment variable is unset.
 const (
-	DefaultPort      = 8080
-	DefaultEnv       = "development"
-	DefaultGraphPath = "data/graph.json"
-	DefaultDBPort    = "5432"
+	DefaultPort     = 8080
+	DefaultEnv      = "development"
+	DefaultOSRMURL  = "http://127.0.0.1:5000"
+	DefaultDBPort   = "5432"
+	DefaultLogLevel = "info"
 )
 
 // Env values accepted by Load.
@@ -29,20 +32,48 @@ const (
 	EnvProduction  = "production"
 )
 
+// Log levels accepted by LOG_LEVEL, lowest first. The names are the ones slog
+// prints, so an operator reading a log line can set the level by copying the word
+// they see.
+const (
+	LogDebug = "debug"
+	LogInfo  = "info"
+	LogWarn  = "warn"
+	LogError = "error"
+)
+
 // Config is the validated runtime configuration.
 type Config struct {
 	// Addr is the address the HTTP server listens on, for example ":8080".
 	Addr string
 	// Env is the deployment environment, EnvDevelopment or EnvProduction.
 	Env string
-	// GraphPath is the road graph file to load at startup.
-	GraphPath string
+	// OSRMURL is the base URL of the OSRM routing service.
+	OSRMURL string
 	// DatabaseDSN is the configured connection string, or "" when none is set.
 	// Fleet records use it; the routing hot path never does (PRD US-5).
 	DatabaseDSN string
 	// DatabaseAddr is the host:port used for readiness checks, or "" when no
 	// database is configured.
 	DatabaseAddr string
+	// LogLevel is the lowest level the process writes: LogDebug, LogInfo, LogWarn
+	// or LogError. Request lines are Info and per-tick detail is Debug, so a
+	// production deployment can keep the first and drop the second without a
+	// rebuild.
+	LogLevel string
+	// SumoRuntime contains the configured SUMO tool paths. An empty network
+	// disables scenario execution without affecting OSRM or real GPS.
+	SumoRuntime SumoRuntime
+}
+
+type SumoRuntime struct {
+	Home        string
+	Network     string
+	Python      string
+	RandomTrips string
+	DuaRouter   string
+	Binary      string
+	WorkDir     string
 }
 
 // Load reads configuration from getenv (normally os.Getenv) and validates it.
@@ -53,9 +84,21 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 
 	cfg := Config{
-		Env:       valueOr(getenv, "ENV", EnvDevelopment),
-		GraphPath: valueOr(getenv, "GRAPH_PATH", DefaultGraphPath),
+		Env:     valueOr(getenv, "ENV", EnvDevelopment),
+		OSRMURL: valueOr(getenv, "OSRM_URL", DefaultOSRMURL),
 	}
+	if err := validateOSRMURL(cfg.OSRMURL); err != nil {
+		return Config{}, err
+	}
+
+	level := strings.ToLower(valueOr(getenv, "LOG_LEVEL", DefaultLogLevel))
+	switch level {
+	case LogDebug, LogInfo, LogWarn, LogError:
+	default:
+		return Config{}, fmt.Errorf("LOG_LEVEL %q: must be one of debug, info, warn, error", level)
+	}
+
+	cfg.LogLevel = level
 
 	port := valueOr(getenv, "PORT", strconv.Itoa(DefaultPort))
 	n, err := strconv.Atoi(port)
@@ -76,7 +119,75 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 	cfg.DatabaseDSN, cfg.DatabaseAddr = dsn, addr
 
+	sumoRuntime, err := loadSumoRuntime(getenv)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.SumoRuntime = sumoRuntime
+
 	return cfg, nil
+}
+
+func loadSumoRuntime(getenv func(string) string) (SumoRuntime, error) {
+	home := strings.TrimSpace(getenv("SUMO_HOME"))
+	network := strings.TrimSpace(getenv("SUMO_NETWORK"))
+	if network == "" {
+		return SumoRuntime{Home: home}, nil
+	}
+
+	extension := ""
+	if runtime.GOOS == "windows" {
+		extension = ".exe"
+	}
+	binary := strings.TrimSpace(getenv("SUMO_BINARY"))
+	duarouter := strings.TrimSpace(getenv("SUMO_DUAROUTER"))
+	randomTrips := strings.TrimSpace(getenv("SUMO_RANDOM_TRIPS"))
+	if home != "" {
+		if binary == "" {
+			binary = filepath.Join(home, "bin", "sumo"+extension)
+		}
+		if duarouter == "" {
+			duarouter = filepath.Join(home, "bin", "duarouter"+extension)
+		}
+		if randomTrips == "" {
+			randomTrips = filepath.Join(home, "tools", "randomTrips.py")
+		}
+	}
+	if binary == "" {
+		return SumoRuntime{}, fmt.Errorf("SUMO_BINARY or SUMO_HOME is required when SUMO_NETWORK is set")
+	}
+	if duarouter == "" {
+		return SumoRuntime{}, fmt.Errorf("SUMO_DUAROUTER or SUMO_HOME is required when SUMO_NETWORK is set")
+	}
+	if randomTrips == "" {
+		return SumoRuntime{}, fmt.Errorf("SUMO_RANDOM_TRIPS or SUMO_HOME is required when SUMO_NETWORK is set")
+	}
+
+	python := strings.TrimSpace(getenv("SUMO_PYTHON"))
+	if python == "" {
+		python = "python3"
+		if runtime.GOOS == "windows" {
+			python = "python"
+		}
+	}
+	return SumoRuntime{
+		Home:        home,
+		Network:     network,
+		Python:      python,
+		RandomTrips: randomTrips,
+		DuaRouter:   duarouter,
+		Binary:      binary,
+		WorkDir:     strings.TrimSpace(getenv("SUMO_WORK_DIR")),
+	}, nil
+}
+
+func validateOSRMURL(value string) error {
+	u, err := url.Parse(value)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" ||
+		u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return fmt.Errorf("OSRM_URL %q: must be an http(s) base URL without credentials, query, or fragment", value)
+	}
+	return nil
 }
 
 // database resolves the optional database settings. DATABASE_URL wins; otherwise

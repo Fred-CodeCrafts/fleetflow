@@ -1,16 +1,16 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"fleetflow/internal/domain"
-	"fleetflow/internal/engine"
 )
 
 func TestStatusFor(t *testing.T) {
@@ -24,8 +24,6 @@ func TestStatusFor(t *testing.T) {
 		{"contradicts state", domain.Conflict("driver_busy", "driver already assigned"), http.StatusConflict},
 		{"not ready", domain.Unavailable("no_metric", "no metric yet"), http.StatusServiceUnavailable},
 		{"untyped error is internal", errors.New("pq: relation does not exist"), http.StatusInternalServerError},
-		{"unknown edge", engine.ErrEdgeNotFound, http.StatusNotFound},
-		{"no metric published", engine.ErrNoMetric, http.StatusServiceUnavailable},
 	}
 
 	for _, tt := range tests {
@@ -34,15 +32,6 @@ func TestStatusFor(t *testing.T) {
 				t.Errorf("statusFor(%v) = %d, want %d", tt.err, got, tt.want)
 			}
 		})
-	}
-}
-
-func TestStatusForFindsTheCauseInAWrappedError(t *testing.T) {
-	// A service that wraps the engine's sentinel must still produce its status.
-	err := fmt.Errorf("routing: %w", engine.ErrEdgeNotFound)
-
-	if got := statusFor(err); got != http.StatusNotFound {
-		t.Errorf("statusFor(wrapped ErrEdgeNotFound) = %d, want 404", got)
 	}
 }
 
@@ -92,6 +81,42 @@ func TestWriteError_InternalErrorDoesNotLeakDetail(t *testing.T) {
 	}
 	if body.Code != "internal" {
 		t.Errorf("code = %q, want internal", body.Code)
+	}
+}
+
+// TestWriteError_LogsThroughTheRequestsLogger pins the fix for a split-brain log.
+// The request line came from the server's injected logger while the failure line
+// went to the package default, so a server configured for JSON emitted plain text
+// for exactly the lines worth reading, and a test that injected a logger could not
+// see a failure at all.
+func TestWriteError_LogsThroughTheRequestsLogger(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, nil))
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/vehicles", nil)
+	req = req.WithContext(contextWithLogger(req.Context(), logger))
+
+	writeError(rec, req, errors.New(`pq: password authentication failed for user "fleetflow"`))
+
+	if buf.Len() == 0 {
+		t.Fatal("the failure was not logged through the request's logger")
+	}
+
+	var line map[string]any
+	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &line); err != nil {
+		t.Fatalf("log line is not JSON: %v (%s)", err, buf.String())
+	}
+	if got, _ := line["error"].(string); !strings.Contains(got, "password authentication failed") {
+		t.Errorf("logged error = %q, want the underlying detail", got)
+	}
+	if got, _ := line["level"].(string); got != "ERROR" {
+		t.Errorf("level = %q, want ERROR", got)
+	}
+
+	// The detail belongs in the log, and the client must still not see it.
+	if strings.Contains(rec.Body.String(), "password") {
+		t.Errorf("body leaked the detail: %s", rec.Body.String())
 	}
 }
 

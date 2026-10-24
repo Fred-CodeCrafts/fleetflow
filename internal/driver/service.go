@@ -52,8 +52,14 @@ type Repository interface {
 // validation lives in exactly one place, this package, instead of being
 // repeated in every handler.
 type CreateInput struct {
-	Name    string
-	Contact string
+	Name          string
+	Contact       string
+	ContactPhone  string
+	LicenseClass  string
+	LicenseExpiry string
+	ShiftStart    string
+	ShiftEnd      string
+	Availability  string
 }
 
 // Service applies the driver rules on top of a Repository.
@@ -66,7 +72,8 @@ func NewService(repo Repository) *Service { return &Service{repo: repo} }
 
 // Create validates in, generates an id and stores the new driver.
 func (s *Service) Create(ctx context.Context, in CreateInput) (Driver, error) {
-	d, err := New(in.Name, in.Contact)
+	d, err := NewProfile(in.Name, in.Contact, in.ContactPhone, in.LicenseClass,
+		in.LicenseExpiry, in.ShiftStart, in.ShiftEnd, in.Availability)
 	if err != nil {
 		return Driver{}, err
 	}

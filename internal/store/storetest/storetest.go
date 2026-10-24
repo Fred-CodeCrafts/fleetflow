@@ -27,7 +27,7 @@ import (
 // fleetTables are emptied by Reset, youngest first. They are listed explicitly
 // rather than discovered, so a new table has to be added here on purpose instead
 // of being quietly left out of a cleanup.
-var fleetTables = []string{"api_keys", "trips", "drivers", "vehicles"}
+var fleetTables = []string{"simulation_runs", "runs", "api_keys", "trips", "drivers", "vehicles"}
 
 // Pool returns a pool to the database named by TEST_DATABASE_URL, and skips the
 // test when that variable is unset, which is what keeps the unit suite free of a
