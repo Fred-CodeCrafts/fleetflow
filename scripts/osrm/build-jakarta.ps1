@@ -11,7 +11,7 @@ $sourceFile = Join-Path $dataDir 'java-latest.osm.pbf'
 $extractFile = Join-Path $dataDir 'jakarta-metro.osm.pbf'
 $osrmFile = Join-Path $dataDir 'jakarta-metro.osrm'
 $mount = "${dataDir}:/data"
-$osrmImage = 'osrm/osrm-backend:v5.27.1'
+$osrmImage = 'osrm/osrm-backend:v5.25.0'
 
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
     throw 'Docker Desktop is required to download, extract, and prepare the Jakarta routing data.'

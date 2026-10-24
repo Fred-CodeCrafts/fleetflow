@@ -9,7 +9,7 @@
 #   docker compose down -v       # drop the data too
 services:
   osrm:
-    image: osrm/osrm-backend:v5.27.1
+    image: osrm/osrm-backend:v5.25.0
     container_name: fleetflow-osrm
     profiles: ["routing"]
     restart: unless-stopped
