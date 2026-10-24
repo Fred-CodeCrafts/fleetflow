@@ -99,6 +99,39 @@ func TestStartRejectsInvalidScenario(t *testing.T) {
 	_ = service.Shutdown(context.Background())
 }
 
+func TestServiceRecoversInterruptedRunsOnStartup(t *testing.T) {
+	repo := memory.New()
+	ctx := context.Background()
+	interrupted := simulation.Run{
+		ID:        "sim_interrupted",
+		Status:    simulation.StatusRunning,
+		Scenario:  sumo.Scenario{Seed: 1, Vehicles: 1, DepartureWindowS: 60},
+		CreatedAt: time.Now().UTC(),
+	}
+	if err := repo.Create(ctx, interrupted); err != nil {
+		t.Fatal(err)
+	}
+
+	service, err := simulation.NewService(ctx, repo, executorFunc(func(context.Context, sumo.Scenario) (sumo.Result, error) {
+		return sumo.Result{}, nil
+	}), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer service.Shutdown(ctx)
+
+	recovered, err := service.Get(ctx, interrupted.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if recovered.Status != simulation.StatusFailed {
+		t.Fatalf("interrupted run status = %q, want failed", recovered.Status)
+	}
+	if recovered.Error == "" {
+		t.Fatal("interrupted run error is empty")
+	}
+}
+
 func waitForRun(t *testing.T, service *simulation.Service, id string, status simulation.Status) simulation.Run {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)

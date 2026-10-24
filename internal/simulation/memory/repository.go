@@ -4,6 +4,7 @@ import (
 	"context"
 	"sort"
 	"sync"
+	"time"
 
 	"fleetflow/internal/domain"
 	"fleetflow/internal/simulation"
@@ -28,8 +29,52 @@ func (r *Repository) Create(ctx context.Context, run simulation.Run) error {
 	if _, exists := r.runs[run.ID]; exists {
 		return domain.Conflict("simulation_run_exists", "simulation run %q already exists", run.ID)
 	}
+	for _, existing := range r.runs {
+		if existing.Status == simulation.StatusQueued || existing.Status == simulation.StatusRunning {
+			return domain.Conflict(simulation.CodeRunConflict, "a SUMO scenario is already running")
+		}
+	}
 	r.runs[run.ID] = clone(run)
 	return nil
+}
+
+func (r *Repository) ActiveRun(ctx context.Context) (*simulation.Run, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, run := range r.runs {
+		if run.Status == simulation.StatusQueued || run.Status == simulation.StatusRunning {
+			cloned := clone(run)
+			return &cloned, nil
+		}
+	}
+	return nil, nil
+}
+
+func (r *Repository) RecoverInterrupted(ctx context.Context, reason string) ([]simulation.Run, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	now := time.Now().UTC()
+	var recovered []simulation.Run
+	for id, run := range r.runs {
+		if run.Status == simulation.StatusQueued || run.Status == simulation.StatusRunning {
+			run.Status = simulation.StatusFailed
+			if run.Error != "" {
+				run.Error = run.Error + "; " + reason
+			} else {
+				run.Error = reason
+			}
+			run.FinishedAt = &now
+			r.runs[id] = run
+			recovered = append(recovered, clone(run))
+		}
+	}
+	return recovered, nil
 }
 
 func (r *Repository) Update(ctx context.Context, run simulation.Run) error {
