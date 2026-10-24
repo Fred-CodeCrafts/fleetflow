@@ -113,7 +113,9 @@ their attribution is displayed on the map.
 - **SUMO Scenarios** starts seeded simulations and shows their progress and
   generated position traces.
 - **Trips** is read-only history from simulation runs. Trip details show the
-  vehicle's sampled simulated route and its origin/destination when available.
+  vehicle's sampled simulated route, generated delivery stops, and ordered
+  package-event timeline when available. These seeded events are simulation
+  output, not live package scans.
 - **Live Map** shows only recently reported GPS locations. It starts empty until
   a connected device sends positions; it does not show static preview markers.
 - **Route Planner** sends the selected coordinates to OSRM and draws the returned
@@ -128,9 +130,10 @@ Fuel and CO₂ values are SUMO HBEFA3 estimates for the explicitly assigned
 converted from milligrams to kilograms, and the model, class, units, source, and
 assumptions are stored with each run. This generic class is not a fleet-specific
 measurement or verified carbon saving. Automatic roster assignment, package
-entities, automatic roster assignment, and multi-stop event history remain
-planned. Fleet profile pages do not show linked trip history until automatic
-dispatch records the vehicle and driver assigned to each scenario trip.
+Automatic roster assignment, time-controlled route playback, and trip history
+on individual fleet records remain planned. Fleet profile pages do not show
+linked trip history until automatic dispatch records the vehicle and driver
+assigned to each scenario trip.
 
 ## API
 

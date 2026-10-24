@@ -30,13 +30,16 @@ implementation caveats.
 - [x] Add seeded scenarios and a reproducible SUMO run lifecycle; capture
   SUMO version/seed and persist run state.
 - [x] Persist scenario results, generated trips, and SUMO position traces.
-- [ ] Persist ordered delivery stops, package events, and event history with a
-  database migration and memory-backed tests.
+- [x] Persist ordered generated delivery stops and package events in each
+  simulation run's existing JSONB result and cover the memory repository.
 - [ ] Generate scenario delivery demand and automatically assign compatible
   available vehicles and drivers; explain unassigned deliveries.
 - [x] Add scenario/run monitoring and read-only generated trip detail screens;
   remove manual trip creation and driver assignment controls.
-- [ ] Add multi-stop route playback and package-event timelines.
+- [x] Show generated stop markers, ordered delivery stops, and a chronological
+  package-event timeline on trip details.
+- [ ] Add time-controlled simulation route playback with a moving vehicle
+  marker.
 - [x] Capture optional vehicle specifications and maintenance notes, and driver
   contact, license, shift, and availability without collecting sensitive
   identity fields; keep missing values explicitly unknown.
