@@ -133,6 +133,7 @@ func (r *Runner) Run(ctx context.Context, scenario Scenario) (Result, error) {
 		"--output-file", routesPath,
 		"--seed", strconv.FormatInt(scenario.Seed, 10),
 		"--no-warnings", "true",
+		"--ignore-errors", "true",
 	}
 	if _, err := r.runCommand(ctx, workDir, "route seeded demand", r.tools.DuaRouter, args...); err != nil {
 		return Result{}, err
