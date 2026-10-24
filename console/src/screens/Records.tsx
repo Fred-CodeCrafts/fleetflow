@@ -18,7 +18,6 @@ const initialVehicle = (models: VehicleModel[]) => {
     body_type: first?.body_type ?? '',
     fuel_type: first?.fuel_type ?? '',
     capacity: first ? String(first.capacity_kg) : '',
-    maintenance_history: '',
   }
 }
 
@@ -92,13 +91,22 @@ export function VehiclesPage() {
         <span>Model specs</span>
         <output>{form.body_type || '—'} · {form.fuel_type || '—'} · {form.type.toUpperCase()}</output>
       </div>
+      <label className="field">
+        Fuel type
+        <select value={form.fuel_type} onChange={(e) => setForm({ ...form, fuel_type: e.target.value })}>
+          <option value="Petrol">Petrol</option>
+          <option value="Diesel">Diesel</option>
+          <option value="Electric">Electric</option>
+          <option value="Hybrid">Hybrid</option>
+          <option value="CNG">CNG</option>
+        </select>
+      </label>
       <label className="field">Status<select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as 'available' | 'offline' })}>
         <option value="available">Available</option><option value="offline">Offline</option>
       </select></label>
-      <label className="field">Maintenance history<textarea placeholder="Service log or notes" value={form.maintenance_history} onChange={(e) => setForm({ ...form, maintenance_history: e.target.value })} /></label>
       <button className="button primary">Add vehicle</button>
     </form>
-    <p className="help-text">Capacity indicates maximum payload weight in kilograms (kg). Body type and fuel type are automatically configured from the selected Vehicle Model.</p>
+    <p className="help-text">Capacity indicates maximum payload weight in kilograms (kg). Body type and fuel type are pre-filled from the selected Vehicle Model and can be customized.</p>
     {error && <ErrorMessage>{error}</ErrorMessage>}</Panel>
     <Panel title="Vehicle register" action={<button className="button" onClick={() => void vehicles.reload()}>Refresh</button>}>
       {vehicles.loading ? <Loading /> : vehicles.error ? <ErrorMessage>{vehicles.error}</ErrorMessage> :
