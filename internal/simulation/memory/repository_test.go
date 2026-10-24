@@ -76,3 +76,52 @@ func TestRepositoryListOrdersNewestFirst(t *testing.T) {
 		t.Fatal("run list included large result payloads")
 	}
 }
+
+func TestRepositoryActiveRunAndRecovery(t *testing.T) {
+	repo := New()
+	ctx := context.Background()
+
+	run := simulation.Run{
+		ID:        "run_active",
+		Status:    simulation.StatusRunning,
+		CreatedAt: time.Now().UTC(),
+	}
+	if err := repo.Create(ctx, run); err != nil {
+		t.Fatal(err)
+	}
+
+	active, err := repo.ActiveRun(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if active == nil || active.ID != "run_active" {
+		t.Fatalf("ActiveRun() = %#v, want run_active", active)
+	}
+
+	// Concurrent creation should be rejected while one is active
+	err = repo.Create(ctx, simulation.Run{
+		ID:        "run_conflict",
+		Status:    simulation.StatusQueued,
+		CreatedAt: time.Now().UTC(),
+	})
+	if err == nil {
+		t.Fatal("Create() allowed concurrent active run")
+	}
+
+	// Recovery marks interrupted runs as failed
+	recovered, err := repo.RecoverInterrupted(ctx, "interrupted by restart")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recovered) != 1 || recovered[0].Status != simulation.StatusFailed || recovered[0].Error != "interrupted by restart" {
+		t.Fatalf("RecoverInterrupted() = %#v", recovered)
+	}
+
+	activeAfter, err := repo.ActiveRun(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if activeAfter != nil {
+		t.Fatalf("ActiveRun() after recovery = %#v, want nil", activeAfter)
+	}
+}

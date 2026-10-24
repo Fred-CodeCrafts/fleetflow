@@ -24,10 +24,15 @@ const (
 )
 
 const (
-	codeRunIDFailed    = "simulation_run_id_failed"
-	codeRunConflict    = "simulation_run_conflict"
-	codeRunUnavailable = "simulation_unavailable"
-	codeRunNotFound    = "simulation_run_not_found"
+	CodeRunIDFailed    = "simulation_run_id_failed"
+	CodeRunConflict    = "simulation_run_conflict"
+	CodeRunUnavailable = "simulation_unavailable"
+	CodeRunNotFound    = "simulation_run_not_found"
+
+	codeRunIDFailed    = CodeRunIDFailed
+	codeRunConflict    = CodeRunConflict
+	codeRunUnavailable = CodeRunUnavailable
+	codeRunNotFound    = CodeRunNotFound
 )
 
 type Run struct {
@@ -46,6 +51,8 @@ type Repository interface {
 	Update(context.Context, Run) error
 	Get(context.Context, string) (Run, error)
 	List(context.Context) ([]Run, error)
+	ActiveRun(context.Context) (*Run, error)
+	RecoverInterrupted(context.Context, string) ([]Run, error)
 }
 
 type Executor interface {
@@ -78,7 +85,13 @@ func NewService(parent context.Context, repo Repository, executor Executor, logg
 		logger = slog.Default()
 	}
 	ctx, cancel := context.WithCancel(parent)
-	return &Service{repo: repo, executor: executor, logger: logger, ctx: ctx, cancel: cancel}, nil
+	s := &Service{repo: repo, executor: executor, logger: logger, ctx: ctx, cancel: cancel}
+	if recovered, err := repo.RecoverInterrupted(ctx, "simulation was interrupted by server restart"); err != nil {
+		logger.Warn("could not recover interrupted simulation runs on startup", "error", err)
+	} else if len(recovered) > 0 {
+		logger.Warn("recovered interrupted simulation runs", "count", len(recovered))
+	}
+	return s, nil
 }
 
 func (s *Service) Start(ctx context.Context, scenario sumo.Scenario) (Run, error) {
@@ -98,6 +111,15 @@ func (s *Service) Start(ctx context.Context, scenario sumo.Scenario) (Run, error
 		s.mu.Unlock()
 		return Run{}, domain.Conflict(codeRunConflict, "a SUMO scenario is already running")
 	}
+	active, err := s.repo.ActiveRun(ctx)
+	if err != nil {
+		s.mu.Unlock()
+		return Run{}, fmt.Errorf("check active simulation run: %w", err)
+	}
+	if active != nil {
+		s.mu.Unlock()
+		return Run{}, domain.Conflict(codeRunConflict, "a SUMO scenario is already running")
+	}
 	id, err := newRunID()
 	if err != nil {
 		s.mu.Unlock()
@@ -111,7 +133,7 @@ func (s *Service) Start(ctx context.Context, scenario sumo.Scenario) (Run, error
 	}
 	if err := s.repo.Create(ctx, run); err != nil {
 		s.mu.Unlock()
-		return Run{}, fmt.Errorf("save queued simulation run: %w", err)
+		return Run{}, err
 	}
 	s.active = true
 	s.wg.Add(1)
@@ -167,6 +189,7 @@ func (s *Service) Shutdown(ctx context.Context) error {
 	case <-done:
 		return nil
 	case <-ctx.Done():
+		_, _ = s.repo.RecoverInterrupted(context.WithoutCancel(s.ctx), "simulation cancelled by server shutdown")
 		return fmt.Errorf("wait for SUMO scenario shutdown: %w", ctx.Err())
 	}
 }
@@ -204,7 +227,11 @@ func (s *Service) execute(run Run) {
 	run.FinishedAt = &finished
 	if err != nil {
 		run.Status = StatusFailed
-		run.Error = err.Error()
+		if s.ctx.Err() != nil {
+			run.Error = "simulation cancelled by server shutdown"
+		} else {
+			run.Error = err.Error()
+		}
 	} else {
 		run.Status = StatusCompleted
 		run.Result = &result

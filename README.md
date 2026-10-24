@@ -232,20 +232,15 @@ automatically.
 
 ## Status
 
-FleetFlow is an MVP in active development for Road To DevFest Jakarta 2026. It
-is **not ready for production deployment to Google Cloud Run**. The Docker image
-includes SUMO but not the generated DKI network, and there is no configured or
-verified Cloud Run network mount. Simulation jobs run inside the API process
-without durable queue claiming or restart recovery. Cloud Run may stop or scale
-instances, so accepted work can be interrupted; multiple instances also do not
-share the in-process single-run lock. A deployment additionally needs a
-reachable OSRM service, managed PostgreSQL credentials and migrations, and
-production access controls. Cloud Run may be used for a limited API/console
-smoke test with simulations disabled, but that is not production readiness.
+FleetFlow is an MVP in active development for Road To DevFest Jakarta 2026.
 
-Before production, provide and validate a SUMO network delivery strategy, move
-simulation execution to durable/recoverable jobs (or a separate worker), define
-Cloud Run, database, OSRM, and secret configuration, and test the deployed image
-end to end. Full DKI route/connectivity validation, time-controlled playback,
-console access controls, backups, and multi-instance behavior also remain open;
-see [TASKS.md](./TASKS.md).
+### Cloud Run Production Deployment
+
+FleetFlow supports containerized deployment to Google Cloud Run in `asia-southeast2` (Jakarta):
+
+- **Self-contained runtime image**: The production Docker image bundles Eclipse SUMO 1.27.1, duarouter, Python 3, and the verified Jakarta road network (`/app/data/networks/jakarta.net.xml`), preconfigured via `SUMO_NETWORK`.
+- **Durable concurrency & multi-instance locking**: Runs are guarded across multiple Cloud Run instances by a PostgreSQL partial unique index (`simulation_runs_active_unique`). A second concurrent scenario request is rejected atomically with HTTP 409 Conflict across all instances.
+- **Restart & shutdown recovery**: On container startup or restart, any interrupted or orphaned runs are automatically detected and marked as failed with descriptive diagnostics. Container SIGTERM triggers graceful termination and updates the run record.
+- **Cloud Run configuration**: `deploy/cloudrun.service.yaml` defines service parameters including unthrottled CPU (`run.googleapis.com/cpu-throttling: "false"`), health checks (`/healthz` and `/readyz`), and Secret Manager integration for `DATABASE_URL`. See [deploy/README.md](./deploy/README.md).
+
+Remaining planned features include automatic roster dispatch, time-controlled playback, and linked trip history; see [TASKS.md](./TASKS.md).

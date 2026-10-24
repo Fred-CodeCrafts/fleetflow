@@ -2,6 +2,8 @@ package sim
 
 import (
 	"errors"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"fleetflow/internal/engine"
@@ -49,6 +51,20 @@ type SpeedObservation struct {
 	VehicleID string
 	EdgeID    string
 	SpeedMPS  float64
+}
+
+// ConcurrentRouter is a FleetService that may be called from several goroutines at
+// once.
+//
+// A route query reads one immutable metric snapshot, so concurrency is safe in the
+// engine and in the HTTP client. Declaring it separately matters because the
+// simulator must not assume it: a test fake that counts calls, or a service that
+// keeps a mutable cursor, would race if the simulator planned a step's departures
+// in parallel without being told it could.
+type ConcurrentRouter interface {
+	// RouteConcurrently plans a path from fromID to toID. It must be safe to call
+	// from multiple goroutines and must not depend on the order of calls.
+	RouteConcurrently(fromID, toID string) (*engine.Path, error)
 }
 
 // EngineFleet serves a routing engine to the simulator in-process. The comparison
@@ -192,6 +208,7 @@ type Sim struct {
 	batchScratch      []SpeedObservation
 	reportedEdgeStamp []uint32
 	reportStep        uint32
+	dueScratch        []*Vehicle
 }
 
 // New builds a simulation whose vehicles start pending. They step onto the
@@ -311,10 +328,82 @@ func (s *Sim) ReportTime() time.Time {
 
 // departDue starts every pending vehicle whose scheduled departure has arrived.
 func (s *Sim) departDue() {
+	due := s.dueScratch[:0]
 	for _, v := range s.vehicles {
 		if v.state == VehiclePending && v.departS <= s.nowS {
-			s.depart(v)
+			due = append(due, v)
 		}
+	}
+	s.dueScratch = due
+
+	// Route the departures concurrently when the fleet service allows it. A
+	// departure's only work is a route query, and over the public API each one is
+	// a round trip: a 60,000-vehicle run over a 30 s window departs 2,000 vehicles
+	// in a step, which is 2,000 round trips end to end. The queries are independent
+	// and the engine answers them from one immutable snapshot, so the only thing
+	// ordering them achieves is waiting.
+	//
+	// A service that cannot route concurrently keeps the sequential path, which is
+	// what the in-process engine and the tests use.
+	if concurrent, ok := s.fleet.(ConcurrentRouter); ok && len(due) > 1 {
+		s.routeDeparturesConcurrently(due, concurrent)
+		return
+	}
+
+	for _, v := range due {
+		s.depart(v)
+	}
+}
+
+// maxConcurrentRoutes bounds how many route queries a step has in flight. The
+// bound is on simultaneous round trips, not on vehicles: past a few dozen the
+// client is queueing at the server rather than saving wall time, and the server
+// has other work to do.
+const maxConcurrentRoutes = 32
+
+// routeDeparturesConcurrently plans a step's departures with several queries in
+// flight, then places each vehicle on its route in the original order.
+//
+// Placement stays sequential because it touches shared state — occupancy, the
+// completed-trip log — while planning does not: it reads one published snapshot.
+// That is the same split the engine is built around.
+func (s *Sim) routeDeparturesConcurrently(due []*Vehicle, router ConcurrentRouter) {
+	type planned struct {
+		v    *Vehicle
+		path *engine.Path
+		err  error
+	}
+
+	results := make([]planned, len(due))
+	var next atomic.Int64
+
+	workers := min(maxConcurrentRoutes, len(due))
+	var wg sync.WaitGroup
+	wg.Add(workers)
+	for w := 0; w < workers; w++ {
+		go func() {
+			defer wg.Done()
+			for {
+				i := int(next.Add(1)) - 1
+				if i >= len(due) {
+					return
+				}
+				v := due[i]
+				path, err := router.RouteConcurrently(v.Origin(), v.Destination())
+				results[i] = planned{v: v, path: path, err: err}
+			}
+		}()
+	}
+	wg.Wait()
+
+	for _, r := range results {
+		if r.err != nil || r.path == nil {
+			r.v.state = VehicleUnroutable
+			continue
+		}
+		r.v.departS = s.nowS
+		r.v.lastRouteS = s.nowS
+		s.placeOnRoute(r.v, r.path.Edges, s.nowS)
 	}
 }
 
