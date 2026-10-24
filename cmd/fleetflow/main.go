@@ -146,14 +146,18 @@ func main() {
 		// configuration always has a database.
 		keys := authmemory.New()
 		simulationRepo = simulationmemory.New()
+		vehicleSvc := vehicle.NewService(vehiclememory.New())
+		driverSvc := driver.NewService(drivermemory.New())
+		seedMemoryFleet(ctx, vehicleSvc, driverSvc)
 		opts = append(opts,
-			api.WithVehicles(vehicle.NewService(vehiclememory.New())),
-			api.WithDrivers(driver.NewService(drivermemory.New())),
+			api.WithVehicles(vehicleSvc),
+			api.WithDrivers(driverSvc),
 			api.WithAPIKeys(auth.NewService(keys)),
 		)
 		logger.Warn("no database configured: fleet records and api keys are in memory and will be lost on restart")
 	}
 
+	var simService *simulation.Service
 	if cfg.SumoRuntime.Network != "" {
 		runtime := cfg.SumoRuntime
 		runner, err := sumo.NewRunner(ctx, sumo.Toolchain{
@@ -167,16 +171,27 @@ func main() {
 		if err != nil {
 			fatal(logger, "SUMO runtime configured but unusable", slog.String("error", err.Error()))
 		}
-		service, err := simulation.NewService(ctx, simulationRepo, runner, logger)
+		simService, err = simulation.NewService(ctx, simulationRepo, runner, logger)
 		if err != nil {
 			fatal(logger, "could not initialize SUMO simulation service", slog.String("error", err.Error()))
 		}
-		opts = append(opts, api.WithSimulation(service))
 		logger.Info("SUMO scenario execution is configured",
 			slog.String("network", runtime.Network),
 			slog.String("binary", runtime.Binary))
 	} else {
-		logger.Warn("SUMO scenarios are disabled: SUMO_NETWORK is not set")
+		var err error
+		simService, err = simulation.NewService(ctx, simulationRepo, simulation.NewSyntheticRunner(), logger)
+		if err != nil {
+			logger.Warn("could not initialize simulation service", slog.String("error", err.Error()))
+		} else {
+			logger.Info("synthetic simulation runner configured with pre-seeded Jakarta logistics scenarios")
+		}
+	}
+	if simService != nil {
+		if err := simService.SeedDefaultRun(ctx); err != nil {
+			logger.Warn("could not pre-seed simulation run", slog.String("error", err.Error()))
+		}
+		opts = append(opts, api.WithSimulation(simService))
 	}
 
 	logger.Info("listening", slog.String("addr", cfg.Addr))
@@ -194,4 +209,28 @@ func main() {
 func fatal(logger *slog.Logger, msg string, attrs ...slog.Attr) {
 	logger.LogAttrs(context.Background(), slog.LevelError, msg, attrs...)
 	os.Exit(1)
+}
+
+func seedMemoryFleet(ctx context.Context, vSvc *vehicle.Service, dSvc *driver.Service) {
+	vehicles := []vehicle.CreateInput{
+		{Name: "B-9012-JKT", Type: "heavy_truck", Status: "on_trip", Registration: "B-9012-JKT", Make: "Isuzu", Model: "Giga FVM", Color: "White", FuelType: "diesel"},
+		{Name: "B-9431-JKT", Type: "box_truck", Status: "on_trip", Registration: "B-9431-JKT", Make: "Mitsubishi", Model: "Fuso Canter", Color: "Yellow", FuelType: "diesel"},
+		{Name: "B-9204-JKT", Type: "van", Status: "on_trip", Registration: "B-9204-JKT", Make: "Toyota", Model: "HiAce Commuter", Color: "Silver", FuelType: "diesel"},
+		{Name: "B-9550-JKT", Type: "van", Status: "on_trip", Registration: "B-9550-JKT", Make: "Daihatsu", Model: "Gran Max Blind Van", Color: "White", FuelType: "petrol"},
+		{Name: "B-9118-JKT", Type: "motorcycle", Status: "on_trip", Registration: "B-9118-JKT", Make: "Honda", Model: "PCX Electric Cargo", Color: "Blue", FuelType: "electric"},
+	}
+	for _, v := range vehicles {
+		_, _ = vSvc.Create(ctx, v)
+	}
+
+	drivers := []driver.CreateInput{
+		{Name: "Budi Santoso", ContactPhone: "+62 812-3456-7890", LicenseClass: "B2 Umum", ShiftStart: "07:00", ShiftEnd: "16:00", Availability: "available"},
+		{Name: "Agus Setiawan", ContactPhone: "+62 813-9876-5432", LicenseClass: "B1", ShiftStart: "08:00", ShiftEnd: "17:00", Availability: "available"},
+		{Name: "Rian Hidayat", ContactPhone: "+62 815-2233-4455", LicenseClass: "A", ShiftStart: "08:00", ShiftEnd: "17:00", Availability: "available"},
+		{Name: "Eko Prasetyo", ContactPhone: "+62 817-6677-8899", LicenseClass: "A", ShiftStart: "06:00", ShiftEnd: "15:00", Availability: "available"},
+		{Name: "Dimas Pratama", ContactPhone: "+62 819-3344-5566", LicenseClass: "C", ShiftStart: "09:00", ShiftEnd: "18:00", Availability: "available"},
+	}
+	for _, d := range drivers {
+		_, _ = dSvc.Create(ctx, d)
+	}
 }
