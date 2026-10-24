@@ -95,6 +95,13 @@ export const navigation: NavBranch[] = [
         keywords: ['dashboard', 'live', 'map', 'track', 'vehicles', 'GPS'],
       },
       {
+        id: 'operations.fleet',
+        label: 'Fleet Status',
+        icon: 'trips',
+        path: '/operations/fleet',
+        keywords: ['fleet', 'status', 'availability', 'assigned', 'idle', 'mission'],
+      },
+      {
         id: 'operations.orders',
         label: 'Trips',
         icon: 'orders',
@@ -123,7 +130,7 @@ export const navigation: NavBranch[] = [
     label: 'Resources',
     icon: 'vehicles',
     path: '/resources',
-    keywords: ['drivers', 'vehicles', 'fleet', 'models'],
+    keywords: ['drivers', 'vehicles', 'fleet', 'models', 'maintenance'],
     requiresVisibleChildren: true,
     children: [
       {
@@ -148,11 +155,11 @@ export const navigation: NavBranch[] = [
         keywords: ['driver', 'contact', 'assignment', 'shift'],
       },
       {
-        id: 'resources.fleet',
-        label: 'Fleet Status',
-        icon: 'trips',
-        path: '/resources/fleet',
-        keywords: ['fleet', 'availability', 'assigned', 'idle', 'maintenance'],
+        id: 'resources.maintenance',
+        label: 'Maintenance',
+        icon: 'reports',
+        path: '/resources/maintenance',
+        keywords: ['maintenance', 'history', 'service', 'workshop', 'inspection', 'odometer', 'emissions'],
       },
     ],
   },

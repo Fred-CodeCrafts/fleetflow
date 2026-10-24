@@ -98,7 +98,13 @@ export function VehiclesPage() {
         <Table headers={['Name', 'Registration', 'Model', 'Year', 'Color', 'Body / fuel', 'Cargo capacity', 'Maintenance history', 'Status']}>{(vehicles.data ?? []).map((v) =>
           <tr key={v.id}><td><Link to={`/resources/vehicles/${encodeURIComponent(v.id)}`}>{v.name}</Link></td><td>{unknown(v.registration)}</td><td>{v.model || v.make || 'Unknown'}</td>
             <td>{unknown(v.year)}</td><td>{unknown(v.color)}</td><td>{v.body_type || v.fuel_type ? `${v.body_type ?? 'Unknown'} / ${v.fuel_type ?? 'Unknown'}` : 'Unknown'}</td>
-            <td>{v.capacity != null ? `${v.capacity} kg` : 'Unknown'}</td><td>{unknown(v.maintenance_history)}</td><td><Status value={v.status} /></td></tr>)}</Table>}
+            <td>{v.capacity != null ? `${v.capacity} kg` : 'Unknown'}</td>
+            <td>
+              <Link to={`/resources/maintenance?vehicle=${encodeURIComponent(v.name)}`} title="View full maintenance log for this vehicle">
+                {v.maintenance_history ? `${v.maintenance_history} →` : 'View log →'}
+              </Link>
+            </td>
+            <td><Status value={v.status} /></td></tr>)}</Table>}
       {!vehicles.loading && !vehicles.error && vehicles.data?.length === 0 && <p className="empty-state">No vehicles registered.</p>}
     </Panel>
   </Page>
@@ -174,10 +180,17 @@ export function VehicleDetailPage() {
         <tr><th scope="row">Status</th><td><Status value={vehicle.status} /></td></tr>
       </Table>
     </Panel>
-    <Panel title="Maintenance history">
+    <Panel
+      title="Maintenance history"
+      action={
+        <Link className="button" to={`/resources/maintenance?vehicle=${encodeURIComponent(vehicle.name)}`}>
+          Open maintenance log
+        </Link>
+      }
+    >
       {vehicle.maintenance_history
         ? <p>{vehicle.maintenance_history}</p>
-        : <p className="empty-state">No maintenance history recorded.</p>}
+        : <p className="empty-state">No maintenance history recorded in vehicle profile.</p>}
     </Panel>
     <Panel title="Scenario and trip history">
       <p className="empty-state">Vehicle-to-trip history will appear after automatic dispatch links generated trips to fleet records.</p>

@@ -1,18 +1,20 @@
 import { FleetStatusPage, LiveMapPage, RoutePlannerPage } from './Operations'
 import { DriversPage, VehiclesPage } from './Records'
 import { ModelsPage } from './Models'
+import { MaintenancePage } from './Maintenance'
 import { SimulationPage, TripsPage } from './Simulation'
 import { GeneralSettingsPage } from './Settings'
 
 const pages = {
   'operations.overview': LiveMapPage,
+  'operations.fleet': FleetStatusPage,
   'operations.orders': TripsPage,
   'operations.simulations': SimulationPage,
   'operations.routes': RoutePlannerPage,
   'resources.vehicles': VehiclesPage,
   'resources.models': ModelsPage,
   'resources.drivers': DriversPage,
-  'resources.fleet': FleetStatusPage,
+  'resources.maintenance': MaintenancePage,
   'settings.general': GeneralSettingsPage,
 }
 

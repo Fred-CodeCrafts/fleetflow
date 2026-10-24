@@ -189,17 +189,38 @@ export function FleetStatusPage() {
   const vehicles = useLoad(api.vehicles)
   const drivers = useLoad(api.drivers)
   const allVehicles: Vehicle[] = vehicles.data ?? []
-  return <Page eyebrow="Resources" title="Fleet Status" description="Current vehicle availability and driver assignments.">
+  return <Page eyebrow="Operations" title="Fleet Status" description="Real-time vehicle availability, driver allocations, and operational mission readiness across the Jakarta fleet.">
     <div className="metric-grid">
-      <Metric label="Vehicles" value={String(allVehicles.length)} />
-      <Metric label="Available" value={String(allVehicles.filter((vehicle) => vehicle.status === 'available').length)} />
-      <Metric label="On trip" value={String(allVehicles.filter((vehicle) => vehicle.status === 'on_trip').length)} />
-      <Metric label="Drivers" value={String(drivers.data?.length ?? 0)} />
+      <Metric label="Total Fleet" value={String(allVehicles.length)} />
+      <Metric label="Available for Dispatch" value={String(allVehicles.filter((vehicle) => vehicle.status === 'available').length)} />
+      <Metric label="On Active Mission" value={String(allVehicles.filter((vehicle) => vehicle.status === 'on_trip').length)} />
+      <Metric label="Active Drivers" value={String(drivers.data?.length ?? 0)} />
     </div>
-    <Panel title="Fleet register">{vehicles.loading ? <Loading /> : vehicles.error ? <ErrorMessage>{vehicles.error}</ErrorMessage> :
-      <Table headers={['Vehicle', 'Type', 'Status', 'Assigned driver']}>
-        {allVehicles.map((vehicle) => <tr key={vehicle.id}><td>{vehicle.name}</td><td>{vehicle.type}</td><td><Status value={vehicle.status} /></td>
-          <td>{drivers.data?.find((driver) => driver.vehicle_id === vehicle.id)?.name ?? 'Unassigned'}</td></tr>)}
-      </Table>}</Panel>
+    <Panel title="Fleet Operational Status" action={<button className="button" onClick={() => void vehicles.reload()}>Refresh</button>}>
+      {vehicles.loading ? <Loading /> : vehicles.error ? <ErrorMessage>{vehicles.error}</ErrorMessage> :
+        <Table headers={['Vehicle', 'Model / Type', 'Status', 'Assigned Driver', 'Payload Capacity', 'Actions']}>
+          {allVehicles.map((vehicle) => (
+            <tr key={vehicle.id}>
+              <td>
+                <Link to={`/resources/vehicles/${encodeURIComponent(vehicle.id)}`}>
+                  <strong>{vehicle.name}</strong>
+                </Link>
+                {vehicle.registration && <div className="muted"><small>{vehicle.registration}</small></div>}
+              </td>
+              <td>{vehicle.model || vehicle.make || vehicle.type}</td>
+              <td><Status value={vehicle.status} /></td>
+              <td>{drivers.data?.find((driver) => driver.vehicle_id === vehicle.id)?.name ?? 'Unassigned'}</td>
+              <td>{vehicle.capacity != null ? `${vehicle.capacity} kg` : '—'}</td>
+              <td>
+                <div className="form-row" style={{ margin: 0, gap: '6px' }}>
+                  <Link className="button" to="/operations">Track on Map</Link>
+                  <Link className="button" to={`/resources/maintenance?vehicle=${encodeURIComponent(vehicle.name)}`}>Maintenance</Link>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </Table>}
+      {!vehicles.loading && !vehicles.error && allVehicles.length === 0 && <p className="empty-state">No vehicles in fleet.</p>}
+    </Panel>
   </Page>
 }

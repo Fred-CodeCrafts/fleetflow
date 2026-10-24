@@ -20,6 +20,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           <Route path="/operations/trips/:runID/:tripID" element={<SimulationTripPage />} />
           <Route path="/resources/vehicles/:vehicleID" element={<VehicleDetailPage />} />
           <Route path="/resources/drivers/:driverID" element={<DriverDetailPage />} />
+          <Route path="/resources/fleet" element={<Navigate to="/operations/fleet" replace />} />
           {navigation.filter((branch) => !allNavItems().some((item) => item.path === branch.path)).map((branch) => (
             <Route key={branch.id} path={branch.path} element={<Navigate to={branch.children[0]?.path ?? '/operations'} replace />} />
           ))}
