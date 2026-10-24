@@ -16,6 +16,7 @@ $networkFile = Join-Path $networkDir 'jakarta-dki.net.xml'
 $metadataFile = Join-Path $networkDir 'jakarta-dki.network.json'
 $extractor = Join-Path $PSScriptRoot 'extract_osm_roads.py'
 $validator = Join-Path $PSScriptRoot 'validate_sumo_net.py'
+$routeValidator = Join-Path $PSScriptRoot 'validate_routes.py'
 $sourceUrl = 'https://download.geofabrik.de/asia/indonesia/java-latest.osm.pbf'
 $boundaryUrl = 'https://nominatim.openstreetmap.org/lookup?osm_ids=R6362934&format=geojson&polygon_geojson=1'
 
@@ -74,6 +75,11 @@ if (-not (Test-Path $networkFile) -or (Get-Item $networkFile).Length -eq 0) {
 
 & $python.Source $validator $networkFile
 if ($LASTEXITCODE -ne 0) { throw 'The generated SUMO network failed structural validation.' }
+$duarouter = Get-Command duarouter.exe -ErrorAction SilentlyContinue
+if ($duarouter) {
+    & $python.Source $routeValidator $networkFile --duarouter $duarouter.Source
+    if ($LASTEXITCODE -ne 0) { throw 'The generated SUMO network failed route connectivity validation.' }
+}
 if ($ValidateWithSumo) {
     & $sumo.Source --net-file $networkFile --begin 0 --end 1 --no-step-log true --duration-log.disable true
     if ($LASTEXITCODE -ne 0) { throw 'SUMO could not load the generated network.' }
