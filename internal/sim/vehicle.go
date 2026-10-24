@@ -56,6 +56,12 @@ type Vehicle struct {
 	// actually entered, which is the baseline the fairness check measures time
 	// lost against.
 	freeFlowS float64
+
+	// distanceM accumulates the length of the edges this trip has entered, so a
+	// completed trip knows how far it drove. It is charged in enterEdge, next to
+	// freeFlowS and for the same reason: a reroute changes the route, and the
+	// distance must follow the route actually taken.
+	distanceM float64
 }
 
 // newVehicle creates a pending vehicle for the given trip.

@@ -254,7 +254,7 @@ func (e *Engine) Customize() *Metric {
 // publish stores a freshly built cost slice as the active snapshot, bumps the
 // version and records when the pass happened and how long it took.
 func (e *Engine) publish(costs []float64, took time.Duration) *Metric {
-	m := NewMetric(costs, e.version.Add(1))
+	m := NewMetricFor(e.graph, costs, e.version.Add(1))
 	e.active.Store(m)
 	e.lastCustomizeNanos.Store(time.Now().UnixNano())
 	e.customizeNanos.Store(int64(took))

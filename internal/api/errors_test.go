@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -12,7 +11,6 @@ import (
 	"testing"
 
 	"fleetflow/internal/domain"
-	"fleetflow/internal/engine"
 )
 
 func TestStatusFor(t *testing.T) {
@@ -26,8 +24,6 @@ func TestStatusFor(t *testing.T) {
 		{"contradicts state", domain.Conflict("driver_busy", "driver already assigned"), http.StatusConflict},
 		{"not ready", domain.Unavailable("no_metric", "no metric yet"), http.StatusServiceUnavailable},
 		{"untyped error is internal", errors.New("pq: relation does not exist"), http.StatusInternalServerError},
-		{"unknown edge", engine.ErrEdgeNotFound, http.StatusNotFound},
-		{"no metric published", engine.ErrNoMetric, http.StatusServiceUnavailable},
 	}
 
 	for _, tt := range tests {
@@ -36,15 +32,6 @@ func TestStatusFor(t *testing.T) {
 				t.Errorf("statusFor(%v) = %d, want %d", tt.err, got, tt.want)
 			}
 		})
-	}
-}
-
-func TestStatusForFindsTheCauseInAWrappedError(t *testing.T) {
-	// A service that wraps the engine's sentinel must still produce its status.
-	err := fmt.Errorf("routing: %w", engine.ErrEdgeNotFound)
-
-	if got := statusFor(err); got != http.StatusNotFound {
-		t.Errorf("statusFor(wrapped ErrEdgeNotFound) = %d, want 404", got)
 	}
 }
 

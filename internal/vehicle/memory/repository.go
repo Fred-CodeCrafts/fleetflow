@@ -54,8 +54,9 @@ func (r *Repository) Create(ctx context.Context, v vehicle.Vehicle) (vehicle.Veh
 		return vehicle.Vehicle{}, domain.Conflict("vehicle_exists", "vehicle %s already exists", v.ID)
 	}
 	r.index[v.ID] = len(r.vehicles)
-	r.vehicles = append(r.vehicles, v)
-	return v, nil
+	stored := cloneVehicle(v)
+	r.vehicles = append(r.vehicles, stored)
+	return cloneVehicle(stored), nil
 }
 
 // List returns every stored vehicle matching filter, oldest first. The result is
@@ -73,7 +74,19 @@ func (r *Repository) List(ctx context.Context, filter vehicle.ListFilter) ([]veh
 		if filter.Status != nil && v.Status != *filter.Status {
 			continue
 		}
-		found = append(found, v)
+		found = append(found, cloneVehicle(v))
 	}
 	return found, nil
+}
+
+func cloneVehicle(v vehicle.Vehicle) vehicle.Vehicle {
+	if v.Year != nil {
+		year := *v.Year
+		v.Year = &year
+	}
+	if v.Capacity != nil {
+		capacity := *v.Capacity
+		v.Capacity = &capacity
+	}
+	return v
 }

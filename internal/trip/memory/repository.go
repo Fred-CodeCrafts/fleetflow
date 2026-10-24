@@ -9,6 +9,7 @@ package memory
 import (
 	"context"
 	"sync"
+	"time"
 
 	"fleetflow/internal/domain"
 	"fleetflow/internal/trip"
@@ -111,6 +112,28 @@ func (r *Repository) SetStatus(ctx context.Context, tripID string, status trip.S
 		return trip.Trip{}, domain.Conflict("trip_status_regressed",
 			"trip %s is %s and cannot go back to %s", tripID, r.trips[pos].Status, status)
 	}
+
+	// The timestamps belong to the transition, not the request: a trip is
+	// started when it first reaches in_progress and finished when it first
+	// reaches completed. Setting a status the trip already has must not move
+	// them, which is what keeps a retried request from rewriting history.
+	now := time.Now().UTC()
+	previous := r.trips[pos].Status
+	if status == trip.StatusInProgress && r.trips[pos].StartedAt.IsZero() {
+		r.trips[pos].StartedAt = now
+	}
+	if status == trip.StatusCompleted {
+		if r.trips[pos].StartedAt.IsZero() && previous != trip.StatusPlanned {
+			// A trip that skips straight to completed never recorded a start.
+			// Backfilling it with "now" would invent a duration, so the start
+			// stays unset and Duration reports false.
+			r.trips[pos].StartedAt = time.Time{}
+		}
+		if r.trips[pos].FinishedAt.IsZero() {
+			r.trips[pos].FinishedAt = now
+		}
+	}
+
 	r.trips[pos].Status = status
 	return r.trips[pos], nil
 }

@@ -102,6 +102,7 @@ func TestNewRejectsUnknownStatus(t *testing.T) {
 	if err == nil {
 		t.Fatalf("New accepted an unknown status as %s", got.Status)
 	}
+
 	if kind := domain.KindOf(err); kind != domain.KindInvalid {
 		t.Errorf("New kind = %s, want invalid", kind)
 	}
@@ -113,3 +114,46 @@ func TestNewRejectsUnknownStatus(t *testing.T) {
 		t.Error("New returned an empty message, want a clear error for the client")
 	}
 }
+
+func TestNewProfileKeepsMissingValuesUnknownAndValidatesSuppliedValues(t *testing.T) {
+	unknown, err := vehicle.NewProfile("Fleet van", "van", "available", "", "", "", nil, "", "", "", nil, "")
+	if err != nil {
+		t.Fatalf("NewProfile with unknown profile fields: %v", err)
+	}
+	if unknown.Registration != "" || unknown.Make != "" || unknown.Model != "" ||
+		unknown.Year != nil || unknown.Color != "" || unknown.BodyType != "" ||
+		unknown.FuelType != "" || unknown.Capacity != nil || unknown.MaintenanceHistory != "" {
+		t.Errorf("missing profile values were changed: %+v", unknown)
+	}
+
+	year, capacity := 2022, 1250.5
+	profile, err := vehicle.NewProfile(" Fleet van ", " van ", "available",
+		" B 1234 XYZ ", " Example ", " Transit ", &year, " white ", " van ", " diesel ",
+		&capacity, " 2025-01 oil service ")
+	if err != nil {
+		t.Fatalf("NewProfile: %v", err)
+	}
+	if profile.Name != "Fleet van" || profile.Registration != "B 1234 XYZ" ||
+		profile.Make != "Example" || profile.Model != "Transit" || profile.Color != "white" ||
+		profile.BodyType != "van" || profile.FuelType != "diesel" ||
+		profile.MaintenanceHistory != "2025-01 oil service" ||
+		profile.Year == nil || *profile.Year != year || profile.Capacity == nil || *profile.Capacity != capacity {
+		t.Errorf("NewProfile returned %+v with unnormalized or missing profile values", profile)
+	}
+
+	for _, invalid := range []struct {
+		year     *int
+		capacity *float64
+	}{
+		{year: ptrInt(1800)},
+		{capacity: ptrFloat(0)},
+		{capacity: ptrFloat(-1)},
+	} {
+		if _, err := vehicle.NewProfile("Fleet van", "van", "available", "", "", "", invalid.year, "", "", "", invalid.capacity, ""); err == nil {
+			t.Errorf("NewProfile accepted invalid profile values: %+v", invalid)
+		}
+	}
+}
+
+func ptrInt(value int) *int           { return &value }
+func ptrFloat(value float64) *float64 { return &value }

@@ -275,6 +275,7 @@ func TestServiceAssignKeepsTheRepositoryOutcome(t *testing.T) {
 	if err == nil {
 		t.Fatal("Assign succeeded although the repository failed")
 	}
+
 	if code, _, ok := domain.Public(err); !ok || code != "driver_assign_failed" {
 		t.Errorf("Assign code = %q (ok=%v), want driver_assign_failed", code, ok)
 	}
@@ -286,5 +287,49 @@ func TestServiceAssignKeepsTheRepositoryOutcome(t *testing.T) {
 	}
 	if code, _, _ := domain.Public(err); code != "driver_vehicle_taken" {
 		t.Errorf("Assign code = %q, want driver_vehicle_taken", code)
+	}
+}
+
+func TestNewProfileKeepsMissingValuesUnknownAndValidatesSuppliedValues(t *testing.T) {
+	unknown, err := driver.NewProfile("Ada Lovelace", "", "", "", "", "", "", "")
+	if err != nil {
+		t.Fatalf("NewProfile with unknown profile fields: %v", err)
+	}
+	if unknown.ContactPhone != "" || unknown.LicenseClass != "" || unknown.LicenseExpiry != "" ||
+		unknown.ShiftStart != "" || unknown.ShiftEnd != "" || unknown.Availability != "" {
+		t.Errorf("missing profile values were changed: %+v", unknown)
+	}
+
+	profile, err := driver.NewProfile(" Ada Lovelace ", "", "+62 812-3456-7890", " B1 ", "2027-05-31", " 08:30 ", "17:45", "available")
+	if err != nil {
+		t.Fatalf("NewProfile: %v", err)
+	}
+	if profile.Name != "Ada Lovelace" || profile.ContactPhone != "+62 812-3456-7890" ||
+		profile.LicenseClass != "B1" || profile.LicenseExpiry != "2027-05-31" ||
+		profile.ShiftStart != "08:30" || profile.ShiftEnd != "17:45" || profile.Availability != "available" {
+		t.Errorf("NewProfile returned %+v with unnormalized or missing values", profile)
+	}
+
+	for _, input := range []struct {
+		phone, expiry, shiftStart, shiftEnd, availability string
+	}{
+		{phone: "call me"},
+		{phone: "++628123456789"},
+		{phone: "(81234567"},
+		{expiry: "2027-02-30"},
+		{shiftStart: "08:00"},
+		{shiftEnd: "17:00"},
+		{shiftStart: "8:00", shiftEnd: "17:00"},
+		{shiftStart: "24:00", shiftEnd: "17:00"},
+		{shiftStart: "08:60", shiftEnd: "17:00"},
+		{availability: "maybe"},
+	} {
+		if _, err := driver.NewProfile("Ada", "", input.phone, "", input.expiry, input.shiftStart, input.shiftEnd, input.availability); err == nil {
+			t.Errorf("NewProfile accepted invalid values: %+v", input)
+		}
+	}
+
+	if _, err := driver.NewProfile("Ada", "", "", "", "", "00:00", "23:59", ""); err != nil {
+		t.Errorf("NewProfile rejected valid boundary clock times: %v", err)
 	}
 }

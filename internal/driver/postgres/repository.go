@@ -13,6 +13,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -47,9 +48,13 @@ func New(pool *pgxpool.Pool) *Repository { return &Repository{pool: pool} }
 // the foreign key rejects it. Any other failure is returned raw so the service
 // can classify it (DESIGN 3.8).
 func (r *Repository) Create(ctx context.Context, d driver.Driver) (driver.Driver, error) {
-	const q = `insert into drivers (id, name, contact, vehicle_id) values ($1, $2, $3, $4)`
+	const q = `insert into drivers
+		(id, name, contact, vehicle_id, contact_phone, license_class, license_expiry, shift_start, shift_end, availability)
+		values ($1, $2, $3, $4, $5, $6, $7::text::date, $8::text::time, $9::text::time, $10)`
 
-	if _, err := r.pool.Exec(ctx, q, d.ID, d.Name, d.Contact, nullableVehicle(d.VehicleID)); err != nil {
+	if _, err := r.pool.Exec(ctx, q, d.ID, d.Name, d.Contact, nullableVehicle(d.VehicleID),
+		nullableText(d.ContactPhone), nullableText(d.LicenseClass), nullableText(d.LicenseExpiry),
+		nullableText(d.ShiftStart), nullableText(d.ShiftEnd), nullableText(d.Availability)); err != nil {
 		return driver.Driver{}, classifyCreate(err, d.ID)
 	}
 	return d, nil
@@ -59,7 +64,8 @@ func (r *Repository) Create(ctx context.Context, d driver.Driver) (driver.Driver
 // id: rows created in the same instant share a timestamp, and the id is the
 // deterministic tiebreaker that keeps the order stable.
 func (r *Repository) List(ctx context.Context) ([]driver.Driver, error) {
-	const q = `select id, name, contact, vehicle_id from drivers order by created_at, id`
+	const q = `select id, name, contact, vehicle_id, contact_phone, license_class, license_expiry, shift_start, shift_end, availability
+		from drivers order by created_at, id`
 
 	rows, err := r.pool.Query(ctx, q)
 	if err != nil {
@@ -70,17 +76,27 @@ func (r *Repository) List(ctx context.Context) ([]driver.Driver, error) {
 	found := make([]driver.Driver, 0)
 	for rows.Next() {
 		var (
-			id, name, contact string
-			vehicle           *string
+			id, name, contact                 string
+			vehicle                           *string
+			phone, licenseClass, availability *string
+			licenseExpiry                     *time.Time
+			shiftStart, shiftEnd              *time.Time
 		)
-		if err := rows.Scan(&id, &name, &contact, &vehicle); err != nil {
+		if err := rows.Scan(&id, &name, &contact, &vehicle, &phone, &licenseClass, &licenseExpiry,
+			&shiftStart, &shiftEnd, &availability); err != nil {
 			return nil, err
 		}
 		found = append(found, driver.Driver{
-			ID:        id,
-			Name:      name,
-			Contact:   contact,
-			VehicleID: vehicleValue(vehicle),
+			ID:            id,
+			Name:          name,
+			Contact:       contact,
+			ContactPhone:  textValue(phone),
+			LicenseClass:  textValue(licenseClass),
+			LicenseExpiry: dateValue(licenseExpiry),
+			ShiftStart:    clockValue(shiftStart),
+			ShiftEnd:      clockValue(shiftEnd),
+			Availability:  textValue(availability),
+			VehicleID:     vehicleValue(vehicle),
 		})
 	}
 	if err := rows.Err(); err != nil {
@@ -101,22 +117,32 @@ func (r *Repository) List(ctx context.Context) ([]driver.Driver, error) {
 // another driver holds is a conflict (unique index).
 func (r *Repository) Assign(ctx context.Context, driverID, vehicleID string) (driver.Driver, error) {
 	const q = `update drivers set vehicle_id = $2 where id = $1
-		returning id, name, contact, vehicle_id`
+		returning id, name, contact, vehicle_id, contact_phone, license_class, license_expiry, shift_start, shift_end, availability`
 
 	var (
-		id, name, contact string
-		vehicle           *string
+		id, name, contact                 string
+		vehicle                           *string
+		phone, licenseClass, availability *string
+		licenseExpiry                     *time.Time
+		shiftStart, shiftEnd              *time.Time
 	)
 	err := r.pool.QueryRow(ctx, q, driverID, nullableVehicle(vehicleID)).
-		Scan(&id, &name, &contact, &vehicle)
+		Scan(&id, &name, &contact, &vehicle, &phone, &licenseClass, &licenseExpiry,
+			&shiftStart, &shiftEnd, &availability)
 	if err != nil {
 		return driver.Driver{}, classifyAssign(err, driverID, vehicleID)
 	}
 	return driver.Driver{
-		ID:        id,
-		Name:      name,
-		Contact:   contact,
-		VehicleID: vehicleValue(vehicle),
+		ID:            id,
+		Name:          name,
+		Contact:       contact,
+		ContactPhone:  textValue(phone),
+		LicenseClass:  textValue(licenseClass),
+		LicenseExpiry: dateValue(licenseExpiry),
+		ShiftStart:    clockValue(shiftStart),
+		ShiftEnd:      clockValue(shiftEnd),
+		Availability:  textValue(availability),
+		VehicleID:     vehicleValue(vehicle),
 	}, nil
 }
 
@@ -180,4 +206,32 @@ func vehicleValue(id *string) string {
 		return ""
 	}
 	return *id
+}
+
+func nullableText(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
+}
+
+func textValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
+func dateValue(value *time.Time) string {
+	if value == nil {
+		return ""
+	}
+	return value.Format("2006-01-02")
+}
+
+func clockValue(value *time.Time) string {
+	if value == nil {
+		return ""
+	}
+	return value.Format("15:04")
 }

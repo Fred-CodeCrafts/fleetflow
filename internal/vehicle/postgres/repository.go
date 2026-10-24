@@ -44,9 +44,14 @@ func New(pool *pgxpool.Pool) *Repository { return &Repository{pool: pool} }
 // literal, so a token the API accepts is exactly the token the check constraint
 // accepts.
 func (r *Repository) Create(ctx context.Context, v vehicle.Vehicle) (vehicle.Vehicle, error) {
-	const q = `insert into vehicles (id, name, type, status) values ($1, $2, $3, $4)`
+	const q = `insert into vehicles
+		(id, name, type, status, registration, make, model, year, color, body_type, fuel_type, capacity, maintenance_history)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`
 
-	if _, err := r.pool.Exec(ctx, q, v.ID, v.Name, v.Type, v.Status.String()); err != nil {
+	if _, err := r.pool.Exec(ctx, q, v.ID, v.Name, v.Type, v.Status.String(),
+		nullableText(v.Registration), nullableText(v.Make), nullableText(v.Model), v.Year,
+		nullableText(v.Color), nullableText(v.BodyType), nullableText(v.FuelType), v.Capacity,
+		nullableText(v.MaintenanceHistory)); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == uniqueViolation {
 			return vehicle.Vehicle{}, domain.Conflict("vehicle_exists", "vehicle %s already exists", v.ID)
@@ -64,7 +69,7 @@ func (r *Repository) Create(ctx context.Context, v vehicle.Vehicle) (vehicle.Veh
 // in that status. Statuses are parsed back with vehicle.ParseStatus, the same
 // package that wrote them, so the two directions cannot drift.
 func (r *Repository) List(ctx context.Context, filter vehicle.ListFilter) ([]vehicle.Vehicle, error) {
-	const q = `select id, name, type, status from vehicles
+	const q = `select id, name, type, status, registration, make, model, year, color, body_type, fuel_type, capacity, maintenance_history from vehicles
 		where ($1::text is null or status = $1)
 		order by created_at, id`
 
@@ -82,19 +87,42 @@ func (r *Repository) List(ctx context.Context, filter vehicle.ListFilter) ([]veh
 	found := make([]vehicle.Vehicle, 0)
 	for rows.Next() {
 		var (
-			id, name, typ, statusName string
+			id, name, typ, statusName                                                string
+			registration, make, model, color, bodyType, fuelType, maintenanceHistory *string
+			year                                                                     *int
+			capacity                                                                 *float64
 		)
-		if err := rows.Scan(&id, &name, &typ, &statusName); err != nil {
+		if err := rows.Scan(&id, &name, &typ, &statusName, &registration, &make, &model, &year,
+			&color, &bodyType, &fuelType, &capacity, &maintenanceHistory); err != nil {
 			return nil, err
 		}
 		st, err := vehicle.ParseStatus(statusName)
 		if err != nil {
 			return nil, err
 		}
-		found = append(found, vehicle.Vehicle{ID: id, Name: name, Type: typ, Status: st})
+		found = append(found, vehicle.Vehicle{
+			ID: id, Name: name, Type: typ, Status: st,
+			Registration: textValue(registration), Make: textValue(make), Model: textValue(model),
+			Year: year, Color: textValue(color), BodyType: textValue(bodyType), FuelType: textValue(fuelType),
+			Capacity: capacity, MaintenanceHistory: textValue(maintenanceHistory),
+		})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 	return found, nil
+}
+
+func nullableText(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
+}
+
+func textValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }

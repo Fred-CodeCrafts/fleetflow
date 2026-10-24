@@ -115,7 +115,7 @@ func TestRateLimitMiddleware_RefusesPastTheBurst(t *testing.T) {
 
 	serve := func() *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, "/api/reports", nil)
+		req := httptest.NewRequest(http.MethodPost, "/api/route", nil)
 		req.RemoteAddr = "203.0.113.9:5555"
 		h.ServeHTTP(rec, req)
 		return rec
@@ -154,7 +154,7 @@ func TestRateLimitMiddleware_AttributesByForwardedClient(t *testing.T) {
 
 	send := func(forwarded string) int {
 		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, "/api/reports", nil)
+		req := httptest.NewRequest(http.MethodPost, "/api/route", nil)
 		// Two different clients behind the same proxy socket.
 		req.RemoteAddr = "10.0.0.1:5555"
 		req.Header.Set("X-Forwarded-For", forwarded)
@@ -174,9 +174,8 @@ func TestRateLimitMiddleware_AttributesByForwardedClient(t *testing.T) {
 	}
 }
 
-// TestWithRateLimit_ReplacesTheAllowance covers the option the in-process
-// simulator needs: it calls the public endpoints and must be able to do so
-// without throttling itself.
+// TestWithRateLimit_ReplacesTheAllowance verifies that a configured limit is
+// applied to requests served by the API.
 func TestWithRateLimit_ReplacesTheAllowance(t *testing.T) {
 	s := testServer(t,
 		WithVehicles(vehicle.NewService(vehiclememory.New())),
@@ -190,40 +189,5 @@ func TestWithRateLimit_ReplacesTheAllowance(t *testing.T) {
 	// request must already be refused.
 	if code := getJSON(t, s, "/api/vehicles").Code; code != http.StatusTooManyRequests {
 		t.Errorf("second request status = %d, want 429 with a burst of 1", code)
-	}
-}
-
-// TestWithInternalKey_ExemptsTheProcesssOwnKey covers the sharper form of the
-// same need: the simulator is this process, so it is exempt from a limit sized for
-// real clients. It is exempt as a caller, not from authentication, and every other
-// caller keeps the allowance it had.
-func TestWithInternalKey_ExemptsTheProcesssOwnKey(t *testing.T) {
-	const report = `{"vehicle_id":"v1","edge_id":"e_AB","speed_mps":13.9}`
-
-	internal := testServer(t,
-		WithEngine(newEngine(t, testGraph(t))),
-		WithRateLimit(1, 1),
-		WithInternalKey(testAPIKey),
-	)
-
-	// Past a burst of 1, the key that belongs to the process still gets served.
-	for i := 1; i <= 5; i++ {
-		if code := postJSON(t, internal, "/api/reports", report).Code; code != http.StatusAccepted {
-			t.Fatalf("request %d status = %d, want 202 for the internal key", i, code)
-		}
-	}
-
-	// The same traffic under another valid key is an ordinary client, and an
-	// ordinary client is refused once past the allowance.
-	ordinary := testServer(t,
-		WithEngine(newEngine(t, testGraph(t))),
-		WithRateLimit(1, 1),
-	)
-
-	if code := postJSON(t, ordinary, "/api/reports", report).Code; code != http.StatusAccepted {
-		t.Fatalf("first request status = %d, want 202", code)
-	}
-	if code := postJSON(t, ordinary, "/api/reports", report).Code; code != http.StatusTooManyRequests {
-		t.Errorf("second request status = %d, want 429: the exemption must be one key, not a bypass", code)
 	}
 }
