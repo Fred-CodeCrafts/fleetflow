@@ -40,11 +40,21 @@ export interface SimulatedTrack {
   positions: SimulatedPosition[]
 }
 
+export interface EmissionProvenance {
+  model: string
+  class: string
+  source: string
+  input_unit: string
+  output_unit: string
+  assumptions: string
+}
+
 export interface SimulationResult {
   sumo_version: string
   seed: number
   started_at: string
   finished_at: string
+  emissions?: EmissionProvenance
   trips: SimulatedTrip[]
   tracks: SimulatedTrack[]
 }

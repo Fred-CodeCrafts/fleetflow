@@ -82,7 +82,11 @@ export function TripsPage() {
               <td><Link to={`/operations/trips/${selectedID}/${encodeURIComponent(trip.id)}`}>Open trip</Link></td>
             </tr>)}
           </Table> : <p className="empty-state">Trip details are available when this run completes.</p>}
-      {selected.run?.status === 'completed' && <p className="help-text">Fuel and CO₂ are SUMO model estimates, not measured fleet data.</p>}
+      {selected.run?.status === 'completed' && <p className="help-text">
+        {selected.run.result?.emissions
+          ? `Fuel and CO₂ are ${selected.run.result.emissions.model} ${selected.run.result.emissions.class} estimates (${selected.run.result.emissions.output_unit}); they are not measured fleet data.`
+          : 'Emission model provenance is unavailable for this stored run.'}
+      </p>}
     </Panel>}
   </Page>
 }
@@ -192,6 +196,15 @@ export function SimulationTripPage() {
       <Metric label="CO₂ estimate" value={`${formatNumber(trip.co2_kg, 3)} kg`} note="SUMO model output" />
     </div>
     <RoutingMap positionMode="simulation" simulationTracks={route} />
+    <Panel title="Emission estimate provenance">
+      {selected.run.result.emissions
+        ? <p className="help-text">
+          {selected.run.result.emissions.model} · {selected.run.result.emissions.class} ·
+          {' '}{selected.run.result.emissions.source} · values converted from {selected.run.result.emissions.input_unit} to {selected.run.result.emissions.output_unit}.
+          {' '}{selected.run.result.emissions.assumptions}
+        </p>
+        : <p className="empty-state">Emission model provenance is unavailable for this stored run.</p>}
+    </Panel>
     <Panel title="Simulated route history">
       <p className="help-text">
         Origin: {origin ? `${origin.latitude.toFixed(5)}, ${origin.longitude.toFixed(5)}` : 'not recorded'} ·

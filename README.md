@@ -122,8 +122,11 @@ their attribution is displayed on the map.
   allocations. Manual driver assignment is not exposed.
 - **General Settings** reports app health and the routing/map providers.
 
-Fuel and CO₂ values are SUMO model estimates, not measured fuel, real fleet
-emissions, or verified carbon savings. Automatic roster assignment, package
+Fuel and CO₂ values are SUMO HBEFA3 estimates for the explicitly assigned
+`HBEFA3/PC_G_EU4` Euro 4 gasoline passenger-car class. SUMO tripinfo values are
+converted from milligrams to kilograms, and the model, class, units, source, and
+assumptions are stored with each run. This generic class is not a fleet-specific
+measurement or verified carbon saving. Automatic roster assignment, package
 entities and multi-stop event history, and full vehicle/driver profiles remain
 planned work.
 
