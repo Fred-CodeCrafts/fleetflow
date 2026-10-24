@@ -5,6 +5,7 @@ import { Layout } from './shell/Layout'
 import { allNavItems, navigation } from './shell/navigation'
 import { Screen } from './screens/Screen'
 import { SimulationTripPage } from './screens/Simulation'
+import { DriverDetailPage, VehicleDetailPage } from './screens/Records'
 import './styles.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
@@ -17,6 +18,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             <Route key={item.id} path={item.path} element={<Screen id={item.id} />} />
           )))}
           <Route path="/operations/trips/:runID/:tripID" element={<SimulationTripPage />} />
+          <Route path="/resources/vehicles/:vehicleID" element={<VehicleDetailPage />} />
+          <Route path="/resources/drivers/:driverID" element={<DriverDetailPage />} />
           {navigation.filter((branch) => !allNavItems().some((item) => item.path === branch.path)).map((branch) => (
             <Route key={branch.id} path={branch.path} element={<Navigate to={branch.children[0]?.path ?? '/operations'} replace />} />
           ))}
