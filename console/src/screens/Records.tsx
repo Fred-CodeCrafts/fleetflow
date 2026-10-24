@@ -22,7 +22,7 @@ const initialVehicle = (models: VehicleModel[]) => {
 }
 
 const emptyDriver = () => ({
-  name: '', contact_phone: '', license_class: '', license_expiry: '', shift_start: '', shift_end: '', availability: '',
+  name: '', contact_phone: '', license_class: '', license_expiry: '', shift_start: '', shift_end: '', availability: '', contract_type: 'Full-time',
 })
 
 const unknown = (value: string | number | null | undefined) => value ?? 'Unknown'
@@ -135,6 +135,16 @@ export function DriversPage() {
   const vehicles = useLoad(api.vehicles)
   const [form, setForm] = useState(emptyDriver)
   const [error, setError] = useState('')
+
+  const handleAssignVehicle = async (driverId: string, vehicleId: string) => {
+    try {
+      await api.assignDriverVehicle(driverId, vehicleId)
+      await Promise.all([drivers.reload(), vehicles.reload()])
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not assign vehicle.')
+    }
+  }
+
   const create = async (event: FormEvent) => {
     event.preventDefault()
     setError('')
@@ -144,9 +154,17 @@ export function DriversPage() {
       await drivers.reload()
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not create driver.') }
   }
-  return <Page eyebrow="Resources" title="Drivers" description="Manage driver contact details, qualifications, shifts, availability, and vehicle assignments.">
+  return <Page eyebrow="Resources" title="Drivers" description="Manage driver contact details, qualifications, shifts, availability, contract types, and vehicle assignments.">
     <Panel title="Add driver"><form className="form-row" onSubmit={create}>
       <label className="field">Full name<input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
+      <label className="field">Contract type
+        <select value={form.contract_type} onChange={(e) => setForm({ ...form, contract_type: e.target.value })}>
+          <option value="Full-time">Full-time (PKWT/PKWTT)</option>
+          <option value="Contract">Fixed-Term Contract</option>
+          <option value="Freelance">Freelance / On-Demand</option>
+          <option value="Mitra">Mitra Partner</option>
+        </select>
+      </label>
       <label className="field">Contact phone<input type="tel" value={form.contact_phone} onChange={(e) => setForm({ ...form, contact_phone: e.target.value })} /></label>
       <label className="field">License class<input value={form.license_class} onChange={(e) => setForm({ ...form, license_class: e.target.value })} /></label>
       <label className="field">License expiry<input type="date" value={form.license_expiry} onChange={(e) => setForm({ ...form, license_expiry: e.target.value })} /></label>
@@ -157,21 +175,65 @@ export function DriversPage() {
       </select></label>
       <button className="button primary">Add driver</button>
     </form>{error && <ErrorMessage>{error}</ErrorMessage>}</Panel>
-    <Panel title="Current vehicle allocation">
+    <Panel title="Vehicle Fleet Allocation" action={<button className="button" type="button" onClick={() => void Promise.all([drivers.reload(), vehicles.reload()])}>Refresh</button>}>
       {vehicles.loading || drivers.loading ? <Loading /> : vehicles.error ? <ErrorMessage>{vehicles.error}</ErrorMessage> :
         drivers.error ? <ErrorMessage>{drivers.error}</ErrorMessage> :
-        <Table headers={['Vehicle', 'Current driver']}>{(vehicles.data ?? []).map((vehicle) => {
+        <Table headers={['Vehicle', 'Registration', 'Model / Fuel', 'Status', 'Assigned Driver']}>{(vehicles.data ?? []).map((vehicle) => {
           const current = drivers.data?.find((driver) => driver.vehicle_id === vehicle.id)
-          return <tr key={vehicle.id}><td>{vehicle.name}</td><td>{current?.name ?? 'Unassigned'}</td>
+          return <tr key={vehicle.id}>
+            <td><strong>{vehicle.name}</strong></td>
+            <td>{unknown(vehicle.registration)}</td>
+            <td>{vehicle.model || vehicle.type} {vehicle.fuel_type ? `· ${vehicle.fuel_type}` : ''}</td>
+            <td><Status value={vehicle.status} /></td>
+            <td>
+              <select
+                value={current?.id ?? ''}
+                onChange={(e) => {
+                  const targetDriverId = e.target.value
+                  if (!targetDriverId && current) {
+                    void handleAssignVehicle(current.id, '')
+                  } else if (targetDriverId) {
+                    void handleAssignVehicle(targetDriverId, vehicle.id)
+                  }
+                }}
+                style={{ minWidth: '150px', padding: '3px 6px', fontSize: '12px' }}
+              >
+                <option value="">Unassigned</option>
+                {(drivers.data ?? []).map((drv) => (
+                  <option key={drv.id} value={drv.id}>
+                    {drv.name} {drv.vehicle_id && drv.vehicle_id !== vehicle.id ? '(Has car)' : ''}
+                  </option>
+                ))}
+              </select>
+            </td>
           </tr>
         })}</Table>}
     </Panel>
     <Panel title="Driver register">
       {drivers.loading ? <Loading /> : drivers.error ? <ErrorMessage>{drivers.error}</ErrorMessage> :
-        <Table headers={['Name', 'Contact phone', 'Existing contact', 'License class', 'License expiry', 'Shift start', 'Shift end', 'Availability', 'Assigned vehicle']}>{(drivers.data ?? []).map((d) =>
-          <tr key={d.id}><td><Link to={`/resources/drivers/${encodeURIComponent(d.id)}`}>{d.name}</Link></td><td>{unknown(d.contact_phone)}</td><td>{unknown(d.contact)}</td><td>{unknown(d.license_class)}</td>
-            <td>{unknown(d.license_expiry)}</td><td>{unknown(d.shift_start)}</td><td>{unknown(d.shift_end)}</td><td>{unknown(d.availability)}</td>
-            <td>{vehicles.data?.find((v) => v.id === d.vehicle_id)?.name ?? 'Unassigned'}</td></tr>)}</Table>}
+        <Table headers={['Name', 'Contract', 'Contact phone', 'License class', 'License expiry', 'Shift', 'Availability', 'Assigned car']}>{(drivers.data ?? []).map((d) =>
+          <tr key={d.id}><td><Link to={`/resources/drivers/${encodeURIComponent(d.id)}`}>{d.name}</Link></td>
+            <td><span style={{ fontSize: '12px', background: '#e7f5ff', color: '#1c7ed6', padding: '2px 6px', borderRadius: '4px' }}>{unknown(d.contract_type)}</span></td>
+            <td>{unknown(d.contact_phone)}</td><td>{unknown(d.license_class)}</td>
+            <td>{unknown(d.license_expiry)}</td><td>{d.shift_start && d.shift_end ? `${d.shift_start} - ${d.shift_end}` : '—'}</td><td>{unknown(d.availability)}</td>
+            <td>
+              <select
+                value={d.vehicle_id ?? ''}
+                onChange={(e) => void handleAssignVehicle(d.id, e.target.value)}
+                style={{ minWidth: '130px', padding: '3px 6px', fontSize: '12px' }}
+              >
+                <option value="">Unassigned</option>
+                {(vehicles.data ?? []).map((v) => {
+                  const heldByOther = drivers.data?.some((other) => other.id !== d.id && other.vehicle_id === v.id)
+                  return (
+                    <option key={v.id} value={v.id} disabled={heldByOther}>
+                      {v.name} {heldByOther ? '(Assigned)' : ''}
+                    </option>
+                  )
+                })}
+              </select>
+            </td>
+          </tr>)}</Table>}
       {!drivers.loading && !drivers.error && drivers.data?.length === 0 && <p className="empty-state">No drivers registered.</p>}
     </Panel>
   </Page>
@@ -237,6 +299,7 @@ export function DriverDetailPage() {
     action={<Link className="button" to="/resources/drivers">Back to drivers</Link>}>
     <Panel title="Driver profile">
       <Table headers={['Field', 'Value']}>
+        <tr><th scope="row">Contract type</th><td>{unknown(driver.contract_type)}</td></tr>
         <tr><th scope="row">Contact phone</th><td>{unknown(driver.contact_phone)}</td></tr>
         <tr><th scope="row">License class</th><td>{unknown(driver.license_class)}</td></tr>
         <tr><th scope="row">License expiry</th><td>{unknown(driver.license_expiry)}</td></tr>

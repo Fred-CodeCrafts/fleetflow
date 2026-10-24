@@ -24,6 +24,7 @@ export interface Driver {
   shift_start: string | null
   shift_end: string | null
   availability: string | null
+  contract_type: string | null
   vehicle_id?: string
 }
 
@@ -214,6 +215,11 @@ export const api = {
     'capacity' | 'maintenance_history'>>) =>
     request<Vehicle>('/api/vehicles', { method: 'POST', body: JSON.stringify(vehicle) }),
   createDriver: (driver: Pick<Driver, 'name'> & Partial<Pick<Driver,
-    'contact' | 'contact_phone' | 'license_class' | 'license_expiry' | 'shift_start' | 'shift_end' | 'availability'>>) =>
+    'contact' | 'contact_phone' | 'license_class' | 'license_expiry' | 'shift_start' | 'shift_end' | 'availability' | 'contract_type'>>) =>
     request<Driver>('/api/drivers', { method: 'POST', body: JSON.stringify(driver) }),
+  assignDriverVehicle: (driverId: string, vehicleId: string) =>
+    request<Driver>(`/api/drivers/${encodeURIComponent(driverId)}/vehicle`, {
+      method: 'PUT',
+      body: JSON.stringify({ vehicle_id: vehicleId }),
+    }),
 }
