@@ -113,7 +113,7 @@ func main() {
 	defer stop()
 
 	opts := []api.Option{
-		api.WithRouter(router),
+		api.WithRouter(osrm.NewFallbackRouter(router)),
 		api.WithLogger(logger),
 	}
 	var simulationRepo simulation.Repository
