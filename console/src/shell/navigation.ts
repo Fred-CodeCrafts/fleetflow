@@ -99,14 +99,15 @@ export const navigation: NavBranch[] = [
         label: 'Trips',
         icon: 'orders',
         path: '/operations/trips',
-        keywords: ['orders', 'trips', 'history', 'SUMO', 'completed'],
+        keywords: ['orders', 'trips', 'history', 'simulation', 'completed'],
       },
       {
         id: 'operations.simulations',
-        label: 'SUMO Scenarios',
+        label: 'Simulation',
         icon: 'simulation',
         path: '/operations/simulations',
-        keywords: ['SUMO', 'scenario', 'seed', 'simulation', 'dispatch'],
+        visible: false,
+        keywords: ['scenario', 'seed', 'simulation', 'dispatch'],
       },
       {
         id: 'operations.routes',
@@ -122,7 +123,7 @@ export const navigation: NavBranch[] = [
     label: 'Resources',
     icon: 'vehicles',
     path: '/resources',
-    keywords: ['drivers', 'vehicles', 'fleet'],
+    keywords: ['drivers', 'vehicles', 'fleet', 'models'],
     requiresVisibleChildren: true,
     children: [
       {
@@ -131,6 +132,13 @@ export const navigation: NavBranch[] = [
         icon: 'vehicles',
         path: '/resources/vehicles',
         keywords: ['vehicle', 'truck', 'van', 'status', 'capacity', 'emission standard'],
+      },
+      {
+        id: 'resources.models',
+        label: 'Vehicle Models',
+        icon: 'vehicles',
+        path: '/resources/models',
+        keywords: ['model', 'vehicle model', 'specs', 'capacity', 'body type', 'fuel type'],
       },
       {
         id: 'resources.drivers',
