@@ -120,6 +120,8 @@ func NewServer(opts ...Option) *Server {
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /healthz", s.handleHealthz)
 	s.mux.Handle("GET /readyz", withTimeout(requestTimeout, http.HandlerFunc(s.handleReadyz)))
+	s.mux.HandleFunc("GET /api/healthz", s.handleHealthz)
+	s.mux.Handle("GET /api/readyz", withTimeout(requestTimeout, http.HandlerFunc(s.handleReadyz)))
 
 	s.mux.Handle("POST /api/locations", s.authed(s.handleCreateLocation))
 	s.mux.Handle("GET /api/locations", s.public(s.handleListLocations))

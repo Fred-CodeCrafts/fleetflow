@@ -68,23 +68,27 @@ func testServer(t *testing.T, opts ...Option) *Server {
 
 func TestHealthz(t *testing.T) {
 	s := testServer(t)
-	rec := httptest.NewRecorder()
 
-	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	for _, path := range []string{"/healthz", "/api/healthz"} {
+		t.Run(path, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", rec.Code)
-	}
-	if got := rec.Header().Get("Content-Type"); got != "application/json; charset=utf-8" {
-		t.Errorf("Content-Type = %q", got)
-	}
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200", rec.Code)
+			}
+			if got := rec.Header().Get("Content-Type"); got != "application/json; charset=utf-8" {
+				t.Errorf("Content-Type = %q", got)
+			}
 
-	var body map[string]string
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatalf("response is not JSON: %v", err)
-	}
-	if body["status"] != "ok" {
-		t.Errorf("body = %v, want status ok", body)
+			var body map[string]string
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatalf("response is not JSON: %v", err)
+			}
+			if body["status"] != "ok" {
+				t.Errorf("body = %v, want status ok", body)
+			}
+		})
 	}
 }
 
@@ -213,15 +217,19 @@ func TestReadyz_WithoutDatabase(t *testing.T) {
 
 func TestReadyz_DatabaseReachable(t *testing.T) {
 	s := testServer(t, WithDatabaseCheck(func(context.Context) error { return nil }))
-	rec := httptest.NewRecorder()
 
-	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+	for _, path := range []string{"/readyz", "/api/readyz"} {
+		t.Run(path, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", rec.Code)
-	}
-	if got := decodeBody(t, rec)["database"]; got != "reachable" {
-		t.Errorf("database = %v, want reachable", got)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200", rec.Code)
+			}
+			if got := decodeBody(t, rec)["database"]; got != "reachable" {
+				t.Errorf("database = %v, want reachable", got)
+			}
+		})
 	}
 }
 
