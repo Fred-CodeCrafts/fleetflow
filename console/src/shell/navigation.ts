@@ -159,7 +159,7 @@ export const navigation: NavBranch[] = [
         label: 'Maintenance',
         icon: 'reports',
         path: '/resources/maintenance',
-        keywords: ['maintenance', 'history', 'service', 'workshop', 'inspection', 'odometer', 'emissions'],
+        keywords: ['maintenance', 'history', 'service', 'workshop', 'inspection', 'odometer'],
       },
     ],
   },

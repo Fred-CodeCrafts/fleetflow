@@ -284,9 +284,9 @@ export function MaintenancePage() {
             </select>
           </label>
           <label className="field" style={{ flex: '1 1 100%' }}>
-            Service notes & emission check
+            Service notes
             <textarea
-              placeholder="Record replacement parts, technician diagnostics, and emissions inspection notes"
+              placeholder="Record replacement parts, technician diagnostics, and workshop repair notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
             />
