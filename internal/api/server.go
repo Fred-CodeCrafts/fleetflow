@@ -149,6 +149,8 @@ func (s *Server) routes() {
 	console := s.public(web.Handler().ServeHTTP)
 	s.mux.Handle("GET /{$}", console)
 	s.mux.Handle("GET /assets/", console)
+	s.mux.Handle("GET /trips", console)
+	s.mux.Handle("GET /trips/", console)
 	s.mux.Handle("GET /operations", console)
 	s.mux.Handle("GET /operations/", console)
 	s.mux.Handle("GET /resources", console)
