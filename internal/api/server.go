@@ -137,6 +137,8 @@ func (s *Server) routes() {
 	s.mux.Handle("POST /api/vehicles", s.public(s.handleCreateVehicle))
 	s.mux.Handle("GET /api/drivers", s.public(s.handleListDrivers))
 	s.mux.Handle("POST /api/drivers", s.public(s.handleCreateDriver))
+	s.mux.Handle("PUT /api/drivers/{id}/vehicle", s.public(s.handleAssignDriverVehicle))
+	s.mux.Handle("POST /api/drivers/{id}/vehicle", s.public(s.handleAssignDriverVehicle))
 	s.mux.Handle("GET /api/trips", s.public(s.handleListTrips))
 	s.mux.Handle("POST /api/trips", s.public(s.handleCreateTrip))
 	s.mux.Handle("PATCH /api/trips/{id}/status", s.public(s.handleUpdateTripStatus))

@@ -78,6 +78,27 @@ func TestDrivers_CreateExposesProfile(t *testing.T) {
 	}
 }
 
+func TestDrivers_AssignVehicle(t *testing.T) {
+	s := fleetServer(t)
+	rec := postJSON(t, s, "/api/drivers", `{"name":"Joko Widodo","contract_type":"Full-time"}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create status = %d: %s", rec.Code, rec.Body)
+	}
+	driverID := field(t, decodeBody(t, rec), "id")
+
+	assignRec := postJSON(t, s, "/api/drivers/"+driverID+"/vehicle", `{"vehicle_id":"B-1000-JKT"}`)
+	if assignRec.Code != http.StatusOK {
+		t.Fatalf("assign status = %d: %s", assignRec.Code, assignRec.Body)
+	}
+	assigned := decodeBody(t, assignRec)
+	if got := field(t, assigned, "vehicle_id"); got != "B-1000-JKT" {
+		t.Errorf("vehicle_id = %q, want B-1000-JKT", got)
+	}
+	if got := field(t, assigned, "contract_type"); got != "Full-time" {
+		t.Errorf("contract_type = %q, want Full-time", got)
+	}
+}
+
 func TestDrivers_RejectInvalidProfileValues(t *testing.T) {
 	for _, body := range []string{
 		`{"name":"Ada","contact_phone":"call me"}`,
