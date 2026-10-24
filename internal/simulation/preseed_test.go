@@ -2,34 +2,13 @@ package simulation_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"fleetflow/internal/simulation"
 	"fleetflow/internal/simulation/memory"
 	"fleetflow/internal/simulation/sumo"
 )
-
-func TestDefaultPreseededRunAndSyntheticRunner(t *testing.T) {
-	run := simulation.DefaultPreseededRun()
-	if run.ID != simulation.PreseededRunID {
-		t.Fatalf("preseeded run ID = %q, want %q", run.ID, simulation.PreseededRunID)
-	}
-	if run.Result == nil || len(run.Result.Tracks) == 0 || len(run.Result.Trips) == 0 {
-		t.Fatalf("preseeded run result is incomplete: %#v", run.Result)
-	}
-	if len(simulation.JakartaLogisticsHubs) != 5 {
-		t.Fatalf("expected 5 logistics hubs, got %d", len(simulation.JakartaLogisticsHubs))
-	}
-
-	runner := simulation.NewSyntheticRunner()
-	res, err := runner.Run(context.Background(), sumo.Scenario{Seed: 999, Vehicles: 5})
-	if err != nil {
-		t.Fatalf("synthetic runner failed: %v", err)
-	}
-	if res.Seed != 999 {
-		t.Fatalf("synthetic runner seed = %d, want 999", res.Seed)
-	}
-}
 
 // A simulated trip has to name the vehicle that drove it and the places it ran
 // between: without them the console can only show an unassigned trip on an
@@ -55,54 +34,81 @@ func TestSimulatedTripsCarryVehicleAndRealPlaces(t *testing.T) {
 			t.Fatalf("trip %q never leaves its origin", trip.ID)
 		}
 	}
+}
 
-	preseeded := simulation.DefaultPreseededRun()
-	for _, trip := range preseeded.Result.Trips {
-		if trip.VehicleID == "" {
-			t.Fatalf("preseeded trip %q has no vehicle", trip.ID)
-		}
-		if !named[trip.Origin] || !named[trip.Destination] {
-			t.Fatalf("preseeded trip %q runs %q -> %q, which are not Jakarta hubs", trip.ID, trip.Origin, trip.Destination)
-		}
+func TestSyntheticRunnerUsesRequestedSeed(t *testing.T) {
+	runner := simulation.NewSyntheticRunner()
+	res, err := runner.Run(context.Background(), sumo.Scenario{Seed: 999, Vehicles: 5})
+	if err != nil {
+		t.Fatalf("synthetic runner failed: %v", err)
 	}
-	// The run's own tracks must answer to the vehicles its trips name, or the
-	// console cannot draw the route of a trip it lists.
-	for _, trip := range preseeded.Result.Trips {
-		found := false
-		for _, track := range preseeded.Result.Tracks {
-			if track.VehicleID == trip.VehicleID {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Fatalf("preseeded trip %q names vehicle %q with no position track", trip.ID, trip.VehicleID)
-		}
+	if res.Seed != 999 {
+		t.Fatalf("synthetic runner seed = %d, want 999", res.Seed)
 	}
 }
 
-func TestSeedDefaultRun(t *testing.T) {
+// The three presets must be stored as real completed runs whose size matches the
+// mode they stand for, and seeding twice must not duplicate them: a restart is
+// not a second scenario.
+func TestSeedPresetRunsIsIdempotentAndComplete(t *testing.T) {
 	repo := memory.New()
 	svc, err := simulation.NewService(context.Background(), repo, simulation.NewSyntheticRunner(), nil)
 	if err != nil {
 		t.Fatalf("NewService failed: %v", err)
 	}
-	defer svc.Shutdown(context.Background())
+	defer func() { _ = svc.Shutdown(context.Background()) }()
 
-	if err := svc.SeedDefaultRun(context.Background()); err != nil {
-		t.Fatalf("SeedDefaultRun failed: %v", err)
+	if err := svc.SeedPresetRuns(context.Background()); err != nil {
+		t.Fatalf("SeedPresetRuns failed: %v", err)
 	}
 
-	seeded, err := svc.Get(context.Background(), simulation.PreseededRunID)
+	for _, preset := range simulation.PresetRuns {
+		seeded, err := svc.Get(context.Background(), preset.ID)
+		if err != nil {
+			t.Fatalf("Get preset %q failed: %v", preset.ID, err)
+		}
+		if seeded.Status != simulation.StatusCompleted {
+			t.Fatalf("preset %q status = %q, want completed", preset.ID, seeded.Status)
+		}
+		if seeded.Result == nil {
+			t.Fatalf("preset %q has no result", preset.ID)
+		}
+		if got := len(seeded.Result.Trips); got != preset.Scenario.Vehicles {
+			t.Fatalf("preset %q has %d trips, want %d", preset.ID, got, preset.Scenario.Vehicles)
+		}
+		if len(seeded.Result.Tracks) == 0 || len(seeded.Result.Deliveries) == 0 {
+			t.Fatalf("preset %q is missing tracks or deliveries", preset.ID)
+		}
+	}
+
+	if err := svc.SeedPresetRuns(context.Background()); err != nil {
+		t.Fatalf("second SeedPresetRuns failed: %v", err)
+	}
+	runs, err := svc.List(context.Background())
 	if err != nil {
-		t.Fatalf("Get preseeded run failed: %v", err)
+		t.Fatalf("List failed: %v", err)
 	}
-	if seeded.Status != simulation.StatusCompleted {
-		t.Fatalf("seeded status = %q, want completed", seeded.Status)
+	if len(runs) != len(simulation.PresetRuns) {
+		t.Fatalf("seeding twice produced %d runs, want %d", len(runs), len(simulation.PresetRuns))
 	}
+}
 
-	// Calling SeedDefaultRun again should be idempotent
-	if err := svc.SeedDefaultRun(context.Background()); err != nil {
-		t.Fatalf("idempotent SeedDefaultRun failed: %v", err)
+// The fleet register is only as large as the widest preset: all three modes draw
+// from one plate sequence, so a peak run's vehicles are the first fifty of the
+// same fleet rather than a second one.
+func TestPresetsShareOneFleetSequence(t *testing.T) {
+	seen := map[string]bool{}
+	for _, preset := range simulation.PresetRuns {
+		res := simulation.GenerateSyntheticScenario(preset.Scenario.Seed, preset.Scenario.Vehicles, preset.Scenario.DepartureWindowS)
+		for i, trip := range res.Trips {
+			want := fmt.Sprintf("B-%04d-JKT", 9001+i)
+			if trip.VehicleID != want {
+				t.Fatalf("preset %q trip %d rides %q, want %q", preset.ID, i, trip.VehicleID, want)
+			}
+			seen[trip.VehicleID] = true
+		}
+	}
+	if len(seen) > 100 {
+		t.Fatalf("presets span %d vehicles, want at most the 100 of the largest mode", len(seen))
 	}
 }

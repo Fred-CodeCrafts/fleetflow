@@ -19,6 +19,7 @@ import (
 	authmemory "fleetflow/internal/auth/memory"
 	authpostgres "fleetflow/internal/auth/postgres"
 	"fleetflow/internal/config"
+	"fleetflow/internal/dispatch"
 	"fleetflow/internal/driver"
 	drivermemory "fleetflow/internal/driver/memory"
 	driverpostgres "fleetflow/internal/driver/postgres"
@@ -117,6 +118,11 @@ func main() {
 		api.WithLogger(logger),
 	}
 	var simulationRepo simulation.Repository
+	// Both branches keep the fleet services in locals: the API options and the
+	// scenario dispatcher must be the same instances, or a dispatched vehicle
+	// would not appear in the register the console reads.
+	var fleetSvc *vehicle.Service
+	var tripSvc *trip.Service
 
 	if cfg.DatabaseDSN != "" {
 		// A database that is configured but unreachable stops the process: a
@@ -132,13 +138,16 @@ func main() {
 		keys := auth.NewService(authpostgres.New(pool))
 		simulationRepo = simulationpostgres.New(pool)
 
+		fleetSvc = vehicle.NewService(vehiclepostgres.New(pool))
+		tripSvc = trip.NewService(trippostgres.New(pool))
+
 		// The record endpoints read and write through these. The pool is shared,
 		// so the process still owns exactly one.
 		opts = append(opts,
 			api.WithDatabaseCheck(pool.Ping),
-			api.WithVehicles(vehicle.NewService(vehiclepostgres.New(pool))),
+			api.WithVehicles(fleetSvc),
 			api.WithDrivers(driver.NewService(driverpostgres.New(pool))),
-			api.WithTrips(trip.NewService(trippostgres.New(pool))),
+			api.WithTrips(tripSvc),
 			api.WithAPIKeys(keys),
 		)
 		logger.Info("fleet records and api keys in postgres",
@@ -150,12 +159,12 @@ func main() {
 		// configuration always has a database.
 		keys := authmemory.New()
 		simulationRepo = simulationmemory.New()
-		vehicleSvc := vehicle.NewService(vehiclememory.New())
+		fleetSvc = vehicle.NewService(vehiclememory.New())
 		driverSvc := driver.NewService(drivermemory.New())
-		tripSvc := trip.NewService(tripmemory.New())
-		seedMemoryFleet(ctx, vehicleSvc, driverSvc, tripSvc)
+		tripSvc = trip.NewService(tripmemory.New())
+		seedMemoryFleet(ctx, fleetSvc, driverSvc, tripSvc)
 		opts = append(opts,
-			api.WithVehicles(vehicleSvc),
+			api.WithVehicles(fleetSvc),
 			api.WithDrivers(driverSvc),
 			api.WithTrips(tripSvc),
 			api.WithAPIKeys(auth.NewService(keys)),
@@ -164,6 +173,12 @@ func main() {
 	}
 
 	var simService *simulation.Service
+	// The scenario dispatcher needs the same fleet stores the API serves from, so
+	// they are kept in locals rather than created inline in the options above.
+	var simOptions []simulation.Option
+	if fleetSvc != nil && tripSvc != nil {
+		simOptions = append(simOptions, simulation.WithDispatcher(dispatch.New(fleetSvc, tripSvc)))
+	}
 	if cfg.SumoRuntime.Network != "" {
 		runtime := cfg.SumoRuntime
 		runner, err := sumo.NewRunner(ctx, sumo.Toolchain{
@@ -177,7 +192,7 @@ func main() {
 		if err != nil {
 			fatal(logger, "SUMO runtime configured but unusable", slog.String("error", err.Error()))
 		}
-		simService, err = simulation.NewService(ctx, simulationRepo, runner, logger)
+		simService, err = simulation.NewService(ctx, simulationRepo, runner, logger, simOptions...)
 		if err != nil {
 			fatal(logger, "could not initialize SUMO simulation service", slog.String("error", err.Error()))
 		}
@@ -186,7 +201,7 @@ func main() {
 			slog.String("binary", runtime.Binary))
 	} else {
 		var err error
-		simService, err = simulation.NewService(ctx, simulationRepo, simulation.NewSyntheticRunner(), logger)
+		simService, err = simulation.NewService(ctx, simulationRepo, simulation.NewSyntheticRunner(), logger, simOptions...)
 		if err != nil {
 			logger.Warn("could not initialize simulation service", slog.String("error", err.Error()))
 		} else {
@@ -194,6 +209,12 @@ func main() {
 		}
 	}
 	if simService != nil {
+		// The three demand modes are seeded here rather than generated when the
+		// page opens: the console reads them like any other stored run, and the
+		// fleet they describe exists because the dispatch ran once at startup.
+		if err := simService.SeedPresetRuns(ctx); err != nil {
+			logger.Warn("could not seed the scenario presets", slog.String("error", err.Error()))
+		}
 		opts = append(opts, api.WithSimulation(simService))
 	}
 
@@ -215,7 +236,7 @@ func fatal(logger *slog.Logger, msg string, attrs ...slog.Attr) {
 }
 
 func ptrFloat(f float64) *float64 { return &f }
-func ptrInt(i int) *int             { return &i }
+func ptrInt(i int) *int           { return &i }
 
 func seedMemoryFleet(ctx context.Context, vSvc *vehicle.Service, dSvc *driver.Service, tSvc *trip.Service) {
 	vehicles := []vehicle.CreateInput{
