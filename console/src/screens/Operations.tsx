@@ -22,9 +22,15 @@ export function LiveMapPage() {
   const selectedRun = useSimulationRun(selectedRunID)
 
   useEffect(() => {
+    if (!selectedRunID && runs.data && runs.data.length > 0 && runs.data[0]) {
+      setSelectedRunID(runs.data[0].id)
+    }
+  }, [selectedRunID, runs.data])
+
+  useEffect(() => {
     if (selectedRun.run?.status === 'completed' && selectedRun.run.result?.tracks?.length) {
       setViewMode('simulation')
-      setMessage(`Simulation completed: ${selectedRun.run.result.trips.length} trips generated.`)
+      setMessage(`Simulation ready: ${selectedRun.run.result.trips.length} active fleet routes across Jakarta logistics hubs.`)
     }
   }, [selectedRun.run?.status, selectedRun.run?.result?.tracks?.length, selectedRun.run?.result?.trips?.length])
 
@@ -116,6 +122,7 @@ export function LiveMapPage() {
       <RoutingMap
         positionMode={viewMode === 'simulation' ? 'simulation' : 'live'}
         simulationTracks={viewMode === 'simulation' ? tracks : undefined}
+        simulationStops={viewMode === 'simulation' ? (selectedRun.run?.result?.deliveries?.flatMap((d) => d.stops) ?? []) : undefined}
       />
 
       <p className="muted">
