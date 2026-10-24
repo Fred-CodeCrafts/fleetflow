@@ -78,4 +78,8 @@ func TestRunnerExecutesSUMOWhenConfigured(t *testing.T) {
 	if len(result.Trips) != 3 || len(result.Tracks) == 0 || result.SUMOVersion == "" {
 		t.Fatalf("incomplete SUMO result: trips=%d tracks=%d version=%q", len(result.Trips), len(result.Tracks), result.SUMOVersion)
 	}
+	if result.Emissions.Model != emissionModelName || result.Emissions.Class != emissionClassName ||
+		result.Emissions.InputUnit != "mg" || result.Emissions.OutputUnit != "kg" {
+		t.Fatalf("emission provenance = %#v", result.Emissions)
+	}
 }

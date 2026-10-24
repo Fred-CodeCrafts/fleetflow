@@ -119,9 +119,13 @@ func (r *Runner) Run(ctx context.Context, scenario Scenario) (Result, error) {
 		"--min-distance", strconv.Itoa(minTripDistanceM),
 		"--max-distance", strconv.Itoa(maxTripDistanceM),
 		"--no-validate",
+		"--vehicle-class", "passenger",
 	}
 	if _, err := r.runCommand(ctx, workDir, "generate seeded demand", r.tools.Python, args...); err != nil {
 		return Result{}, err
+	}
+	if err := pinEmissionClass(demandPath); err != nil {
+		return Result{}, fmt.Errorf("pin SUMO emission class: %w", err)
 	}
 
 	args = []string{
@@ -197,8 +201,16 @@ func (r *Runner) Run(ctx context.Context, scenario Scenario) (Result, error) {
 		Seed:        scenario.Seed,
 		StartedAt:   startedAt,
 		FinishedAt:  time.Now().UTC(),
-		Trips:       trips,
-		Tracks:      tracks,
+		Emissions: EmissionProvenance{
+			Model:       emissionModelName,
+			Class:       emissionClassName,
+			Source:      "SUMO tripinfo CO2_abs and fuel_abs",
+			InputUnit:   "mg",
+			OutputUnit:  "kg",
+			Assumptions: "All generated vehicles use the HBEFA3 Euro 4 gasoline passenger-car class; these are model estimates, not fleet-specific or measured activity.",
+		},
+		Trips:  trips,
+		Tracks: tracks,
 	}, nil
 }
 

@@ -10,6 +10,10 @@ const (
 	maxVehicles     = 500
 	maxSeed         = 2147483647
 	maxDepartureWin = 24 * 60 * 60
+
+	defaultVehicleTypeID = "fleetflow_passenger"
+	emissionModelName    = "HBEFA3"
+	emissionClassName    = "HBEFA3/PC_G_EU4"
 )
 
 var errScenarioInvalid = errors.New("invalid SUMO scenario")
@@ -62,11 +66,21 @@ type Track struct {
 	Positions []Position `json:"positions"`
 }
 
+type EmissionProvenance struct {
+	Model       string `json:"model"`
+	Class       string `json:"class"`
+	Source      string `json:"source"`
+	InputUnit   string `json:"input_unit"`
+	OutputUnit  string `json:"output_unit"`
+	Assumptions string `json:"assumptions"`
+}
+
 type Result struct {
-	SUMOVersion string    `json:"sumo_version"`
-	Seed        int64     `json:"seed"`
-	StartedAt   time.Time `json:"started_at"`
-	FinishedAt  time.Time `json:"finished_at"`
-	Trips       []Trip    `json:"trips"`
-	Tracks      []Track   `json:"tracks"`
+	SUMOVersion string             `json:"sumo_version"`
+	Seed        int64              `json:"seed"`
+	StartedAt   time.Time          `json:"started_at"`
+	FinishedAt  time.Time          `json:"finished_at"`
+	Emissions   EmissionProvenance `json:"emissions"`
+	Trips       []Trip             `json:"trips"`
+	Tracks      []Track            `json:"tracks"`
 }

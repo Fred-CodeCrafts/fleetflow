@@ -34,7 +34,15 @@ func TestRepositoryPersistsRunAndReturnsDetailedResult(t *testing.T) {
 	run.Result = &sumo.Result{
 		SUMOVersion: "SUMO test",
 		Seed:        42,
-		Trips:       []sumo.Trip{{ID: "fleetflow0", Status: sumo.TripCompleted}},
+		Emissions: sumo.EmissionProvenance{
+			Model:       "HBEFA3",
+			Class:       "HBEFA3/PC_G_EU4",
+			Source:      "SUMO tripinfo CO2_abs and fuel_abs",
+			InputUnit:   "mg",
+			OutputUnit:  "kg",
+			Assumptions: "test assumptions",
+		},
+		Trips: []sumo.Trip{{ID: "fleetflow0", Status: sumo.TripCompleted}},
 	}
 	if err := repo.Update(ctx, run); err != nil {
 		t.Fatal(err)
@@ -45,7 +53,8 @@ func TestRepositoryPersistsRunAndReturnsDetailedResult(t *testing.T) {
 		t.Fatal(err)
 	}
 	if found.Status != simulation.StatusCompleted || found.Result == nil ||
-		found.Result.SUMOVersion != run.Result.SUMOVersion || len(found.Result.Trips) != 1 {
+		found.Result.SUMOVersion != run.Result.SUMOVersion || found.Result.Emissions != run.Result.Emissions ||
+		len(found.Result.Trips) != 1 {
 		t.Fatalf("Get() returned incomplete run: %#v", found)
 	}
 	list, err := repo.List(ctx)
