@@ -94,6 +94,18 @@ func NewService(parent context.Context, repo Repository, executor Executor, logg
 	return s, nil
 }
 
+// SeedDefaultRun ensures that the default multi-hub Jakarta simulation run is present.
+func (s *Service) SeedDefaultRun(ctx context.Context) error {
+	if _, err := s.repo.Get(ctx, PreseededRunID); err == nil {
+		return nil
+	}
+	run := DefaultPreseededRun()
+	if err := s.repo.Create(ctx, run); err != nil {
+		return err
+	}
+	return s.repo.Update(ctx, run)
+}
+
 func (s *Service) Start(ctx context.Context, scenario sumo.Scenario) (Run, error) {
 	if ctx == nil {
 		return Run{}, domain.Invalid("simulation_context_required", "request context is required")
