@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { api, type SimulatedTrack, type SimulationRun } from '../api/client'
+import { api, type Coordinate, type OSRMRoute, type SimulatedTrack, type SimulationRun } from '../api/client'
 import { RoutingMap } from '../map/RoutingMap'
 import { ErrorMessage, formatNumber, Loading, Metric, Page, Panel, Status, Table, useLoad } from './Shared'
 
@@ -177,7 +177,11 @@ export function TripsPage() {
           <Table headers={['Trip ID', 'Origin', 'Destination', 'Assigned Vehicle', 'Status', 'Started', 'Finished / Duration', 'Actions']}>
             {filteredTrips.map((t) => (
               <tr key={t.id}>
-                <td><strong>{t.id.slice(0, 12)}</strong></td>
+                <td>
+                  <Link to={`/operations/trips/operational/${encodeURIComponent(t.id)}`} title="Open trip details and route map">
+                    <strong>{(t.id || '').slice(0, 12) || 'Trip'}</strong>
+                  </Link>
+                </td>
                 <td>{t.origin}</td>
                 <td>{t.destination}</td>
                 <td>
@@ -199,6 +203,13 @@ export function TripsPage() {
                     : '—'}
                 </td>
                 <td>
+                  <Link
+                    className="button"
+                    style={{ padding: '4px 8px', fontSize: '12px', marginRight: '6px' }}
+                    to={`/operations/trips/operational/${encodeURIComponent(t.id)}`}
+                  >
+                    Open trip
+                  </Link>
                   {t.status === 'planned' && (
                     <button
                       className="button primary"
@@ -270,7 +281,7 @@ export function TripsPage() {
         {runs.loading ? <Loading /> : runs.error ? <ErrorMessage>{runs.error}</ErrorMessage> :
           <Table headers={['Run', 'Status', 'Seed', 'Requested vehicles', 'Created', 'Open']}>
             {(runs.data ?? []).map((run) => <tr key={run.id}>
-              <td>{run.id.slice(0, 12)}</td><td><Status value={run.status} /></td><td>{run.scenario.seed}</td>
+              <td>{(run.id || '').slice(0, 12)}</td><td><Status value={run.status} /></td><td>{run.scenario.seed}</td>
               <td>{run.scenario.vehicles}</td><td>{new Date(run.created_at).toLocaleString()}</td>
               <td><button className="button" type="button" onClick={() => setSearchParams({ run: run.id })}>View simulation trips</button></td>
             </tr>)}
@@ -283,7 +294,7 @@ export function TripsPage() {
         {selected.loading ? <Loading /> : selected.error ? <ErrorMessage>{selected.error}</ErrorMessage> :
           selected.run?.status === 'failed' ? <ErrorMessage>{selected.run.error || 'Simulation run failed.'}</ErrorMessage> :
             selected.run?.result ? <Table headers={['Trip', 'Vehicle', 'Status', 'Distance', 'Duration', 'Fuel estimate', 'CO₂ estimate', 'Details']}>
-              {selected.run.result.trips.map((trip) => <tr key={trip.id}>
+              {(selected.run.result.trips ?? []).map((trip) => <tr key={trip.id}>
                 <td>{trip.id}</td><td>{trip.id}</td><td><Status value={trip.status} /></td>
                 <td>{formatNumber(trip.distance_m / 1000, 2)} km</td>
                 <td>{formatNumber(trip.duration_s / 60, 1)} min</td>
@@ -456,4 +467,178 @@ export function SimulationTripPage() {
     </Panel>
     <p className="help-text">Position samples, distance, duration, fuel, and emissions are simulation output, not real telemetry or measured activity.</p>
   </Page>
+}
+
+const jakartaHubLocations: Record<string, Coordinate> = {
+  'tanjung priok': { lat: -6.1030, lon: 106.8833 },
+  'pluit': { lat: -6.1245, lon: 106.7905 },
+  'halim': { lat: -6.2625, lon: 106.8911 },
+  'cilandak': { lat: -6.2921, lon: 106.8042 },
+  'tomang': { lat: -6.1750, lon: 106.7915 },
+  'kelapa gading': { lat: -6.1580, lon: 106.9080 },
+  'glodok': { lat: -6.1432, lon: 106.8155 },
+  'sudirman': { lat: -6.2150, lon: 106.8220 },
+  'senayan': { lat: -6.2270, lon: 106.7970 },
+  'grand indonesia': { lat: -6.1950, lon: 106.8215 },
+  'soekarno-hatta': { lat: -6.1275, lon: 106.6537 },
+  'cakung': { lat: -6.1950, lon: 106.9450 },
+  'pasar senen': { lat: -6.1740, lon: 106.8420 },
+  'marunda': { lat: -6.1050, lon: 106.9600 },
+  'sunter': { lat: -6.1380, lon: 106.8680 },
+  'kuningan': { lat: -6.2280, lon: 106.8300 },
+}
+
+function resolveLocation(name: string, fallback: Coordinate): Coordinate {
+  const lower = name.toLowerCase()
+  for (const [key, coord] of Object.entries(jakartaHubLocations)) {
+    if (lower.includes(key)) return coord
+  }
+  const parts = name.split(',').map((p) => Number(p.trim()))
+  if (parts.length === 2 && !isNaN(parts[0]!) && !isNaN(parts[1]!)) {
+    return { lat: parts[0]!, lon: parts[1]! }
+  }
+  return fallback
+}
+
+export function OperationalTripPage() {
+  const { tripID = '' } = useParams()
+  const trips = useLoad(api.trips)
+  const vehicles = useLoad(api.vehicles)
+  const drivers = useLoad(api.drivers)
+
+  const trip = (trips.data ?? []).find((t) => t.id === tripID)
+  const vehicle = (vehicles.data ?? []).find((v) => v.name === trip?.vehicle_id || v.id === trip?.vehicle_id)
+  const driver = (drivers.data ?? []).find((d) => d.vehicle_id === vehicle?.id)
+
+  const [route, setRoute] = useState<OSRMRoute | null>(null)
+  const [routeLoading, setRouteLoading] = useState(false)
+
+  const from = resolveLocation(trip?.origin ?? '', { lat: -6.1750, lon: 106.8215 })
+  const to = resolveLocation(trip?.destination ?? '', { lat: -6.2150, lon: 106.8220 })
+
+  useEffect(() => {
+    if (!trip) return
+    let disposed = false
+    setRouteLoading(true)
+    api.route(from, to)
+      .then((r) => {
+        if (!disposed) {
+          setRoute(r)
+          setRouteLoading(false)
+        }
+      })
+      .catch(() => {
+        if (!disposed) setRouteLoading(false)
+      })
+    return () => {
+      disposed = true
+    }
+  }, [trip?.origin, trip?.destination])
+
+  const handleAdvance = async (nextStatus: 'in_progress' | 'completed') => {
+    if (!trip) return
+    try {
+      await api.updateTripStatus(trip.id, nextStatus)
+      await trips.reload()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to update trip.')
+    }
+  }
+
+  if (trips.loading) {
+    return <Page eyebrow="Operations" title="Fleet trip details" description="Loading fleet trip."><Loading /></Page>
+  }
+  if (trips.error) {
+    return <Page eyebrow="Operations" title="Fleet trip details" description="Trip error."><ErrorMessage>{trips.error}</ErrorMessage></Page>
+  }
+  if (!trip) {
+    return (
+      <Page eyebrow="Operations" title="Trip details" description="Trip not found." action={<Link className="button" to="/operations/trips">Back to trips</Link>}>
+        <ErrorMessage>Trip with ID "{tripID}" could not be found.</ErrorMessage>
+      </Page>
+    )
+  }
+
+  return (
+    <Page
+      eyebrow="Operations"
+      title={`Trip ${trip.id.slice(0, 12)}`}
+      description={`Operational fleet mission from ${trip.origin} to ${trip.destination}.`}
+      action={<Link className="button" to="/operations/trips">Back to trips</Link>}
+    >
+      <div className="metric-grid">
+        <Metric label="Status" value={trip.status.replace('_', ' ').toUpperCase()} />
+        <Metric label="Origin" value={trip.origin} />
+        <Metric label="Destination" value={trip.destination} />
+        <Metric label="Assigned Vehicle" value={trip.vehicle_id || 'Unassigned'} />
+        {route && <Metric label="Estimated Distance" value={`${formatNumber(route.distance_m / 1000, 2)} km`} />}
+        {route && <Metric label="Estimated Duration" value={`${formatNumber(route.duration_s / 60, 1)} min`} />}
+      </div>
+
+      <Panel
+        title="Trip Route & Map"
+        action={
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {trip.status === 'planned' && (
+              <button className="button primary" type="button" onClick={() => void handleAdvance('in_progress')}>
+                Start Trip
+              </button>
+            )}
+            {trip.status === 'in_progress' && (
+              <button
+                className="button"
+                style={{ borderColor: '#0ca678', color: '#0ca678' }}
+                type="button"
+                onClick={() => void handleAdvance('completed')}
+              >
+                Complete Trip
+              </button>
+            )}
+          </div>
+        }
+      >
+        {routeLoading && <Loading />}
+        <RoutingMap
+          selectedPoints={{ from, to }}
+          route={route}
+        />
+      </Panel>
+
+      <Panel title="Trip Mission Specifications">
+        <Table headers={['Field', 'Value']}>
+          <tr><th scope="row">Trip ID</th><td>{trip.id}</td></tr>
+          <tr><th scope="row">Origin Facility</th><td>{trip.origin} ({from.lat.toFixed(4)}, {from.lon.toFixed(4)})</td></tr>
+          <tr><th scope="row">Destination Facility</th><td>{trip.destination} ({to.lat.toFixed(4)}, {to.lon.toFixed(4)})</td></tr>
+          <tr><th scope="row">Status</th><td><Status value={trip.status} /></td></tr>
+          <tr>
+            <th scope="row">Assigned Vehicle</th>
+            <td>
+              {vehicle ? (
+                <Link to={`/resources/vehicles/${encodeURIComponent(vehicle.id)}`}>
+                  {vehicle.name} ({vehicle.model || vehicle.type})
+                </Link>
+              ) : (
+                trip.vehicle_id || 'Unassigned'
+              )}
+            </td>
+          </tr>
+          <tr>
+            <th scope="row">Assigned Driver</th>
+            <td>
+              {driver ? (
+                <Link to={`/resources/drivers/${encodeURIComponent(driver.id)}`}>
+                  {driver.name} ({driver.contact_phone || 'Available'})
+                </Link>
+              ) : (
+                'Unassigned'
+              )}
+            </td>
+          </tr>
+          <tr><th scope="row">Started At</th><td>{trip.started_at ? new Date(trip.started_at).toLocaleString() : 'Not started yet'}</td></tr>
+          <tr><th scope="row">Finished At</th><td>{trip.finished_at ? new Date(trip.finished_at).toLocaleString() : 'In progress or scheduled'}</td></tr>
+          <tr><th scope="row">Recorded Duration</th><td>{trip.duration_s != null ? `${formatNumber(trip.duration_s / 60, 1)} minutes` : '—'}</td></tr>
+        </Table>
+      </Panel>
+    </Page>
+  )
 }
