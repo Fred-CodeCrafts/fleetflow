@@ -2,11 +2,25 @@ import { useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { ErrorMessage, Loading, Page, Panel, Status, Table, useLoad } from './Shared'
+import { getVehicleModels, type VehicleModel } from './Models'
 
-const emptyVehicle = () => ({
-  name: '', type: 'van', status: 'available', registration: '', make: '', model: '',
-  year: '', color: '', body_type: '', fuel_type: '', capacity: '', maintenance_history: '',
-})
+const initialVehicle = (models: VehicleModel[]) => {
+  const first = models[0]
+  return {
+    name: '',
+    type: (first?.type ?? 'van') as 'van' | 'truck' | 'car' | 'motorcycle',
+    status: 'available' as 'available' | 'offline',
+    registration: '',
+    make: '',
+    model: first?.name ?? '',
+    year: '',
+    color: '',
+    body_type: first?.body_type ?? '',
+    fuel_type: first?.fuel_type ?? '',
+    capacity: first ? String(first.capacity_kg) : '',
+    maintenance_history: '',
+  }
+}
 
 const emptyDriver = () => ({
   name: '', contact_phone: '', license_class: '', license_expiry: '', shift_start: '', shift_end: '', availability: '',
@@ -16,8 +30,26 @@ const unknown = (value: string | number | null | undefined) => value ?? 'Unknown
 
 export function VehiclesPage() {
   const vehicles = useLoad(api.vehicles)
-  const [form, setForm] = useState(emptyVehicle)
+  const availableModels = getVehicleModels()
+  const [form, setForm] = useState(() => initialVehicle(availableModels))
   const [error, setError] = useState('')
+
+  const onSelectModel = (modelName: string) => {
+    const selected = availableModels.find((m) => m.name === modelName)
+    if (selected) {
+      setForm((prev) => ({
+        ...prev,
+        model: selected.name,
+        type: selected.type,
+        body_type: selected.body_type,
+        fuel_type: selected.fuel_type,
+        capacity: String(selected.capacity_kg),
+      }))
+    } else {
+      setForm((prev) => ({ ...prev, model: modelName }))
+    }
+  }
+
   const create = async (event: FormEvent) => {
     event.preventDefault()
     setError('')
@@ -27,36 +59,46 @@ export function VehiclesPage() {
         year: form.year ? Number(form.year) : undefined,
         capacity: form.capacity ? Number(form.capacity) : undefined,
       })
-      setForm(emptyVehicle())
+      setForm(initialVehicle(availableModels))
       await vehicles.reload()
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not create vehicle.') }
   }
+
   return <Page eyebrow="Resources" title="Vehicles" description="Register fleet vehicles and review their specifications, maintenance, and operating status.">
     <Panel title="Add vehicle"><form className="form-row" onSubmit={create}>
-      <label className="field">Name<input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
-      <label className="field">Registration<input value={form.registration} onChange={(e) => setForm({ ...form, registration: e.target.value })} /></label>
-      <label className="field">Make<input value={form.make} onChange={(e) => setForm({ ...form, make: e.target.value })} /></label>
-      <label className="field">Model<input value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} /></label>
-      <label className="field">Year<input type="number" min="1886" step="1" value={form.year} onChange={(e) => setForm({ ...form, year: e.target.value })} /></label>
-      <label className="field">Color<input value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} /></label>
-      <label className="field">Body type<input value={form.body_type} onChange={(e) => setForm({ ...form, body_type: e.target.value })} /></label>
-      <label className="field">Fuel type<input value={form.fuel_type} onChange={(e) => setForm({ ...form, fuel_type: e.target.value })} /></label>
-      <label className="field">Capacity<input type="number" min="0" step="any" value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value })} /></label>
-      <label className="field">Type<select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-        <option value="van">Van</option><option value="truck">Truck</option><option value="car">Car</option><option value="motorcycle">Motorcycle</option>
-      </select></label>
-      <label className="field">Status<select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+      <label className="field">Name<input required placeholder="Vehicle identifier" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
+      <label className="field">Registration<input placeholder="e.g. B 1234 ABC" value={form.registration} onChange={(e) => setForm({ ...form, registration: e.target.value })} /></label>
+      <label className="field">Model
+        <select value={form.model} onChange={(e) => onSelectModel(e.target.value)}>
+          {availableModels.map((m) => (
+            <option key={m.id} value={m.name}>{m.name}</option>
+          ))}
+        </select>
+      </label>
+      <label className="field">Year<input type="number" min="1886" step="1" placeholder="Year" value={form.year} onChange={(e) => setForm({ ...form, year: e.target.value })} /></label>
+      <label className="field">Color<input placeholder="Color" value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} /></label>
+      <label className="field">
+        Cargo capacity (kg)
+        <input type="number" min="0" step="any" placeholder="Payload in kg" value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value })} />
+      </label>
+      <div className="field location-value">
+        <span>Model specs</span>
+        <output>{form.body_type || '—'} · {form.fuel_type || '—'} · {form.type.toUpperCase()}</output>
+      </div>
+      <label className="field">Status<select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as 'available' | 'offline' })}>
         <option value="available">Available</option><option value="offline">Offline</option>
       </select></label>
-      <label className="field">Maintenance history<textarea value={form.maintenance_history} onChange={(e) => setForm({ ...form, maintenance_history: e.target.value })} /></label>
+      <label className="field">Maintenance history<textarea placeholder="Service log or notes" value={form.maintenance_history} onChange={(e) => setForm({ ...form, maintenance_history: e.target.value })} /></label>
       <button className="button primary">Add vehicle</button>
-    </form>{error && <ErrorMessage>{error}</ErrorMessage>}</Panel>
+    </form>
+    <p className="help-text">Capacity indicates maximum payload weight in kilograms (kg). Body type and fuel type are automatically configured from the selected Vehicle Model.</p>
+    {error && <ErrorMessage>{error}</ErrorMessage>}</Panel>
     <Panel title="Vehicle register" action={<button className="button" onClick={() => void vehicles.reload()}>Refresh</button>}>
       {vehicles.loading ? <Loading /> : vehicles.error ? <ErrorMessage>{vehicles.error}</ErrorMessage> :
-        <Table headers={['Name', 'Registration', 'Make / model', 'Year', 'Color', 'Body / fuel', 'Capacity', 'Maintenance history', 'Status', 'Record ID']}>{(vehicles.data ?? []).map((v) =>
-          <tr key={v.id}><td><Link to={`/resources/vehicles/${encodeURIComponent(v.id)}`}>{v.name}</Link></td><td>{unknown(v.registration)}</td><td>{v.make || v.model ? `${v.make ?? ''} ${v.model ?? ''}`.trim() : 'Unknown'}</td>
+        <Table headers={['Name', 'Registration', 'Model', 'Year', 'Color', 'Body / fuel', 'Cargo capacity', 'Maintenance history', 'Status']}>{(vehicles.data ?? []).map((v) =>
+          <tr key={v.id}><td><Link to={`/resources/vehicles/${encodeURIComponent(v.id)}`}>{v.name}</Link></td><td>{unknown(v.registration)}</td><td>{v.model || v.make || 'Unknown'}</td>
             <td>{unknown(v.year)}</td><td>{unknown(v.color)}</td><td>{v.body_type || v.fuel_type ? `${v.body_type ?? 'Unknown'} / ${v.fuel_type ?? 'Unknown'}` : 'Unknown'}</td>
-            <td>{unknown(v.capacity)}</td><td>{unknown(v.maintenance_history)}</td><td><Status value={v.status} /></td><td>{v.id}</td></tr>)}</Table>}
+            <td>{v.capacity != null ? `${v.capacity} kg` : 'Unknown'}</td><td>{unknown(v.maintenance_history)}</td><td><Status value={v.status} /></td></tr>)}</Table>}
       {!vehicles.loading && !vehicles.error && vehicles.data?.length === 0 && <p className="empty-state">No vehicles registered.</p>}
     </Panel>
   </Page>
@@ -100,10 +142,10 @@ export function DriversPage() {
     </Panel>
     <Panel title="Driver register">
       {drivers.loading ? <Loading /> : drivers.error ? <ErrorMessage>{drivers.error}</ErrorMessage> :
-        <Table headers={['Name', 'Contact phone', 'Existing contact', 'License class', 'License expiry', 'Shift start', 'Shift end', 'Availability', 'Assigned vehicle', 'Record ID']}>{(drivers.data ?? []).map((d) =>
+        <Table headers={['Name', 'Contact phone', 'Existing contact', 'License class', 'License expiry', 'Shift start', 'Shift end', 'Availability', 'Assigned vehicle']}>{(drivers.data ?? []).map((d) =>
           <tr key={d.id}><td><Link to={`/resources/drivers/${encodeURIComponent(d.id)}`}>{d.name}</Link></td><td>{unknown(d.contact_phone)}</td><td>{unknown(d.contact)}</td><td>{unknown(d.license_class)}</td>
             <td>{unknown(d.license_expiry)}</td><td>{unknown(d.shift_start)}</td><td>{unknown(d.shift_end)}</td><td>{unknown(d.availability)}</td>
-            <td>{vehicles.data?.find((v) => v.id === d.vehicle_id)?.name ?? 'Unassigned'}</td><td>{d.id}</td></tr>)}</Table>}
+            <td>{vehicles.data?.find((v) => v.id === d.vehicle_id)?.name ?? 'Unassigned'}</td></tr>)}</Table>}
       {!drivers.loading && !drivers.error && drivers.data?.length === 0 && <p className="empty-state">No drivers registered.</p>}
     </Panel>
   </Page>
@@ -123,13 +165,12 @@ export function VehicleDetailPage() {
     <Panel title="Vehicle profile">
       <Table headers={['Field', 'Value']}>
         <tr><th scope="row">Registration</th><td>{unknown(vehicle.registration)}</td></tr>
-        <tr><th scope="row">Make</th><td>{unknown(vehicle.make)}</td></tr>
-        <tr><th scope="row">Model</th><td>{unknown(vehicle.model)}</td></tr>
+        <tr><th scope="row">Model</th><td>{unknown(vehicle.model || vehicle.make)}</td></tr>
         <tr><th scope="row">Year</th><td>{unknown(vehicle.year)}</td></tr>
         <tr><th scope="row">Color</th><td>{unknown(vehicle.color)}</td></tr>
         <tr><th scope="row">Body type</th><td>{unknown(vehicle.body_type)}</td></tr>
         <tr><th scope="row">Fuel type</th><td>{unknown(vehicle.fuel_type)}</td></tr>
-        <tr><th scope="row">Capacity</th><td>{unknown(vehicle.capacity)}</td></tr>
+        <tr><th scope="row">Cargo payload capacity</th><td>{vehicle.capacity != null ? `${vehicle.capacity} kg` : 'Unknown'}</td></tr>
         <tr><th scope="row">Status</th><td><Status value={vehicle.status} /></td></tr>
       </Table>
     </Panel>
