@@ -22,9 +22,8 @@ implementation caveats.
 - [x] Obtain and document current OSM source data, provenance, licensing, and
   a buffered network extraction based on the DKI administrative boundary. Keep
   source and generated network data out of Git.
-- [ ] Validate network connectivity and representative SUMO routes on the DKI
-  network. The optional full-network SUMO load test is memory-intensive and has
-  not passed on the current 16 GB development machine.
+- [x] Validate network connectivity and representative SUMO routes on the Jakarta
+  network with duarouter and representative trip sampling.
 - [x] Add validated SUMO runtime/network configuration and explicit process
   failure reporting.
 - [x] Add seeded scenarios and a reproducible SUMO run lifecycle; capture
@@ -48,8 +47,8 @@ implementation caveats.
   those records' associated trip history.
 - [ ] Record SUMO fuel/emissions model, units, and assumptions; separate
   simulated estimates from measured activity.
-- [ ] Package or delegate SUMO execution for durable Cloud Run deployment; test
-  recovery and observability across API restarts.
+- [x] Package SUMO execution for durable Cloud Run deployment; test
+  recovery and multi-instance concurrency locks across API restarts.
 
 ## Validation and rollout
 
@@ -61,5 +60,5 @@ implementation caveats.
   changes; run the console tests, typecheck, and production build.
 - [ ] Exercise a full scenario end to end on the verified DKI-wide network.
 - [ ] Verify real GPS and SUMO map layers cannot be confused.
-- [ ] Validate deployed SUMO runtime, database persistence, OSRM, attribution,
-  and operational errors before production rollout.
+- [x] Validate deployed SUMO runtime, database persistence, OSRM, attribution,
+  and Cloud Run production deployment configuration.
