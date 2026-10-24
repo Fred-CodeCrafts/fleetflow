@@ -47,6 +47,9 @@ export interface SimulationScenario {
 
 export interface SimulatedTrip {
   id: string
+  vehicle_id?: string
+  origin?: string
+  destination?: string
   status: 'running' | 'completed'
   depart_s: number
   arrival_s?: number
@@ -151,6 +154,42 @@ export interface VehicleLocation extends Coordinate {
   age_s: number
 }
 
+export interface EmissionsTotals {
+  trips: number
+  distance_km: number
+  co2_kg: number
+  fuel_kg: number
+  g_co2_per_km: number
+  runs: number
+}
+
+export interface EmissionsRun {
+  run_id: string
+  created_at: string
+  vehicles: number
+  trips: number
+  distance_km: number
+  co2_kg: number
+  fuel_kg: number
+  g_co2_per_km: number
+}
+
+export interface EmissionsVehicle {
+  vehicle_id: string
+  trips: number
+  distance_km: number
+  co2_kg: number
+  fuel_kg: number
+  g_co2_per_km: number
+}
+
+export interface EmissionsSummary {
+  totals: EmissionsTotals
+  runs: EmissionsRun[]
+  vehicles: EmissionsVehicle[]
+  method?: EmissionProvenance
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -222,4 +261,5 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ vehicle_id: vehicleId }),
     }),
+  emissionsSummary: () => request<EmissionsSummary>('/api/emissions/summary'),
 }

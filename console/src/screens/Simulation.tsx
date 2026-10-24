@@ -187,7 +187,7 @@ export function TripsPage() {
                 <td>
                   {t.vehicle_id ? (
                     <Link to={`/operations/fleet?vehicle=${encodeURIComponent(t.vehicle_id)}`}>
-                      {t.vehicle_id}
+                      {(vehicles.data ?? []).find((v) => v.id === t.vehicle_id)?.name ?? t.vehicle_id}
                     </Link>
                   ) : (
                     <span className="muted">Unassigned</span>
@@ -293,9 +293,17 @@ export function TripsPage() {
       {selectedID && <Panel title="Simulated Scenario Trips">
         {selected.loading ? <Loading /> : selected.error ? <ErrorMessage>{selected.error}</ErrorMessage> :
           selected.run?.status === 'failed' ? <ErrorMessage>{selected.run.error || 'Simulation run failed.'}</ErrorMessage> :
-            selected.run?.result ? <Table headers={['Trip', 'Vehicle', 'Status', 'Distance', 'Duration', 'Fuel estimate', 'CO₂ estimate', 'Details']}>
+            selected.run?.result ? <Table headers={['Trip', 'Vehicle', 'Origin', 'Destination', 'Status', 'Distance', 'Duration', 'Fuel estimate', 'CO₂ estimate', 'Details']}>
               {(selected.run.result.trips ?? []).map((trip) => <tr key={trip.id}>
-                <td>{trip.id}</td><td>{trip.id}</td><td><Status value={trip.status} /></td>
+                <td>{trip.id}</td>
+                <td>
+                  {trip.vehicle_id
+                    ? <Link to={`/operations/fleet?vehicle=${encodeURIComponent(trip.vehicle_id)}`}>{trip.vehicle_id}</Link>
+                    : <span className="muted">Not recorded</span>}
+                </td>
+                <td>{trip.origin || <span className="muted">Not recorded</span>}</td>
+                <td>{trip.destination || <span className="muted">Not recorded</span>}</td>
+                <td><Status value={trip.status} /></td>
                 <td>{formatNumber(trip.distance_m / 1000, 2)} km</td>
                 <td>{formatNumber(trip.duration_s / 60, 1)} min</td>
                 <td>{formatNumber(trip.fuel_kg, 3)} kg</td><td>{formatNumber(trip.co2_kg, 3)} kg</td>
@@ -394,7 +402,10 @@ export function SimulationTripPage() {
   const { runID = '', tripID = '' } = useParams()
   const selected = useSimulationRun(runID)
   const trip = selected.run?.result?.trips.find((item) => item.id === tripID)
-  const track = selected.run?.result?.tracks.find((item) => item.vehicle_id === tripID)
+  // A trip names its vehicle; SUMO output uses the trip id as the vehicle id,
+  // so fall back to the id for older stored runs.
+  const trackKey = trip?.vehicle_id || tripID
+  const track = selected.run?.result?.tracks.find((item) => item.vehicle_id === trackKey)
   const delivery = selected.run?.result?.deliveries?.find((item) => item.trip_id === tripID)
   const positions = track?.positions ?? []
   const route: SimulatedTrack[] = track ? [track] : []
@@ -412,6 +423,7 @@ export function SimulationTripPage() {
   return <Page eyebrow="Trips" title={trip.id} description={`Simulated vehicle route from run ${runID.slice(0, 12)}.`}
     action={<Link className="button" to={`/operations/trips?run=${encodeURIComponent(runID)}`}>Back to trips</Link>}>
     <div className="metric-grid">
+      <Metric label="Vehicle" value={trip.vehicle_id || 'Not recorded'} />
       <Metric label="Status" value={trip.status} />
       <Metric label="Distance" value={`${formatNumber(trip.distance_m / 1000, 2)} km`} />
       <Metric label="Duration" value={`${formatNumber(trip.duration_s / 60, 1)} min`} />
