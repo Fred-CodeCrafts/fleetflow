@@ -19,7 +19,7 @@ import (
 // departure window can bring that back, and this test fails instead of leaving it
 // to whoever notices the demo has no numbers in it.
 //
-// DESIGN 3.1 and docs/results.md carry the measurement; this keeps it true.
+// The defaults and DESIGN 3.1 carry the measurement; this keeps them honest.
 func TestDemoScenarioMakesTheArmsDiffer(t *testing.T) {
 	g, err := graph.LoadFromFile("../../data/graph.json")
 	if err != nil {
