@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"fleetflow/internal/dispatch"
-	"fleetflow/internal/simulation"
 	"fleetflow/internal/simulation/sumo"
 	"fleetflow/internal/trip"
 	"fleetflow/internal/vehicle"
@@ -83,9 +82,8 @@ func TestDispatchRecordsVehiclesAndTripsOnce(t *testing.T) {
 	fleet := &fakeFleet{}
 	trips := &fakeTrips{}
 	d := dispatch.New(fleet, trips)
-	run := simulation.Run{ID: "sim_test"}
 
-	if err := d.Dispatch(context.Background(), run, result()); err != nil {
+	if err := d.Dispatch(context.Background(), "sim_test", result()); err != nil {
 		t.Fatalf("Dispatch failed: %v", err)
 	}
 	if fleet.created != 2 {
@@ -113,7 +111,7 @@ func TestDispatchRecordsVehiclesAndTripsOnce(t *testing.T) {
 
 	// Dispatching the same scenario again must not grow the fleet or duplicate
 	// the history: a restart is not a second run.
-	if err := d.Dispatch(context.Background(), run, result()); err != nil {
+	if err := d.Dispatch(context.Background(), "sim_test", result()); err != nil {
 		t.Fatalf("second Dispatch failed: %v", err)
 	}
 	if fleet.created != 2 || len(trips.trips) != 2 {
@@ -123,10 +121,10 @@ func TestDispatchRecordsVehiclesAndTripsOnce(t *testing.T) {
 
 func TestDispatchWithoutStoresIsANoOp(t *testing.T) {
 	var d *dispatch.Dispatcher
-	if err := d.Dispatch(context.Background(), simulation.Run{ID: "sim"}, result()); err != nil {
+	if err := d.Dispatch(context.Background(), "sim", result()); err != nil {
 		t.Fatalf("nil dispatcher returned error: %v", err)
 	}
-	if err := dispatch.New(nil, nil).Dispatch(context.Background(), simulation.Run{ID: "sim"}, result()); err != nil {
+	if err := dispatch.New(nil, nil).Dispatch(context.Background(), "sim", result()); err != nil {
 		t.Fatalf("empty dispatcher returned error: %v", err)
 	}
 }

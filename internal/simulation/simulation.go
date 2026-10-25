@@ -68,7 +68,7 @@ type Executor interface {
 // depend on the fleet stores: a run is still valid as a stored result when no
 // dispatcher is wired, which is what the unit tests and a database-free run do.
 type Dispatcher interface {
-	Dispatch(ctx context.Context, run Run, result sumo.Result) error
+	Dispatch(ctx context.Context, runID string, result sumo.Result) error
 }
 
 // Option adjusts a Service at construction.
@@ -140,7 +140,7 @@ func (s *Service) SeedPresetRuns(ctx context.Context) error {
 			return fmt.Errorf("store preset run %s: %w", preset.ID, err)
 		}
 		if s.dispatcher != nil && run.Result != nil {
-			if err := s.dispatcher.Dispatch(ctx, run, *run.Result); err != nil {
+			if err := s.dispatcher.Dispatch(ctx, run.ID, *run.Result); err != nil {
 				s.logger.Warn("could not dispatch preset run into the fleet", "run_id", run.ID, "error", err)
 			}
 		}
@@ -298,7 +298,7 @@ func (s *Service) execute(run Run) {
 	// run, so a dispatch failure is a warning that leaves the scenario intact
 	// rather than a reason to mark a completed run failed.
 	if run.Status == StatusCompleted && s.dispatcher != nil && run.Result != nil {
-		if err := s.dispatcher.Dispatch(context.WithoutCancel(s.ctx), run, *run.Result); err != nil {
+		if err := s.dispatcher.Dispatch(context.WithoutCancel(s.ctx), run.ID, *run.Result); err != nil {
 			s.logger.Warn("could not dispatch scenario vehicles into the fleet", "run_id", run.ID, "error", err)
 		}
 	}

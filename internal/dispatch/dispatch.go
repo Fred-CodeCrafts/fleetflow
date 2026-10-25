@@ -10,6 +10,10 @@
 //
 // What it is not: a scheduler. It records what the scenario already decided; it
 // assigns no drivers and plans no new work.
+//
+// The package deliberately imports neither the simulation service nor the API: it
+// takes a run id and a result, which is all it needs, so the dependency runs one
+// way and the simulation package never learns that fleet stores exist.
 package dispatch
 
 import (
@@ -18,7 +22,6 @@ import (
 	"strconv"
 	"strings"
 
-	"fleetflow/internal/simulation"
 	"fleetflow/internal/simulation/sumo"
 	"fleetflow/internal/trip"
 	"fleetflow/internal/vehicle"
@@ -41,9 +44,7 @@ type Trips interface {
 //
 // The scenario decides where and how fast a vehicle drives, not what it is, so
 // these are assigned by the vehicle's position in the fleet sequence: stable for
-// a plate, and demo data rather than something the simulation reported. They
-// mirror the profiles in scripts/dev/seed-fleet.ps1 so a seeded fleet and a
-// dispatched fleet describe the same vehicles.
+// a plate, and demo data rather than something the simulation reported.
 type fleetProfile struct {
 	Make     string
 	Model    string
@@ -99,18 +100,31 @@ func New(fleet Fleet, trips Trips) *Dispatcher {
 // It is idempotent by content, not by run id: a vehicle is matched on its plate,
 // and a trip is skipped when the same vehicle already carries a trip between the
 // same two hubs. Re-running a mode, or restarting the server, therefore reuses
-// the rows it created the first time instead of growing the register.
+// the rows it created the first time instead of growing the register. The presets
+// are covered by a test that proves their hub pairs are distinct per vehicle, so
+// the reuse is a decision rather than a collision.
 //
-// Vehicles are registered as vans. The scenario decides how far and how fast a
-// vehicle drives, not what it is, so claiming a heavier class here would be
-// inventing a specification.
-func (d *Dispatcher) Dispatch(ctx context.Context, run simulation.Run, result sumo.Result) error {
+// Both stores are read once and indexed, because a dispatch of a hundred vehicles
+// would otherwise list the fleet a hundred times.
+func (d *Dispatcher) Dispatch(ctx context.Context, runID string, result sumo.Result) error {
 	if d == nil || d.fleet == nil || d.trips == nil {
 		return nil
 	}
 	existing, err := d.trips.List(ctx)
 	if err != nil {
 		return fmt.Errorf("list trips before dispatch: %w", err)
+	}
+	dispatched := make(map[string]bool, len(existing))
+	for _, t := range existing {
+		if t.VehicleID == "" {
+			continue
+		}
+		dispatched[tripKey(t.VehicleID, t.Origin, t.Destination)] = true
+	}
+
+	vehicles, err := d.vehicleIndex(ctx)
+	if err != nil {
+		return err
 	}
 
 	for _, simulated := range result.Trips {
@@ -120,11 +134,12 @@ func (d *Dispatcher) Dispatch(ctx context.Context, run simulation.Run, result su
 		if simulated.Origin == "" || simulated.Destination == "" || simulated.VehicleID == "" {
 			continue
 		}
-		vehicleID, err := d.ensureVehicle(ctx, simulated.VehicleID)
+		vehicleID, err := d.ensureVehicle(ctx, vehicles, simulated.VehicleID)
 		if err != nil {
-			return fmt.Errorf("register vehicle %q for run %s: %w", simulated.VehicleID, run.ID, err)
+			return fmt.Errorf("register vehicle %q for run %s: %w", simulated.VehicleID, runID, err)
 		}
-		if alreadyDispatched(existing, vehicleID, simulated.Origin, simulated.Destination) {
+		key := tripKey(vehicleID, simulated.Origin, simulated.Destination)
+		if dispatched[key] {
 			continue
 		}
 		created, err := d.trips.Create(ctx, trip.CreateInput{
@@ -134,8 +149,9 @@ func (d *Dispatcher) Dispatch(ctx context.Context, run simulation.Run, result su
 			Status:      trip.StatusPlanned.String(),
 		})
 		if err != nil {
-			return fmt.Errorf("record trip %q for run %s: %w", simulated.ID, run.ID, err)
+			return fmt.Errorf("record trip %q for run %s: %w", simulated.ID, runID, err)
 		}
+		dispatched[key] = true
 		// The scenario reports finished trips, so the record is walked through
 		// the states it actually passed rather than inserted as completed: the
 		// store derives the timestamps from those transitions, and a completed
@@ -145,23 +161,30 @@ func (d *Dispatcher) Dispatch(ctx context.Context, run simulation.Run, result su
 				return fmt.Errorf("advance trip %q to %s: %w", created.ID, status, err)
 			}
 		}
-		existing = append(existing, created)
 	}
 	return nil
 }
 
-// ensureVehicle returns the id of the vehicle with this plate, registering it
-// when the fleet does not know it yet.
-func (d *Dispatcher) ensureVehicle(ctx context.Context, plate string) (string, error) {
-	plate = strings.TrimSpace(plate)
+// vehicleIndex maps a plate, folded to lower case, to its stored vehicle id.
+func (d *Dispatcher) vehicleIndex(ctx context.Context) (map[string]string, error) {
 	vehicles, err := d.fleet.List(ctx, vehicle.ListFilter{})
 	if err != nil {
-		return "", fmt.Errorf("list vehicles: %w", err)
+		return nil, fmt.Errorf("list vehicles: %w", err)
 	}
+	index := make(map[string]string, len(vehicles))
 	for _, v := range vehicles {
-		if strings.EqualFold(v.Name, plate) {
-			return v.ID, nil
-		}
+		index[strings.ToLower(strings.TrimSpace(v.Name))] = v.ID
+	}
+	return index, nil
+}
+
+// ensureVehicle returns the id of the vehicle with this plate, registering it
+// when the fleet does not know it yet.
+func (d *Dispatcher) ensureVehicle(ctx context.Context, index map[string]string, plate string) (string, error) {
+	plate = strings.TrimSpace(plate)
+	key := strings.ToLower(plate)
+	if id, ok := index[key]; ok {
+		return id, nil
 	}
 	profile := profileFor(plate)
 	year, capacity := profile.Year, profile.Capacity
@@ -181,20 +204,15 @@ func (d *Dispatcher) ensureVehicle(ctx context.Context, plate string) (string, e
 	if err != nil {
 		return "", err
 	}
+	index[key] = created.ID
 	return created.ID, nil
 }
 
-// alreadyDispatched reports whether this vehicle already carries a trip between
-// these two places.
-func alreadyDispatched(trips []trip.Trip, vehicleID, origin, destination string) bool {
-	for _, t := range trips {
-		if t.VehicleID != vehicleID {
-			continue
-		}
-		if strings.EqualFold(strings.TrimSpace(t.Origin), origin) &&
-			strings.EqualFold(strings.TrimSpace(t.Destination), destination) {
-			return true
-		}
-	}
-	return false
+// tripKey is the identity a trip is deduplicated on: one vehicle, one pair of
+// places. The places are folded the same way the stores trim them, so a spelling
+// difference cannot smuggle in a duplicate.
+func tripKey(vehicleID, origin, destination string) string {
+	return vehicleID +
+		"\x00" + strings.ToLower(strings.TrimSpace(origin)) +
+		"\x00" + strings.ToLower(strings.TrimSpace(destination))
 }
