@@ -19,9 +19,9 @@ package dispatch
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 
+	"fleetflow/internal/fleet"
 	"fleetflow/internal/simulation/sumo"
 	"fleetflow/internal/trip"
 	"fleetflow/internal/vehicle"
@@ -38,67 +38,6 @@ type Trips interface {
 	List(ctx context.Context) ([]trip.Trip, error)
 	Create(ctx context.Context, in trip.CreateInput) (trip.Trip, error)
 	SetStatus(ctx context.Context, tripID, status string) (trip.Trip, error)
-}
-
-// fleetProfile is the specification a dispatched vehicle is registered with.
-//
-// The scenario decides where and how fast a vehicle drives, not what it is, so
-// these are assigned by the vehicle's position in the fleet sequence: stable for
-// a plate, and demo data rather than something the simulation reported.
-type fleetProfile struct {
-	Make     string
-	Model    string
-	Type     string
-	BodyType string
-	FuelType string
-	Color    string
-	Year     int
-	Capacity float64
-}
-
-// fleetProfiles are the seven Jakarta light-commercial profiles a dispatched
-// plate can be registered with.
-var fleetProfiles = []fleetProfile{
-	{Make: "Isuzu", Model: "Giga FVM Heavy Cargo", Type: "truck", BodyType: "Heavy Cargo Box", FuelType: "diesel", Color: "White", Year: 2022, Capacity: 14000},
-	{Make: "Mitsubishi", Model: "Fuso Canter 136 HDL", Type: "truck", BodyType: "Box Truck", FuelType: "diesel", Color: "Yellow", Year: 2023, Capacity: 4500},
-	{Make: "Toyota", Model: "HiAce Commuter Cargo", Type: "van", BodyType: "Van", FuelType: "diesel", Color: "Silver", Year: 2023, Capacity: 1200},
-	{Make: "Daihatsu", Model: "Gran Max Blind Van", Type: "van", BodyType: "Blind Van", FuelType: "petrol", Color: "White", Year: 2024, Capacity: 800},
-	{Make: "Honda", Model: "PCX Electric Cargo", Type: "motorcycle", BodyType: "Motorcycle Cargo", FuelType: "electric", Color: "Blue", Year: 2024, Capacity: 60},
-	{Make: "Hino", Model: "Dutro 130 HD Cargo", Type: "truck", BodyType: "Box Truck", FuelType: "diesel", Color: "Green", Year: 2023, Capacity: 4500},
-	{Make: "Wuling", Model: "Formo Blind Van", Type: "van", BodyType: "Blind Van", FuelType: "petrol", Color: "White", Year: 2023, Capacity: 650},
-}
-
-// profileFor returns the profile for a plate, chosen from its number so the same
-// vehicle always receives the same specification.
-func profileFor(plate string) fleetProfile {
-	number := plateNumber(plate)
-	return fleetProfiles[(number-9001)%len(fleetProfiles)]
-}
-
-// plateNumber reads the number out of a plate, defaulting to the first plate in
-// the sequence when it carries no digits.
-func plateNumber(plate string) int {
-	digits := strings.Map(func(r rune) rune {
-		if r >= '0' && r <= '9' {
-			return r
-		}
-		return -1
-	}, plate)
-	number, err := strconv.Atoi(digits)
-	if err != nil || number < 9001 {
-		return 9001
-	}
-	return number
-}
-
-// fleetName is what the register calls the vehicle.
-//
-// The plate is not a name: it is stored as the registration, and the register
-// shows the two side by side. The name is the unit number the fleet works in,
-// derived from the plate so the same vehicle keeps the same name on every
-// dispatch.
-func fleetName(plate string) string {
-	return fmt.Sprintf("Unit %d", plateNumber(plate)-9000)
 }
 
 // Dispatcher writes a scenario's vehicles and trips into the fleet stores.
@@ -212,10 +151,10 @@ func (d *Dispatcher) ensureVehicle(ctx context.Context, index map[string]string,
 	if id, ok := index[key]; ok {
 		return id, nil
 	}
-	profile := profileFor(plate)
-	year, capacity := profile.Year, profile.Capacity
+	profile := fleet.For(plate)
+	year, capacity := profile.Year, profile.CapacityKg
 	created, err := d.fleet.Create(ctx, vehicle.CreateInput{
-		Name:         fleetName(plate),
+		Name:         fleet.Name(plate),
 		Type:         profile.Type,
 		Status:       vehicle.StatusAvailable.String(),
 		Registration: plate,
