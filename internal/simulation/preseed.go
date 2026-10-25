@@ -150,6 +150,11 @@ func GenerateSyntheticScenario(seed int64, vehicles int, departureWindowS int) s
 		fuelKg := math.Round((distM/1000.0*0.075)*1000) / 1000
 		co2Kg := math.Round((fuelKg*3.15)*1000) / 1000
 
+		// A completed trip arrives. The arrival is what the delivery history and
+		// the job's completion time are built from, so a trip without it is a
+		// failed run rather than a finished one.
+		arrivalS := departS + durS
+
 		trips = append(trips, sumo.Trip{
 			ID:          tripID,
 			VehicleID:   vehID,
@@ -157,6 +162,7 @@ func GenerateSyntheticScenario(seed int64, vehicles int, departureWindowS int) s
 			Destination: to.Name,
 			Status:      sumo.TripCompleted,
 			DepartS:     departS,
+			ArrivalS:    &arrivalS,
 			DurationS:   durS,
 			DistanceM:   math.Round(distM),
 			CO2Kg:       co2Kg,

@@ -89,6 +89,33 @@ func TestGenerateDeliveriesDoesNotCompleteRunningTrip(t *testing.T) {
 	}
 }
 
+// A scenario the button starts is finished through the same path as SUMO: the
+// generator's trips are handed to the delivery history builder. That only works
+// if a completed trip carries its arrival, which is the bug this test pins: the
+// generator used to mark a trip complete without saying when it arrived, so every
+// started run failed with "has no arrival time".
+func TestSyntheticScenarioTripsAreCompleteEnoughForTheDeliveryHistory(t *testing.T) {
+	result := GenerateSyntheticScenario(42, 20, 300)
+	for _, trip := range result.Trips {
+		if trip.Status != sumo.TripCompleted {
+			continue
+		}
+		if trip.ArrivalS == nil {
+			t.Fatalf("trip %q is completed without an arrival time", trip.ID)
+		}
+		if *trip.ArrivalS < trip.DepartS+trip.DurationS {
+			t.Fatalf("trip %q arrives at %.0fs, before its own duration ends at %.0fs",
+				trip.ID, *trip.ArrivalS, trip.DepartS+trip.DurationS)
+		}
+	}
+	if err := generateDeliveries(&result); err != nil {
+		t.Fatalf("delivery history rejected the generated scenario: %v", err)
+	}
+	if len(result.Deliveries) != len(result.Trips) {
+		t.Fatalf("built %d deliveries for %d trips", len(result.Deliveries), len(result.Trips))
+	}
+}
+
 func TestGenerateDeliveriesRejectsMissingTrack(t *testing.T) {
 	result := sumo.Result{Trips: []sumo.Trip{{ID: "fleetflow0"}}}
 	if err := generateDeliveries(&result); err == nil {
