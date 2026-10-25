@@ -266,7 +266,7 @@ export function TripsPage() {
             <select value={assignedVehicle} onChange={(e) => setAssignedVehicle(e.target.value)}>
               <option value="">Unassigned</option>
               {(vehicles.data ?? []).map((v) => (
-                <option key={v.id} value={v.name}>{v.name} ({v.model || v.type})</option>
+                <option key={v.id} value={v.id}>{v.name} ({v.model || v.type})</option>
               ))}
             </select>
           </label>
