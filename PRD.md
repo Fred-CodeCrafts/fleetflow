@@ -12,11 +12,29 @@ dispatched deliveries and vehicle movement, and review the route and package
 event history. The console distinguishes simulated output from GPS telemetry;
 neither is fabricated to look like the other.
 
-SUMO is the traffic simulator and route engine for generated scenarios.
-OSRM remains the service for standalone road-route estimates. FleetFlow must
+SUMO is the traffic simulator for generated scenarios when a network is
+configured; without one, a built-in generator produces the same scenario shape,
+and every run records which engine ran (`runner`). OSRM remains the service for
+road-route estimates. FleetFlow must
 not substitute a home-grown shortest-path router, invent GPS reports, or present
 simulated results as measurements from a real fleet. Scenario comparisons and
 AI-assisted decisions are not in the current scope.
+
+Delivered beyond the scope this document originally set:
+
+- Dispatch of a completed run into fleet records: vehicles with a unit name and a
+  separate plate, trips deduplicated by vehicle/origin/destination, and trip
+  history on every vehicle and driver page.
+- A hub catalogue served by the API (`GET /api/hubs`) and drawn by the map, rather
+  than a second copy of the hub list in the console.
+- Per-class fuel and CO₂ factors with the class and model name attached to every
+  figure, and an electrification-headroom estimate computed from recorded trips.
+- One sustainability page holding fleet totals, per-vehicle attribution, and the
+  run ledger.
+- Operator writes that can require an API key, with `/readyz` reporting whether
+  they do.
+- A console that loads the map renderer only where a map is shown, and assets
+  served gzipped.
 
 ## 2. Users
 
@@ -112,9 +130,12 @@ AI-assisted decisions are not in the current scope.
 
 - AI, autonomous operational decisions, or opaque assignment/routing policies.
 - Baseline-versus-dynamic routing comparisons, experiment scoreboards, or
-  thesis-result reporting.
-- Manual trip creation or manual vehicle/driver dispatch in the scenario
-  workflow.
+  thesis-result reporting inside the console. The dynamic-weights research is the
+  author's thesis; this product is the console that came after it, and it does not
+  claim to reproduce that research.
+- Automatic driver assignment by dispatch. Dispatch creates the vehicles and
+  trips a run needs and leaves drivers to the operator, which is why the demo
+  seeder pairs them.
 - Fabricated live GPS positions, synthetic points presented as real telemetry,
   static demo map markers, or unsupported emissions/savings claims.
 - FleetFlow-owned shortest-path routing.
