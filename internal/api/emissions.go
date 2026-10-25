@@ -59,8 +59,11 @@ type EmissionsVehicle struct {
 	Fuel      float64 `json:"fuel_kg"`
 	CO2Rate   float64 `json:"g_co2_per_km"`
 	// Class names the emission class the vehicle's trips were charged at, so the
-	// console can show why two vehicles on the same distance differ.
-	Class string `json:"class,omitempty"`
+	// console can show why two vehicles on the same distance differ. ClassKey is
+	// the catalogue key behind that name, which is what a client needs to reason
+	// about a class it does not know by prose.
+	Class    string `json:"class,omitempty"`
+	ClassKey string `json:"class_key,omitempty"`
 }
 
 // emissionsTally accumulates the figures one run or one vehicle contributed.
@@ -159,6 +162,7 @@ func summariseEmissions(runs []simulation.Run) EmissionsSummary {
 			Fuel:      round3(vehicle.fuel),
 			CO2Rate:   round3(co2PerKm(vehicle.co2, vehicle.distance)),
 			Class:     classLabel(vehicle.class),
+			ClassKey:  vehicle.class,
 		})
 	}
 	// Worst emitter first, so the table reads as a ranking. Ties fall back to
