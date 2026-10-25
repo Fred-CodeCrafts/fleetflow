@@ -176,7 +176,7 @@ their attribution is displayed on the map.
 
 - **SUMO Scenarios** starts seeded simulations and shows their progress and
   generated position traces.
-- **Trips** is read-only history from simulation runs. Trip details show the
+- **Trips** lists history from simulation runs, newest first, and is where a scheduled trip appears once the Route Planner creates it. Trip details show the
   vehicle's sampled simulated route, generated delivery stops, and ordered
   package-event timeline when available. These seeded events are simulation
   output, not live package scans.
@@ -294,9 +294,9 @@ runs with distinct per-class intensities. Close everything else.
 | time | screen | say |
 |---|---|---|
 | 0:00–0:20 | landing | "A fleet operations console for Jakarta: dispatch, trip history, a live map, a carbon ledger. One rule: a number a model produced has to name the model." |
-| 0:20–0:55 | `/route-planning` | "Eleven Jakarta hubs. Geometry, distance and duration come from OSRM over a Jakarta OpenStreetMap extract; this application computes no route itself." Draw one route. |
+| 0:20–0:55 | `/route-planning` | "Twelve Jakarta hubs. Geometry, distance and duration come from OSRM over a Jakarta OpenStreetMap extract; this application computes no route itself." Draw one route. |
 | 0:55–1:30 | `/operations/simulations` | Start the peak preset. "Seeded demand, generated trips, positions, deliveries. When it finishes, the panel says what produced it: synthetic generator, because no SUMO process ran. I could have labelled it SUMO." Point at `runner`. |
-| 1:30–2:05 | dispatch | "That run becomes fleet records: 100 vehicles with ids and separate plates, five drivers, 170 trips. Repeat trips are refused by vehicle, origin and destination." Open a vehicle: trips, not a placeholder. |
+| 1:30–2:05 | dispatch | "That run becomes fleet records: 100 vehicles with ids and separate plates and 170 trips. The five drivers come from the demo seeder, and dispatch assigns none: the vehicles are unassigned until someone pairs them. Repeat trips are refused by vehicle, origin and destination." Open a vehicle: trips, not a placeholder. |
 | 2:05–2:45 | `/sustainability` | "A 14-tonne diesel box truck is 948 grams per kilometre, a 4.5-tonne truck 569, a diesel van 348, an electric cargo motorcycle zero at the tailpipe. The class is on the row and the model is named above it: FleetFlow class factors, planning assumptions — not HBEFA3, not a certified inventory." |
 | 2:45–3:00 | close | "Apache-2.0, tests in the repo, and the limits are written down where you can check them." |
 
