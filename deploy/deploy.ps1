@@ -9,7 +9,7 @@
 #
 # Usage:
 #   .\deploy\deploy.ps1 -Project fleetflow-4448
-#   .\deploy\deploy.ps1 -Project fleetflow-4448 -Tag v0.1.4
+#   .\deploy\deploy.ps1 -Project fleetflow-4448 -Tag <release-tag>
 
 param(
   [Parameter(Mandatory = $true)][string]$Project,

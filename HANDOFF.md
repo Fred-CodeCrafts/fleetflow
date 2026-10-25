@@ -44,7 +44,7 @@ request fails with 503.
    `fleetflow` in project `fleetflow-4448` exists but answers 404/503: its billing
    account closed on 24 October, and Cloud Run refuses deploys without an open
    account. Restore billing, then `.\deploy\deploy.ps1 -Project fleetflow-4448 -Tag
-   v0.1.0` puts the tagged image on the service and prints the URL.
+   <release-tag>` (the current release is `v0.1.4`) puts the tagged image on the service and prints the URL.
 2. Record the three-minute demo using the shot list and the expected questions in
    the README's Submission pack section.
 3. Produce one real SUMO scenario run so the demo can show `runner: "sumo"`
