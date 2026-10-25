@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { api, type Coordinate, type OSRMRoute, type SimulatedTrack, type SimulationRun } from '../api/client'
 import { RoutingMap } from '../map/RoutingMap'
-import { ErrorMessage, formatNumber, Loading, Metric, Page, Panel, presets, runLabel, Status, Table, useLoad } from './Shared'
+import { ErrorMessage, formatNumber, Loading, Metric, Page, Panel, presets, runLabel, runnerLabel, Status, Table, useLoad } from './Shared'
 
 export function useSimulationRun(runID: string) {
   const [run, setRun] = useState<SimulationRun | null>(null)
@@ -412,7 +412,7 @@ export function SimulationPage() {
             <div className="metric-grid">
               <Metric label="Trips generated" value={String(selected.run.result.trips.length)} />
               <Metric label="Completed" value={String(selected.run.result.trips.filter((trip) => trip.status === 'completed').length)} />
-              <Metric label="Version" value={selected.run.result.sumo_version} />
+              <Metric label="Produced by" value={runnerLabel(selected.run.result)} />
               <Metric label="Seed" value={String(selected.run.scenario.seed)} />
             </div>
             <RoutingMap positionMode="simulation" simulationTracks={selected.run.result.tracks} />

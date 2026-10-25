@@ -197,6 +197,7 @@ func (r *Runner) Run(ctx context.Context, scenario Scenario) (Result, error) {
 	}
 
 	return Result{
+		Runner:      "sumo",
 		SUMOVersion: r.version,
 		Seed:        scenario.Seed,
 		StartedAt:   startedAt,

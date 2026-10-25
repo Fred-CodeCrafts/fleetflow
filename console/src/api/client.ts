@@ -114,7 +114,9 @@ export interface EmissionProvenance {
 }
 
 export interface SimulationResult {
-  sumo_version: string
+  /** sumo or synthetic: what actually produced the result. */
+  runner?: string
+  sumo_version?: string
   seed: number
   started_at: string
   finished_at: string

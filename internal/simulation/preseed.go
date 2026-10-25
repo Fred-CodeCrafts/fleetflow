@@ -220,10 +220,10 @@ func GenerateSyntheticScenario(seed int64, vehicles int, departureWindowS int) s
 	}
 
 	return sumo.Result{
-		SUMOVersion: "FleetFlow synthetic generator (no SUMO process)",
-		Seed:        seed,
-		StartedAt:   baseTime,
-		FinishedAt:  finishTime,
+		Runner:     "synthetic",
+		Seed:       seed,
+		StartedAt:  baseTime,
+		FinishedAt: finishTime,
 		Emissions: sumo.EmissionProvenance{
 			Model:       "FleetFlow class factors v1",
 			Class:       "per vehicle class",

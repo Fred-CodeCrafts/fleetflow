@@ -24,6 +24,13 @@ export function runLabel(id: string) {
   return mode in presets ? presets[mode as keyof typeof presets].label : id
 }
 
+/** Names what produced a run, so a synthetic scenario never reads as a SUMO one. */
+export function runnerLabel(result: { runner?: string; sumo_version?: string }) {
+  if (result.runner === 'sumo') return result.sumo_version ? `SUMO ${result.sumo_version}` : 'SUMO'
+  if (result.runner === 'synthetic') return 'FleetFlow synthetic generator'
+  return result.sumo_version || 'Not recorded'
+}
+
 export function Page({ title, description, eyebrow, action, children }: {
   title: string
   description: string

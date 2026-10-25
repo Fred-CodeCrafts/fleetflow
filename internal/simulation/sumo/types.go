@@ -148,7 +148,13 @@ type EmissionProvenance struct {
 }
 
 type Result struct {
-	SUMOVersion string             `json:"sumo_version"`
+	// Runner names the thing that produced this result: "sumo" when the SUMO
+	// process ran the scenario, "synthetic" when the Go generator did. A reader
+	// (and a judge) can tell the two apart without trusting a version string.
+	Runner string `json:"runner"`
+	// SUMOVersion is the SUMO build that ran the scenario. It is empty for a
+	// synthetic run, because no SUMO process ran.
+	SUMOVersion string             `json:"sumo_version,omitempty"`
 	Seed        int64              `json:"seed"`
 	StartedAt   time.Time          `json:"started_at"`
 	FinishedAt  time.Time          `json:"finished_at"`
