@@ -46,7 +46,7 @@ export function LabPage() {
   const firstRun: LabRun | undefined = summary?.runs[0]
 
   return <Page
-    eyebrow="Operations · Routing"
+    eyebrow="Settings · Research"
     title="Routing Lab"
     description="The same seeded demand routed twice: once believing the speed limit, once on congestion learned from the fleet's own speed reports."
   >
@@ -118,18 +118,8 @@ export function LabPage() {
           {data.method.model}. The network is {data.method.network}. Routing is{' '}
           {data.method.routing}. Congestion is {data.method.congestion}.{' '}
           {sentence(data.method.assumptions)}. Not included: {data.method.not_included}.
-          A percentage from this page describes this model, not the city.
-        </p>
-        <p>
-          What makes this different: a fleet console normally takes its distance and time from
-          one router and leaves congestion out of the plan, so every vehicle is routed as though
-          the road were empty. This one treats congestion as data the fleet itself produces —
-          each simulated vehicle reports the speed it actually achieved, that report moves the
-          edge it just drove, and the next wave plans on what the previous wave learned. The
-          claim is checked in the same run, on the same demand and the same seed, against an arm
-          that never learns: set adoption to 0% and the two arms tie exactly, so an improvement
-          cannot come from noise. The design is the author's thesis proposal, run at grid scale;
-          the proposal's own network, its contraction hierarchies and its SUMO loop are not here.
+          This is the author's thesis proposal, run at grid scale: a percentage from this
+          page describes this model, not the city.
         </p>
       </Panel>
     </>}
