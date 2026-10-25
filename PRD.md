@@ -64,11 +64,12 @@ Delivered beyond the scope this document originally set:
 
 ### Deliveries, dispatch, and trip history
 
-- Create delivery demand from the selected scenario; operators view generated
-  trips and cannot manually create or assign a trip in the dispatch workflow.
-- Automatically assign an available compatible vehicle and driver using
-  deterministic, documented eligibility rules. Respect capacity, vehicle
-  availability, driver shift, and license class. Explain unassigned demand.
+- Create delivery demand from the selected scenario and record it as fleet trips.
+  Dispatch registers the vehicles a run needs and records each completed trip; it
+  does not assign drivers, and the console keeps manual scheduling from the Route
+  Planner and driver pairing from the register as operator tools.
+- Never assign a vehicle or driver silently: a staged trip shows its state, and an
+  unassigned vehicle is labelled unassigned rather than filled in with a default.
 - Support one or more delivery stops per trip and package-level status events,
   including creation, assignment, arrival, delivery, and completion.
 - Provide a trip detail view with an interactive map, highlighted SUMO route,
@@ -83,7 +84,8 @@ Delivered beyond the scope this document originally set:
   and availability. Do not collect full KTP/NIK, gender, or age absent a
   necessary and approved product requirement.
 - Vehicle and driver detail pages show their own profile and associated
-  scenario/trip history; assignments remain automatic in the operating flow.
+  scenario/trip history. Pairing a driver with a vehicle is an explicit action in
+  the register, and the seeder performs it for the demo fleet.
 - Seed/demo identities must be clearly fictitious and must not resemble real
   personal data.
 
@@ -158,16 +160,16 @@ Delivered beyond the scope this document originally set:
 
 1. Run a deterministic scenario twice with the same network, preset, SUMO
    version, and seed; verify its recorded inputs and generated demand.
-2. Confirm scenario execution invokes SUMO and fails clearly if its executable
-   or network is unavailable.
+2. Confirm a scenario runs, records which engine produced it (`runner`), and fails
+   clearly when a configured SUMO executable or network is unavailable.
 3. Start the console and inspect generated trips, automatic eligible
    assignments, vehicle positions, and completed route/event history.
-4. Verify trip details show the route on the map and ordered package events;
-   operators cannot create or manually assign scenario trips.
+4. Verify trip details show the route on the map and ordered package events, and
+   that a trip scheduled from the Route Planner appears in the list.
 5. Inspect vehicle and driver profiles, including maintenance, capacity,
    license, shift, and availability.
-6. Verify fuel/emissions are traceable SUMO estimates, clearly distinguished
-   from real measured data and absent when output is unavailable.
+6. Verify fuel/emissions name the model that produced them, distinguished from
+   measured data, and absent when no output exists.
 7. Confirm real GPS mode only shows authenticated fresh reports and remains
    distinct from SUMO simulation.
 8. Confirm OSRM failures, invalid scenarios, database errors, and missing
