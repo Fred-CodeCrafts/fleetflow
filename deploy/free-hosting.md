@@ -27,9 +27,30 @@ and the Go binary from the release tag and leaves out SUMO and OSRM.
 5. Open the URL Render prints, or find it under the service's **Overview** tab. It
    looks like `https://fleetflow-xxxx.onrender.com`.
 
-Render's free instance is 512 MB of RAM and a tenth of a CPU, and it sleeps after
-fifteen minutes without traffic. The first request after a sleep takes about a
-minute; the console then behaves normally. That is the price of zero.
+Render's free instance, in the words of their own documentation (October 2026):
+
+- **512 MB of RAM and 0.1 of a CPU.** The console and API idle well under 100 MB,
+  but the Routing Lab's sweep, which takes a fraction of a second on a laptop,
+  takes a few seconds here.
+- **It sleeps after fifteen minutes without traffic**, and takes about a minute to
+  wake. Render shows its own loading page while that happens, so the first click
+  after a quiet spell looks like nothing is happening. Ping the URL a minute
+  before a judge opens it.
+- **750 free instance hours per workspace per month**, and a service that is spun
+  down does not spend them. One service awake every hour of the month is about 730
+  hours, so a single always-warm deployment fits with very little to spare. Run a
+  second free service and the workspace suspends both when the hours run out.
+- **The filesystem is ephemeral and free instances cannot attach a disk.** Every
+  redeploy, restart or spin-down erases whatever the process wrote, which is why
+  the seeded runs are regenerated at each start and why persistence means a
+  database, not a file.
+- **One instance, no scaling, no shell.** That suits this demo: a single instance
+  cannot serve a request from one store and a half-written record from another.
+- **No card is required for the free plan.** Outbound bandwidth and build minutes
+  are monthly allowances shared by the workspace; exceeding them without a payment
+  method suspends the free services until the month turns over.
+
+That is the price of zero.
 
 ### Hugging Face Spaces, if you have PRO
 
@@ -62,8 +83,10 @@ route nobody computed, which is the same rule the rest of the project follows.
 ## Adding a database (still free, still no card)
 
 Neon's free tier is the least work: create a project, copy its connection string,
-then add it to the Render service as `DATABASE_URL` and redeploy. Run the migrations
-once from your machine against that database:
+then add it to the Render service as `DATABASE_URL` and redeploy. Render's own free
+Postgres works too, but it expires thirty days after creation, which is shorter than
+the interval between the submission and the judging. Run the migrations once from
+your machine against that database:
 
 ```powershell
 $env:DATABASE_URL = 'postgres://...'   # the Neon connection string
