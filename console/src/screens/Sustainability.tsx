@@ -44,6 +44,14 @@ export function SustainabilityPage() {
   const vehicles = useLoad(api.vehicles)
   const data = summary.data
 
+  // The van trips that could move to the electric cargo motorcycle today: same
+  // distance, same stops, no tailpipe CO2. This is arithmetic on trips that were
+  // already recorded, using the factors printed on this page, not a projection.
+  const vans = (data?.vehicles ?? []).filter((vehicle) =>
+    vehicle.class_key === 'diesel-van' || vehicle.class_key === 'petrol-van')
+  const vanCO2 = vans.reduce((total, vehicle) => total + vehicle.co2_kg, 0)
+  const vanShare = (data?.totals.co2_kg ?? 0) > 0 ? (vanCO2 / data!.totals.co2_kg) * 100 : 0
+
   return <Page
     eyebrow="Sustainability"
     title="Green Dashboard"
@@ -58,6 +66,26 @@ export function SustainabilityPage() {
         <Metric label="Simulated trips" value={formatNumber(data?.totals.trips, 0)} />
         <Metric label="Scenarios counted" value={formatNumber(data?.totals.runs, 0)} note="Completed runs only" />
       </div>
+
+      <Panel title="Electrification headroom">
+        {!vans.length
+          ? <p className="empty-state">No van trips are recorded yet, so there is nothing to compare.</p>
+          : <>
+            <div className="metric-grid">
+              <Metric label="Van trips recorded" value={formatNumber(vans.reduce((total, vehicle) => total + vehicle.trips, 0), 0)} note="Diesel and petrol vans" />
+              <Metric label="Their CO₂ today" value={`${formatNumber(vanCO2, 1)} kg`} note="Model output" />
+              <Metric label="Avoidable at the tailpipe" value={`${formatNumber(vanCO2, 1)} kg`} note={`${formatNumber(vanShare, 1)}% of fleet CO₂`} />
+            </div>
+            <p className="help-text">
+              If every recorded van kilometre had been ridden by the electric cargo motorcycle instead,
+              tailpipe CO₂ would fall by the figure above: the electric class burns nothing at the pipe.
+              Treat it as an upper bound, not a plan. A van carries 0.8 to 1.2 tonnes and the motorcycle
+              about 60 kg, so replacing a full van load takes many motorcycle runs, and those extra
+              kilometres are not in this arithmetic; grid energy is not counted either. What is counted is
+              the distance already in the ledger, charged at the class factors printed above.
+            </p>
+          </>}
+      </Panel>
 
       <Panel title="Vehicle attribution">
         {!data?.vehicles.length

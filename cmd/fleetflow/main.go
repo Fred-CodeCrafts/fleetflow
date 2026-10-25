@@ -149,6 +149,7 @@ func main() {
 			api.WithDrivers(driver.NewService(driverpostgres.New(pool))),
 			api.WithTrips(tripSvc),
 			api.WithAPIKeys(keys),
+			api.WithOperatorWritesProtected(cfg.RequireOperatorKey),
 		)
 		logger.Info("fleet records and api keys in postgres",
 			slog.String("database", cfg.DatabaseAddr))
@@ -168,6 +169,7 @@ func main() {
 			api.WithDrivers(driverSvc),
 			api.WithTrips(tripSvc),
 			api.WithAPIKeys(auth.NewService(keys)),
+			api.WithOperatorWritesProtected(cfg.RequireOperatorKey),
 		)
 		logger.Warn("no database configured: fleet records and api keys are in memory and will be lost on restart")
 	}

@@ -64,6 +64,11 @@ type Config struct {
 	// SumoRuntime contains the configured SUMO tool paths. An empty network
 	// disables scenario execution without affecting OSRM or real GPS.
 	SumoRuntime SumoRuntime
+	// RequireOperatorKey makes the routes that change fleet data demand an API
+	// key. It is off by default so a demonstration console works without one,
+	// and /readyz reports which mode the process is in, so an open booth is
+	// visible rather than assumed.
+	RequireOperatorKey bool
 }
 
 type SumoRuntime struct {
@@ -99,6 +104,15 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 
 	cfg.LogLevel = level
+
+	switch strings.ToLower(valueOr(getenv, "REQUIRE_OPERATOR_KEY", "false")) {
+	case "", "false", "0", "no":
+	case "true", "1", "yes":
+		cfg.RequireOperatorKey = true
+	default:
+		return Config{}, fmt.Errorf("REQUIRE_OPERATOR_KEY %q: must be true or false",
+			getenv("REQUIRE_OPERATOR_KEY"))
+	}
 
 	port := valueOr(getenv, "PORT", strconv.Itoa(DefaultPort))
 	n, err := strconv.Atoi(port)

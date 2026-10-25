@@ -42,7 +42,9 @@ type Server struct {
 	router     osrm.Router
 	simulation *simulation.Service
 	keys       *auth.Service
-	live       *liveVehicles
+	// operatorKeyRequired closes the write routes to callers without a key.
+	operatorKeyRequired bool
+	live                *liveVehicles
 
 	mux      *http.ServeMux
 	handler  http.Handler
@@ -82,6 +84,17 @@ func WithRouter(router osrm.Router) Option {
 
 func WithAPIKeys(svc *auth.Service) Option {
 	return func(s *Server) { s.keys = svc }
+}
+
+// WithOperatorWritesProtected makes every write that changes fleet data require
+// an API key: registering a vehicle or driver, assigning a driver, creating or
+// changing a trip, and starting a scenario. Reads stay public.
+//
+// It is off in development, where the console has no key to present and the
+// demonstration has to work, and /readyz reports which of the two a running
+// process is in. A booth that is open to writes says so.
+func WithOperatorWritesProtected(protected bool) Option {
+	return func(s *Server) { s.operatorKeyRequired = protected }
 }
 
 func WithDatabaseCheck(check func(context.Context) error) Option {
@@ -134,15 +147,15 @@ func (s *Server) routes() {
 	s.mux.Handle("POST /api/route", s.public(s.handleRoute))
 
 	s.mux.Handle("GET /api/vehicles", s.public(s.handleListVehicles))
-	s.mux.Handle("POST /api/vehicles", s.public(s.handleCreateVehicle))
+	s.mux.Handle("POST /api/vehicles", s.writes(s.handleCreateVehicle))
 	s.mux.Handle("GET /api/drivers", s.public(s.handleListDrivers))
-	s.mux.Handle("POST /api/drivers", s.public(s.handleCreateDriver))
-	s.mux.Handle("PUT /api/drivers/{id}/vehicle", s.public(s.handleAssignDriverVehicle))
-	s.mux.Handle("POST /api/drivers/{id}/vehicle", s.public(s.handleAssignDriverVehicle))
+	s.mux.Handle("POST /api/drivers", s.writes(s.handleCreateDriver))
+	s.mux.Handle("PUT /api/drivers/{id}/vehicle", s.writes(s.handleAssignDriverVehicle))
+	s.mux.Handle("POST /api/drivers/{id}/vehicle", s.writes(s.handleAssignDriverVehicle))
 	s.mux.Handle("GET /api/trips", s.public(s.handleListTrips))
-	s.mux.Handle("POST /api/trips", s.public(s.handleCreateTrip))
-	s.mux.Handle("PATCH /api/trips/{id}/status", s.public(s.handleUpdateTripStatus))
-	s.mux.Handle("POST /api/simulation/runs", s.public(s.handleCreateSimulationRun))
+	s.mux.Handle("POST /api/trips", s.writes(s.handleCreateTrip))
+	s.mux.Handle("PATCH /api/trips/{id}/status", s.writes(s.handleUpdateTripStatus))
+	s.mux.Handle("POST /api/simulation/runs", s.writes(s.handleCreateSimulationRun))
 	s.mux.Handle("GET /api/simulation/runs", s.public(s.handleListSimulationRuns))
 	s.mux.Handle("GET /api/simulation/runs/{id}", s.public(s.handleGetSimulationRun))
 	s.mux.Handle("GET /api/emissions/summary", s.public(s.handleEmissionsSummary))
@@ -169,6 +182,16 @@ func (s *Server) public(h http.HandlerFunc) http.Handler {
 
 func (s *Server) authed(h http.HandlerFunc) http.Handler {
 	return s.limiter.middleware(withTimeout(requestTimeout, s.requireAPIKey(h)))
+}
+
+// writes is the middleware for routes that change fleet data. Where operator
+// writes are protected it demands a key; otherwise it is the public middleware,
+// so development behaves exactly as it did.
+func (s *Server) writes(h http.HandlerFunc) http.Handler {
+	if s.operatorKeyRequired {
+		return s.authed(h)
+	}
+	return s.public(h)
 }
 
 func newHTTPServer(addr string, handler http.Handler) *http.Server {
@@ -229,7 +252,11 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 	if s.simulation != nil {
 		simulationStatus = "available"
 	}
-	body := map[string]any{"routing": "not_configured", "simulation": simulationStatus}
+	writesStatus := "unauthenticated"
+	if s.operatorKeyRequired {
+		writesStatus = "protected"
+	}
+	body := map[string]any{"routing": "not_configured", "simulation": simulationStatus, "writes": writesStatus}
 	ready := false
 	if s.router != nil {
 		if checker, ok := s.router.(osrm.HealthChecker); ok {

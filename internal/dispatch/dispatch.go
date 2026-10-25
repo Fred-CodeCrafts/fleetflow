@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"fleetflow/internal/fleet"
 	"fleetflow/internal/simulation/sumo"
@@ -98,11 +99,17 @@ func (d *Dispatcher) Dispatch(ctx context.Context, runID string, result sumo.Res
 		if dispatched[key] {
 			continue
 		}
+		// The scenario knows when the trip ran; the import does not. Stamping the
+		// import's own wall clock would report a 26 km trip as the five
+		// milliseconds the replay took, which is exactly what the console showed.
+		startedAt, finishedAt := scenarioWindow(result.StartedAt, simulated)
 		created, err := d.trips.Create(ctx, trip.CreateInput{
 			Origin:      simulated.Origin,
 			Destination: simulated.Destination,
 			VehicleID:   vehicleID,
 			Status:      trip.StatusPlanned.String(),
+			StartedAt:   startedAt,
+			FinishedAt:  finishedAt,
 		})
 		if err != nil {
 			return fmt.Errorf("record trip %q for run %s: %w", simulated.ID, runID, err)
@@ -180,4 +187,26 @@ func tripKey(vehicleID, origin, destination string) string {
 	return vehicleID +
 		"\x00" + strings.ToLower(strings.TrimSpace(origin)) +
 		"\x00" + strings.ToLower(strings.TrimSpace(destination))
+}
+
+// scenarioWindow returns when a scenario trip started and finished, in the run's
+// own clock. An unknown start time stays zero, so the status transitions fall
+// back to the wall clock rather than recording an invented time.
+func scenarioWindow(started time.Time, simulated sumo.Trip) (time.Time, time.Time) {
+	if started.IsZero() {
+		return time.Time{}, time.Time{}
+	}
+	startedAt := started.Add(seconds(simulated.DepartS))
+	switch {
+	case simulated.ArrivalS != nil:
+		return startedAt, started.Add(seconds(*simulated.ArrivalS))
+	case simulated.DurationS > 0:
+		return startedAt, startedAt.Add(seconds(simulated.DurationS))
+	}
+	return startedAt, time.Time{}
+}
+
+// seconds converts the scenario's wall-clock seconds into a duration.
+func seconds(s float64) time.Duration {
+	return time.Duration(s * float64(time.Second))
 }

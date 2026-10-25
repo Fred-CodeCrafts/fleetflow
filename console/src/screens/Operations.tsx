@@ -280,8 +280,6 @@ export function RoutePlannerPage() {
   const [toName, setToName] = useState('')
   const [pickTarget, setPickTarget] = useState<'from' | 'to' | null>(null)
   const [primaryRoute, setPrimaryRoute] = useState<OSRMRoute | null>(null)
-  const [altRoute, setAltRoute] = useState<OSRMRoute | null>(null)
-  const [selectedRouteIndex, setSelectedRouteIndex] = useState<0 | 1>(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [dispatchSuccess, setDispatchSuccess] = useState('')
@@ -308,28 +306,11 @@ export function RoutePlannerPage() {
     setError('')
     setDispatchSuccess('')
     setPrimaryRoute(null)
-    setAltRoute(null)
     try {
       const main = await api.route(routeFrom, routeTo)
       setPrimaryRoute(main)
-      setSelectedRouteIndex(0)
 
-      // Create an alternative route recommendation (Arterial / non-toll corridor)
-      if (main.geometry.length > 3) {
-        const midIdx = Math.floor(main.geometry.length / 2)
-        const altCoords = [...main.geometry]
-        // Offset midpoint slightly to simulate an alternate arterial bypass
-        const midPoint = altCoords[midIdx]
-        if (midPoint) {
-          altCoords[midIdx] = [midPoint[0] + 0.015, midPoint[1] + 0.012]
-        }
-        setAltRoute({
-          provider: 'OSRM',
-          distance_m: main.distance_m * 1.15,
-          duration_s: main.duration_s * 1.25,
-          geometry: altCoords,
-        })
-      }
+
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'OSRM route request failed.')
     } finally {
@@ -343,13 +324,11 @@ export function RoutePlannerPage() {
       setFromName(`${point.lat.toFixed(4)}, ${point.lon.toFixed(4)}`)
       setPickTarget('to')
       setPrimaryRoute(null)
-      setAltRoute(null)
     } else if (pickTarget === 'to') {
       setTo(point)
       setToName(`${point.lat.toFixed(4)}, ${point.lon.toFixed(4)}`)
       setPickTarget(null)
       setPrimaryRoute(null)
-      setAltRoute(null)
     }
   }
 
@@ -371,10 +350,10 @@ export function RoutePlannerPage() {
     }
   }
 
-  const activeRoute = selectedRouteIndex === 1 && altRoute ? altRoute : primaryRoute
+  const activeRoute = primaryRoute
 
   return (
-    <Page eyebrow="Operations" title="Route Planner" description="Plan optimal driving routes across Jakarta logistics corridors, compare alternatives, and schedule fleet trips.">
+    <Page eyebrow="Operations" title="Route Planner" description="Ask OSRM for a driving route across Jakarta logistics corridors, then schedule it as a planned trip.">
       <Panel title="Plan a route">
         <form className="form-row" onSubmit={(event) => void plan(event)} style={{ alignItems: 'flex-end', flexWrap: 'wrap', gap: '12px' }}>
           <LocationSearchInput
@@ -384,7 +363,6 @@ export function RoutePlannerPage() {
               setFrom({ lat: loc.lat, lon: loc.lon })
               setFromName(loc.name)
               setPrimaryRoute(null)
-              setAltRoute(null)
             }}
             placeholder="Type origin or click map…"
           />
@@ -399,7 +377,6 @@ export function RoutePlannerPage() {
               setTo({ lat: loc.lat, lon: loc.lon })
               setToName(loc.name)
               setPrimaryRoute(null)
-              setAltRoute(null)
             }}
             placeholder="Type destination or click map…"
           />
@@ -422,50 +399,16 @@ export function RoutePlannerPage() {
       </Panel>
 
       {primaryRoute && (
-        <Panel title="Recommended routes">
-          <p className="help-text">Select a route option below to inspect on the map and dispatch to an available vehicle.</p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '12px', marginBottom: '16px' }}>
-            <div
-              onClick={() => setSelectedRouteIndex(0)}
-              style={{
-                padding: '14px',
-                borderRadius: '6px',
-                border: selectedRouteIndex === 0 ? '2px solid #16866c' : '1px solid #ced4da',
-                background: selectedRouteIndex === 0 ? '#f8fcfa' : '#ffffff',
-                cursor: 'pointer',
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <strong style={{ color: '#16866c' }}>Route A: Direct Express (Recommended)</strong>
-                {selectedRouteIndex === 0 && <span style={{ fontSize: '11px', background: '#16866c', color: '#fff', padding: '2px 6px', borderRadius: '4px' }}>Active</span>}
-              </div>
-              <p style={{ margin: '6px 0 0 0', fontSize: '14px' }}>
-                <strong>{formatNumber(primaryRoute.distance_m / 1000, 2)} km</strong> · {formatNumber(primaryRoute.duration_s / 60, 1)} min estimated
-              </p>
-              <small className="muted">Fastest route via Jakarta tollway corridors</small>
+        <Panel title="Route">
+          <p className="help-text">The geometry, distance and duration below are what OSRM returned for this query. There is one route because that is what was asked for; the console does not invent alternatives.</p>
+          <div style={{ padding: '14px', borderRadius: '6px', border: '2px solid #16866c', background: '#f8fcfa', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <strong style={{ color: '#16866c' }}>{primaryRoute.provider} route</strong>
+              <span style={{ fontSize: '11px', background: '#16866c', color: '#fff', padding: '2px 6px', borderRadius: '4px' }}>Returned by OSRM</span>
             </div>
-
-            {altRoute && (
-              <div
-                onClick={() => setSelectedRouteIndex(1)}
-                style={{
-                  padding: '14px',
-                  borderRadius: '6px',
-                  border: selectedRouteIndex === 1 ? '2px solid #e67700' : '1px solid #ced4da',
-                  background: selectedRouteIndex === 1 ? '#fff9db' : '#ffffff',
-                  cursor: 'pointer',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <strong style={{ color: '#e67700' }}>Route B: Arterial Corridor (Toll-Free)</strong>
-                  {selectedRouteIndex === 1 && <span style={{ fontSize: '11px', background: '#e67700', color: '#fff', padding: '2px 6px', borderRadius: '4px' }}>Active</span>}
-                </div>
-                <p style={{ margin: '6px 0 0 0', fontSize: '14px' }}>
-                  <strong>{formatNumber(altRoute.distance_m / 1000, 2)} km</strong> · {formatNumber(altRoute.duration_s / 60, 1)} min estimated
-                </p>
-                <small className="muted">Standard arterial route avoiding toll plazas</small>
-              </div>
-            )}
+            <p style={{ margin: '6px 0 0 0', fontSize: '14px' }}>
+              <strong>{formatNumber(primaryRoute.distance_m / 1000, 2)} km</strong> · {formatNumber(primaryRoute.duration_s / 60, 1)} min estimated
+            </p>
           </div>
 
           <form className="form-row" onSubmit={(e) => void handleDispatch(e)} style={{ alignItems: 'flex-end', gap: '12px' }}>

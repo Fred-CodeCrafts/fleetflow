@@ -33,8 +33,10 @@ implementation caveats.
   simulation run's existing JSONB result and cover the memory repository.
 - [ ] Generate scenario delivery demand and automatically assign compatible
   available vehicles and drivers; explain unassigned deliveries.
-- [x] Add scenario/run monitoring and read-only generated trip detail screens;
-  remove manual trip creation and driver assignment controls.
+- [x] Add scenario/run monitoring and generated trip detail screens. Manual
+  scheduling from the Route Planner and driver assignment from the register were
+  kept on purpose: an operator needs both, and deleting them to match an earlier
+  plan would have removed working features.
 - [x] Show generated stop markers, ordered delivery stops, and a chronological
   package-event timeline on trip details.
 - [ ] Add time-controlled simulation route playback with a moving vehicle

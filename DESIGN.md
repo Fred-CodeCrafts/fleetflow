@@ -84,8 +84,33 @@ flowchart LR
 - SUMO fuel and emissions are estimates under the configured vehicle/emission
   model. Persist model/version, units, and run assumptions; never label them as
   measured activity or verified carbon savings.
+- A run records which engine produced it in a `runner` field (`sumo` or
+  `synthetic`), and a synthetic run carries no SUMO version. A scenario that did
+  not run through SUMO never claims it did.
+- Emissions are charged per vehicle class (`internal/fleet`): each class names
+  its fuel and its fuel burn per kilometre, and the class travels with every trip
+  so the console can show why two vehicles on the same distance differ. The two
+  paths are labelled separately because they are different models, and neither is
+  a measured inventory.
 - Basemap rendering depends on OpenFreeMap; routing and simulation runtime
   failures are surfaced rather than converted to fallback data.
+
+### Archived: the dynamic-weights prototype
+
+- An earlier prototype applied the author's thesis idea — per-edge congestion
+  state from probe reports — at a smaller scale: a 36-node grid, `rho` smoothed
+  by an exponential moving average per edge, decay toward free flow once per
+  customization for edges that stopped reporting, and an immutable metric
+  snapshot published behind an atomic pointer so a route query never takes a
+  write lock. Each edge owns its `sync.RWMutex`, so a report on one segment never
+  blocks customization on another.
+- It is not the thesis implementation: there is no CCH, no TraCI loop, no LuST
+  scenario, and no adoption-rate sweep in this repository. Shortest paths came
+  from Dijkstra over the grid.
+- It was removed on 25 October 2026 because nothing in the console consumed it,
+  its network generator was gone, and its survey could not be reproduced from a
+  clone. The code remains retrievable at tag `v0.1.1`; the console's routing is
+  OSRM only.
 
 ## Deployment and failure behavior
 

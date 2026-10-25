@@ -9,13 +9,9 @@ OSRM, and keeps real GPS reports separate from simulation data.
 
 The console uses MapLibre GL with OpenFreeMap tiles. FleetFlow does not generate
 real traffic and does not present simulated positions or modelled emissions as
-measured fleet data. The routing-versus-baseline study in `docs/results.md` is a
-recorded experiment, not a feature in the console.
-
-- Submission summary: [`docs/submission-summary.md`](docs/submission-summary.md)
-- Three-minute demo script: [`docs/demo-script.md`](docs/demo-script.md)
-- Judge Q&A rehearsal: [`docs/qa.md`](docs/qa.md)
-- Deployment: [`deploy/README.md`](deploy/README.md)
+measured fleet data. The submission summary, the three-minute demo and the
+questions this repository can answer are in [Submission pack](#submission-pack);
+deployment notes are in [deploy/README.md](./deploy/README.md).
 
 ## Routing, map, and simulation data
 
@@ -180,7 +176,7 @@ their attribution is displayed on the map.
 
 - **SUMO Scenarios** starts seeded simulations and shows their progress and
   generated position traces.
-- **Trips** is read-only history from simulation runs. Trip details show the
+- **Trips** lists history from simulation runs, newest first, and is where a scheduled trip appears once the Route Planner creates it. Trip details show the
   vehicle's sampled simulated route, generated delivery stops, and ordered
   package-event timeline when available. These seeded events are simulation
   output, not live package scans.
@@ -267,17 +263,95 @@ Copy `.env.example` to `.env` for the Compose database values. Set `OSRM_URL`
 in the environment of the Go process; local shell processes do not load `.env`
 automatically.
 
+`REQUIRE_OPERATOR_KEY=true` closes the seven write routes to callers without an
+API key (registering vehicles and drivers, assigning a driver, creating a trip,
+changing a trip's status, and starting a scenario). It is unset by default so the
+demonstration console, which has no key to present, can write; `/readyz` reports
+`writes: "protected"` or `"unauthenticated"` so the running mode is never a guess.
+Reads stay public in both modes.
+
+## Where the dynamic-weights idea came from
+
+The routing idea behind FleetFlow is the author's thesis: *Implementation of
+Stateful Dynamic Edge Weights to Avoid Congestion in SUMO-Based Routing Systems*
+— per-edge congestion state derived from probe reports, exponential smoothing,
+temporal decay, and metric customization. **This repository does not implement
+that research.** There is no CCH here, no TraCI loop and no LuST scenario, and the
+console routes through OSRM rather than a FleetFlow-owned router.
+
+An earlier prototype in this repository applied the *idea* at a much smaller
+scale: a 36-node grid, per-edge smoothed congestion written by the scenario's own
+speed reports, decay for edges that stopped reporting, and an immutable metric
+snapshot behind an atomic pointer so a route query never takes a write lock. It
+was removed on 25 October 2026, because nothing in the console consumed it, the
+script that generated its network was no longer in the tree, and its numbers could
+not be reproduced from a clone. The code is retrievable at tag `v0.1.1`
+(`internal/weights`, `internal/engine`, `internal/sim`); the thesis is where that
+work continues, and this repository is the operational console that came after it.
+
 ## Status
 
-FleetFlow is an MVP in active development for Road To DevFest Jakarta 2026.
+FleetFlow is an MVP built for Road To DevFest Jakarta 2026. Dispatch, scenario
+playback on the map and per-vehicle trip history ship. The image bundles the SUMO
+packages Debian provides plus `data/networks/jakarta.net.xml`, which is a
+central-Jakarta artifact and not verified DKI-wide coverage. The Cloud Run
+deployment is blocked on an open billing account; see [deploy/README.md](./deploy/README.md).
 
-### Cloud Run Production Deployment
+## Submission pack
 
-FleetFlow supports containerized deployment to Google Cloud Run in `asia-southeast2` (Jakarta):
+### What this is
 
-- **Self-contained runtime image**: The production Docker image bundles Eclipse SUMO 1.27.1, duarouter, Python 3, and the verified Jakarta road network (`/app/data/networks/jakarta.net.xml`), preconfigured via `SUMO_NETWORK`.
-- **Durable concurrency & multi-instance locking**: Runs are guarded across multiple Cloud Run instances by a PostgreSQL partial unique index (`simulation_runs_active_unique`). A second concurrent scenario request is rejected atomically with HTTP 409 Conflict across all instances.
-- **Restart & shutdown recovery**: On container startup or restart, any interrupted or orphaned runs are automatically detected and marked as failed with descriptive diagnostics. Container SIGTERM triggers graceful termination and updates the run record.
-- **Cloud Run configuration**: `deploy/cloudrun.service.yaml` defines service parameters including unthrottled CPU (`run.googleapis.com/cpu-throttling: "false"`), health checks (`/healthz` and `/readyz`), and Secret Manager integration for `DATABASE_URL`. See [deploy/README.md](./deploy/README.md).
+A Jakarta fleet operations console: dispatch, trip history, a live map, and a
+carbon ledger, built around one rule — a number a model produced must name the
+model that produced it.
 
-Remaining planned features include automatic roster dispatch, time-controlled playback, and linked trip history; see [TASKS.md](./TASKS.md).
+Real: the fleet records, trip ids, deduplication, attribution, and the arithmetic
+behind every figure. Simulated: every vehicle, every trip, every position, and
+every emission number. Emissions are per-class planning factors for congested
+urban delivery work, not a certified inventory; the electric cargo motorcycle
+reports zero tailpipe CO2 and its grid energy is not counted.
+
+### The three-minute demo
+
+Pre-flight: Postgres and OSRM up; API started with `OSRM_URL`; run
+`scripts/dev/seed-fleet.ps1` so the five demo drivers exist and are paired with
+vehicles; `/readyz` showing `routing: available`, `database: reachable` and the
+`writes` mode you expect; `/sustainability` showing three runs with distinct
+per-class intensities. Close everything else.
+
+| time | screen | say |
+|---|---|---|
+| 0:00–0:20 | landing | "A fleet operations console for Jakarta: dispatch, trip history, a live map, a carbon ledger. One rule: a number a model produced has to name the model." |
+| 0:20–0:55 | `/route-planning` | "Twelve Jakarta hubs. Geometry, distance and duration come from OSRM over a Jakarta OpenStreetMap extract; this application computes no route itself." Draw one route. |
+| 0:55–1:30 | `/operations/simulations` | Start the peak preset. "Seeded demand, generated trips, positions, deliveries. When it finishes, the panel says what produced it: synthetic generator, because no SUMO process ran. I could have labelled it SUMO." Point at `runner`. |
+| 1:30–2:05 | dispatch | "That run becomes fleet records: 100 vehicles with ids and separate plates and 170 trips. The five drivers come from the demo seeder, and dispatch assigns none: the vehicles are unassigned until someone pairs them. Repeat trips are refused by vehicle, origin and destination." Open a vehicle: trips, not a placeholder. |
+| 2:05–2:45 | `/sustainability` | "A 14-tonne diesel box truck is 948 grams per kilometre, a 4.5-tonne truck 569, a diesel van 348, an electric cargo motorcycle zero at the tailpipe. The class is on the row and the model is named above it: FleetFlow class factors, planning assumptions — not HBEFA3, not a certified inventory." |
+| 2:45–3:00 | close | "Apache-2.0, tests in the repo, and the limits are written down where you can check them." |
+
+Do not say "SUMO simulation" over a synthetic run, do not call the factors
+measured or HBEFA3, and do not claim a Cloud Run URL while the service is down.
+
+### Questions this repository can answer
+
+**"Which numbers in this demo were actually produced by SUMO?"** None of the
+stored runs. Every result carries `runner`: `"synthetic"` for the Go generator,
+`"sumo"` when `duarouter` and `sumo` ran, with `sumo_version` empty otherwise. The
+SUMO path is wired in `internal/simulation/sumo` and parses tripinfo, fcd and
+emission output under SUMO's HBEFA3 class; no validated Jakarta SUMO run exists on
+this machine, and the console does not pretend one does.
+
+**"What is the evidence this helps a Jakarta fleet, in money?"** There is no field
+evidence. What can be checked is the mechanism: routing is OSRM or a 503, the
+emission arithmetic is one table in `internal/fleet` with the class printed beside
+every figure, and `internal/fleet/fleet_test.go` proves a diesel truck and an
+electric motorcycle differ on the same kilometre. No operator, no measured Jakarta
+speeds, no fuel bills — so any rupiah figure would be invented, and none is given.
+
+**"Your writes are unauthenticated. What stops me scripting your booth?"** This
+process can close them: `REQUIRE_OPERATOR_KEY=true` makes every write that changes
+fleet data require the same API key as GPS ingestion, and `/readyz` publishes
+which mode is running (`writes: "protected"` or `"unauthenticated"`). The
+demonstration runs in the open mode because the console has no key to present, and
+it says so rather than implying it is safe. Independently of the mode, a rate limit
+of 100 requests per second with a burst of 200 and a 64 KiB body cap keep one
+caller from wedging the process: availability, not authorisation.

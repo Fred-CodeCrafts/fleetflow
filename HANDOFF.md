@@ -7,9 +7,9 @@ FleetFlow is a fleet-operations console for Jakarta. Read
 source of truth for scope. Scenarios run through Eclipse SUMO when a network is
 configured, or through the built-in Go generator; every run records which one
 produced it (`runner`). OSRM answers route requests, MapLibre draws the map, and
-authenticated GPS reports are stored separately from simulation data. The
-baseline-versus-dynamic study in [docs/results.md](./docs/results.md) is a
-recorded experiment, not a console feature, and there are no AI controls.
+authenticated GPS reports are stored separately from simulation data. There are
+no AI controls, and the console routes nothing of its own: OSRM answers or the
+request fails with 503.
 
 ## Current implementation
 
@@ -17,8 +17,9 @@ recorded experiment, not a console feature, and there are no AI controls.
   runs (memory and PostgreSQL repositories), dispatch, emissions summary, the hub
   catalogue at `GET /api/hubs`, and Flyway-managed schema in `db/migration`.
 - Dispatch turns a completed run into fleet records: vehicles get a unit name and
-  a separate plate, drivers are assigned, trips are deduplicated by vehicle,
-  origin and destination, and each trip links back to the run that produced it.
+  a separate plate, trips are deduplicated by vehicle, origin and destination, and
+  each trip links back to the run that produced it. Dispatch assigns no drivers;
+  `scripts/dev/seed-fleet.ps1` pairs the demo drivers with vehicles.
 - React console: MapLibre/OpenFreeMap map with hubs above routes and below
   vehicles, route planner, vehicle and driver detail pages with trip history, run
   ledger, and one sustainability page holding fleet totals, per-vehicle
@@ -44,11 +45,12 @@ recorded experiment, not a console feature, and there are no AI controls.
    account closed on 24 October, and Cloud Run refuses deploys without an open
    account. Restore billing, then `.\deploy\deploy.ps1 -Project fleetflow-4448 -Tag
    v0.1.0` puts the tagged image on the service and prints the URL.
-2. Record the three-minute demo following [docs/demo-script.md](./docs/demo-script.md)
-   and rehearse [docs/qa.md](./docs/qa.md).
+2. Record the three-minute demo using the shot list and the expected questions in
+   the README's Submission pack section.
 3. Produce one real SUMO scenario run so the demo can show `runner: "sumo"`
    beside a synthetic run, and validate the Jakarta network if that is claimed.
 4. Replace the emission planning factors with an operator's own fuel figures
    when one is available; until then do not convert the numbers to rupiah.
-5. `main` and `dev` are level at the `v0.1.0` tag. Keep the small-commit habit
-   and the branch model in [AGENTS.md](./AGENTS.md).
+5. `main` carries the released tag; `dev` runs ahead of it between releases, and
+   a release is a merge of `dev` into `main` plus a tag. Keep the small-commit
+   habit and the branch model in [AGENTS.md](./AGENTS.md).
