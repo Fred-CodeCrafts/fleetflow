@@ -263,6 +263,25 @@ Copy `.env.example` to `.env` for the Compose database values. Set `OSRM_URL`
 in the environment of the Go process; local shell processes do not load `.env`
 automatically.
 
+## Where the dynamic-weights idea came from
+
+The routing idea behind FleetFlow is the author's thesis: *Implementation of
+Stateful Dynamic Edge Weights to Avoid Congestion in SUMO-Based Routing Systems*
+— per-edge congestion state derived from probe reports, exponential smoothing,
+temporal decay, and metric customization. **This repository does not implement
+that research.** There is no CCH here, no TraCI loop and no LuST scenario, and the
+console routes through OSRM rather than a FleetFlow-owned router.
+
+An earlier prototype in this repository applied the *idea* at a much smaller
+scale: a 36-node grid, per-edge smoothed congestion written by the scenario's own
+speed reports, decay for edges that stopped reporting, and an immutable metric
+snapshot behind an atomic pointer so a route query never takes a write lock. It
+was removed on 25 October 2026, because nothing in the console consumed it, the
+script that generated its network was no longer in the tree, and its numbers could
+not be reproduced from a clone. The code is retrievable at tag `v0.1.1`
+(`internal/weights`, `internal/engine`, `internal/sim`); the thesis is where that
+work continues, and this repository is the operational console that came after it.
+
 ## Status
 
 FleetFlow is an MVP built for Road To DevFest Jakarta 2026. Dispatch, scenario
