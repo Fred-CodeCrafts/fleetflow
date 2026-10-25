@@ -10,6 +10,12 @@ function shareLabel(value: number) {
   return value === 0 ? '0% (control)' : `${Math.round(value * 100)}%`
 }
 
+// The API writes its method notes as clauses, so joining them into a paragraph
+// needs only a capital where one becomes a sentence.
+function sentence(text: string) {
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
+
 export function LabPage() {
   const [share, setShare] = useState(0.5)
   const [seeds, setSeeds] = useState(5)
@@ -108,18 +114,22 @@ export function LabPage() {
       </Panel>}
 
       <Panel title="What produced these numbers">
-        <dl className="detail-list">
-          <dt>Model</dt><dd>{data.method.model}</dd>
-          <dt>Network</dt><dd>{data.method.network}</dd>
-          <dt>Routing</dt><dd>{data.method.routing}</dd>
-          <dt>Congestion</dt><dd>{data.method.congestion}</dd>
-          <dt>Assumptions</dt><dd>{data.method.assumptions}</dd>
-          <dt>Not included</dt><dd>{data.method.not_included}</dd>
-        </dl>
-        <p className="help-text">
-          This is the idea from the author's thesis proposal, run at grid scale. It is not
-          the thesis: the proposal's network, its contraction hierarchies and its SUMO loop
-          are not here. A percentage from this page describes this model, not Jakarta.
+        <p>
+          {data.method.model}. The network is {data.method.network}. Routing is{' '}
+          {data.method.routing}. Congestion is {data.method.congestion}.{' '}
+          {sentence(data.method.assumptions)}. Not included: {data.method.not_included}.
+          A percentage from this page describes this model, not the city.
+        </p>
+        <p>
+          What makes this different: a fleet console normally takes its distance and time from
+          one router and leaves congestion out of the plan, so every vehicle is routed as though
+          the road were empty. This one treats congestion as data the fleet itself produces —
+          each simulated vehicle reports the speed it actually achieved, that report moves the
+          edge it just drove, and the next wave plans on what the previous wave learned. The
+          claim is checked in the same run, on the same demand and the same seed, against an arm
+          that never learns: set adoption to 0% and the two arms tie exactly, so an improvement
+          cannot come from noise. The design is the author's thesis proposal, run at grid scale;
+          the proposal's own network, its contraction hierarchies and its SUMO loop are not here.
         </p>
       </Panel>
     </>}

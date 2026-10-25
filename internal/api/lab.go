@@ -152,10 +152,10 @@ func floatParam(raw string, def float64) (float64, error) {
 func labMethodFor(cfg lab.Config) LabMethod {
 	return LabMethod{
 		Model:       "FleetFlow dynamic edge weights v1 (lab)",
-		Network:     fmt.Sprintf("%dx%d lattice, %.0f m streets; arterials every %d rows and columns at %.0f m and %.1f km/h", cfg.Network.Size, cfg.Network.Size, cfg.Network.SpacingM, cfg.Network.ArterialEvery, cfg.Network.ArterialLengthM, cfg.Network.ArterialSpeedMPS*3.6),
-		Routing:     "Dijkstra over an immutable metric snapshot; the static arm always costs edges at free-flow time",
-		Congestion:  "each extra simultaneous vehicle on an edge adds 25% to its travel time, capped at four times free flow",
-		Assumptions: "dynamic arm smooths reported congestion with an EMA (gamma 0.3), decays quiet edges toward free flow (lambda 0.1), and gives each driver a 35% private perception error; every simulated vehicle reports the speed it achieved",
-		NotIncluded: "not the thesis: no CCH, no TraCI, no LuST scenario, no Jakarta street plan, no measured traffic",
+		Network:     fmt.Sprintf("a %dx%d lattice of %.0f m streets, with arterials every %d rows and columns at %.0f m and %.1f km/h", cfg.Network.Size, cfg.Network.Size, cfg.Network.SpacingM, cfg.Network.ArterialEvery, cfg.Network.ArterialLengthM, cfg.Network.ArterialSpeedMPS*3.6),
+		Routing:     "Dijkstra over an immutable metric snapshot, with the static arm always costing edges at free-flow time",
+		Congestion:  "a speed-flow curve where each extra simultaneous vehicle on an edge adds 25% to its travel time, capped at four times free flow",
+		Assumptions: "the dynamic arm smooths reported congestion with an EMA (gamma 0.3), decays quiet edges toward free flow (lambda 0.1), and gives each driver a 35% private perception error, while every simulated vehicle reports the speed it achieved",
+		NotIncluded: "contraction hierarchies, TraCI, a LuST scenario, a Jakarta street plan, measured traffic",
 	}
 }
