@@ -23,13 +23,14 @@ func (f *fakeFleet) List(context.Context, vehicle.ListFilter) ([]vehicle.Vehicle
 func (f *fakeFleet) Create(_ context.Context, in vehicle.CreateInput) (vehicle.Vehicle, error) {
 	f.created++
 	v := vehicle.Vehicle{
-		ID:       fmt.Sprintf("veh-%d", f.created),
-		Name:     in.Name,
-		Type:     in.Type,
-		Make:     in.Make,
-		Model:    in.Model,
-		FuelType: in.FuelType,
-		Status:   vehicle.StatusAvailable,
+		ID:           fmt.Sprintf("veh-%d", f.created),
+		Name:         in.Name,
+		Type:         in.Type,
+		Registration: in.Registration,
+		Make:         in.Make,
+		Model:        in.Model,
+		FuelType:     in.FuelType,
+		Status:       vehicle.StatusAvailable,
 	}
 	f.vehicles = append(f.vehicles, v)
 	return v, nil
@@ -103,6 +104,17 @@ func TestDispatchRecordsVehiclesAndTripsOnce(t *testing.T) {
 	// way on every dispatch.
 	if fleet.vehicles[0].Make == "" || fleet.vehicles[0].Model == "" || fleet.vehicles[0].Type == "" {
 		t.Fatalf("registered vehicle has no profile: %#v", fleet.vehicles[0])
+	}
+	// The plate is the registration, not the name: the register shows a unit and
+	// its plate as separate fields.
+	if fleet.vehicles[0].Registration != "B-9001-JKT" {
+		t.Fatalf("registration = %q, want the plate", fleet.vehicles[0].Registration)
+	}
+	if fleet.vehicles[0].Name == fleet.vehicles[0].Registration {
+		t.Fatalf("name = %q, want a unit name rather than the plate", fleet.vehicles[0].Name)
+	}
+	if fleet.vehicles[0].Name != "Unit 1" {
+		t.Fatalf("name = %q, want the unit number from the plate", fleet.vehicles[0].Name)
 	}
 	// The profile follows the plate, so two plates get two specifications.
 	if fleet.vehicles[0].Model == fleet.vehicles[1].Model {

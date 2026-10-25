@@ -71,6 +71,13 @@ var fleetProfiles = []fleetProfile{
 // profileFor returns the profile for a plate, chosen from its number so the same
 // vehicle always receives the same specification.
 func profileFor(plate string) fleetProfile {
+	number := plateNumber(plate)
+	return fleetProfiles[(number-9001)%len(fleetProfiles)]
+}
+
+// plateNumber reads the number out of a plate, defaulting to the first plate in
+// the sequence when it carries no digits.
+func plateNumber(plate string) int {
 	digits := strings.Map(func(r rune) rune {
 		if r >= '0' && r <= '9' {
 			return r
@@ -79,9 +86,19 @@ func profileFor(plate string) fleetProfile {
 	}, plate)
 	number, err := strconv.Atoi(digits)
 	if err != nil || number < 9001 {
-		number = 9001
+		return 9001
 	}
-	return fleetProfiles[(number-9001)%len(fleetProfiles)]
+	return number
+}
+
+// fleetName is what the register calls the vehicle.
+//
+// The plate is not a name: it is stored as the registration, and the register
+// shows the two side by side. The name is the unit number the fleet works in,
+// derived from the plate so the same vehicle keeps the same name on every
+// dispatch.
+func fleetName(plate string) string {
+	return fmt.Sprintf("Unit %d", plateNumber(plate)-9000)
 }
 
 // Dispatcher writes a scenario's vehicles and trips into the fleet stores.
@@ -97,12 +114,12 @@ func New(fleet Fleet, trips Trips) *Dispatcher {
 
 // Dispatch registers every completed trip's vehicle and then the trip itself.
 //
-// It is idempotent by content, not by run id: a vehicle is matched on its plate,
-// and a trip is skipped when the same vehicle already carries a trip between the
-// same two hubs. Re-running a mode, or restarting the server, therefore reuses
-// the rows it created the first time instead of growing the register. The presets
-// are covered by a test that proves their hub pairs are distinct per vehicle, so
-// the reuse is a decision rather than a collision.
+// It is idempotent by content, not by run id: a vehicle is matched on the plate
+// its registration carries, and a trip is skipped when the same vehicle already
+// carries a trip between the same two hubs. Re-running a mode, or restarting the
+// server, therefore reuses the rows it created the first time instead of growing
+// the register. The presets are covered by a test that proves their hub pairs are
+// distinct per vehicle, so the reuse is a decision rather than a collision.
 //
 // Both stores are read once and indexed, because a dispatch of a hundred vehicles
 // would otherwise list the fleet a hundred times.
@@ -166,20 +183,29 @@ func (d *Dispatcher) Dispatch(ctx context.Context, runID string, result sumo.Res
 }
 
 // vehicleIndex maps a plate, folded to lower case, to its stored vehicle id.
+//
+// The match is made on the registration, because the plate is the identifier a
+// scenario prints. Names are indexed too, so a row registered before plates had
+// their own column still resolves instead of being duplicated.
 func (d *Dispatcher) vehicleIndex(ctx context.Context) (map[string]string, error) {
 	vehicles, err := d.fleet.List(ctx, vehicle.ListFilter{})
 	if err != nil {
 		return nil, fmt.Errorf("list vehicles: %w", err)
 	}
-	index := make(map[string]string, len(vehicles))
+	index := make(map[string]string, len(vehicles)*2)
 	for _, v := range vehicles {
-		index[strings.ToLower(strings.TrimSpace(v.Name))] = v.ID
+		for _, key := range []string{v.Registration, v.Name} {
+			if key = strings.ToLower(strings.TrimSpace(key)); key != "" {
+				index[key] = v.ID
+			}
+		}
 	}
 	return index, nil
 }
 
 // ensureVehicle returns the id of the vehicle with this plate, registering it
-// when the fleet does not know it yet.
+// when the fleet does not know it yet. The plate becomes the registration; the
+// name is the unit the fleet works in.
 func (d *Dispatcher) ensureVehicle(ctx context.Context, index map[string]string, plate string) (string, error) {
 	plate = strings.TrimSpace(plate)
 	key := strings.ToLower(plate)
@@ -189,7 +215,7 @@ func (d *Dispatcher) ensureVehicle(ctx context.Context, index map[string]string,
 	profile := profileFor(plate)
 	year, capacity := profile.Year, profile.Capacity
 	created, err := d.fleet.Create(ctx, vehicle.CreateInput{
-		Name:         plate,
+		Name:         fleetName(plate),
 		Type:         profile.Type,
 		Status:       vehicle.StatusAvailable.String(),
 		Registration: plate,
