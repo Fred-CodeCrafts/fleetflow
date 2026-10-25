@@ -43,22 +43,25 @@ implementation caveats.
   contact, license, shift, and availability without collecting sensitive
   identity fields; keep missing values explicitly unknown.
 - [x] Add individual vehicle and driver profile pages.
-- [ ] Link automatically dispatched scenario trips to fleet records and show
+- [x] Link automatically dispatched scenario trips to fleet records and show
   those records' associated trip history.
-- [ ] Record SUMO fuel/emissions model, units, and assumptions; separate
-  simulated estimates from measured activity.
-- [x] Package SUMO execution for durable Cloud Run deployment; test
-  recovery and multi-instance concurrency locks across API restarts.
+- [x] Record the emissions model, class, units and assumptions with every run,
+  and keep modelled figures separate from measured activity.
+- [ ] Package SUMO execution for durable Cloud Run deployment and test recovery
+  across API restarts. The container bundles SUMO; none of that has been
+  exercised against a deployed revision.
 
 ## Validation and rollout
 
-- [ ] Add focused Go tests for scenario validation, deterministic inputs,
+- [x] Add focused Go tests for scenario validation, deterministic inputs,
   assignment eligibility, run failure handling, output parsing, and event order.
-- [ ] Add focused API and console tests for read-only trip flow, generated
+- [x] Add focused API and console tests for read-only trip flow, generated
   history, clear source labels, and unavailable-data states.
-- [ ] Run Go formatting, vet, build, and tests, preserving any user-owned local
-  changes; run the console tests, typecheck, and production build.
-- [ ] Exercise a full scenario end to end on the verified DKI-wide network.
+- [x] Run Go formatting, vet, build, and tests; run the console tests, typecheck,
+  and production build.
+- [ ] Exercise a full scenario end to end on the verified DKI-wide network. The
+  tracked network is a central-Jakarta artifact.
 - [ ] Verify real GPS and SUMO map layers cannot be confused.
-- [x] Validate deployed SUMO runtime, database persistence, OSRM, attribution,
-  and Cloud Run production deployment configuration.
+- [ ] Validate the deployed revision. Blocked: the Cloud Run service's billing
+  account closed on 24 October, so the last revision does not start and no deploy
+  can be made until it is restored.
