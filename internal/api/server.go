@@ -160,6 +160,7 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/simulation/runs/{id}", s.public(s.handleGetSimulationRun))
 	s.mux.Handle("GET /api/emissions/summary", s.public(s.handleEmissionsSummary))
 	s.mux.Handle("GET /api/hubs", s.public(s.handleListHubs))
+	s.mux.Handle("GET /api/lab/dynamic", s.public(s.handleLabDynamic))
 
 	console := s.public(web.Handler().ServeHTTP)
 	s.mux.Handle("GET /{$}", console)
