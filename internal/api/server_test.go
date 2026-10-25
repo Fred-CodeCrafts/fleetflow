@@ -68,23 +68,51 @@ func testServer(t *testing.T, opts ...Option) *Server {
 
 func TestHealthz(t *testing.T) {
 	s := testServer(t)
-	rec := httptest.NewRecorder()
 
-	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	for _, path := range []string{"/healthz", "/api/healthz"} {
+		t.Run(path, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", rec.Code)
-	}
-	if got := rec.Header().Get("Content-Type"); got != "application/json; charset=utf-8" {
-		t.Errorf("Content-Type = %q", got)
-	}
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200", rec.Code)
+			}
+			if got := rec.Header().Get("Content-Type"); got != "application/json; charset=utf-8" {
+				t.Errorf("Content-Type = %q", got)
+			}
 
-	var body map[string]string
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatalf("response is not JSON: %v", err)
+			var body map[string]string
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatalf("response is not JSON: %v", err)
+			}
+			if body["status"] != "ok" {
+				t.Errorf("body = %v, want status ok", body)
+			}
+		})
 	}
-	if body["status"] != "ok" {
-		t.Errorf("body = %v, want status ok", body)
+}
+
+// Every sidebar section has to reach the console when Go serves it, not just
+// when Vite does. The route table allow-lists sections one by one, so a new
+// section that is not listed answers 404 in production and looks fine in
+// development — which is exactly how the sustainability pages shipped broken.
+func TestEveryConsoleSectionReachesTheConsole(t *testing.T) {
+	s := testServer(t)
+	for _, path := range []string{
+		"/operations",
+		"/operations/trips",
+		"/resources/vehicles",
+		"/sustainability",
+		"/sustainability/emissions",
+		"/settings/general",
+	} {
+		rec := httptest.NewRecorder()
+		s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		unbuilt := rec.Code == http.StatusServiceUnavailable &&
+			strings.Contains(rec.Body.String(), "console is not built")
+		if !unbuilt && rec.Code != http.StatusOK {
+			t.Errorf("GET %s answered %d, want the console document", path, rec.Code)
+		}
 	}
 }
 
@@ -126,9 +154,6 @@ func TestPrototypeEndpointsAreNotRegistered(t *testing.T) {
 		{http.MethodGet, "/api/network"},
 		{http.MethodGet, "/api/emissions"},
 		{http.MethodGet, "/api/stream"},
-		{http.MethodGet, "/api/trips"},
-		{http.MethodPost, "/api/trips"},
-		{http.MethodPost, "/api/trips/example/status"},
 		{http.MethodPost, "/api/vehicles/example/driver"},
 	} {
 		t.Run(endpoint.path, func(t *testing.T) {
@@ -213,15 +238,19 @@ func TestReadyz_WithoutDatabase(t *testing.T) {
 
 func TestReadyz_DatabaseReachable(t *testing.T) {
 	s := testServer(t, WithDatabaseCheck(func(context.Context) error { return nil }))
-	rec := httptest.NewRecorder()
 
-	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+	for _, path := range []string{"/readyz", "/api/readyz"} {
+		t.Run(path, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", rec.Code)
-	}
-	if got := decodeBody(t, rec)["database"]; got != "reachable" {
-		t.Errorf("database = %v, want reachable", got)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200", rec.Code)
+			}
+			if got := decodeBody(t, rec)["database"]; got != "reachable" {
+				t.Errorf("database = %v, want reachable", got)
+			}
+		})
 	}
 }
 

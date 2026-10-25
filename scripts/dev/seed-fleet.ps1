@@ -61,31 +61,44 @@ function Get-OrCreateRecord {
 
 Invoke-FleetFlowApi -Method 'Get' -Path '/healthz' -Body $null | Out-Null
 
+# The fleet itself belongs to the scenarios: a completed run registers the
+# vehicles it drove, with their profiles. Seeding a second fleet here would give
+# the console two of everything, so this script only adds people and allocations.
+# It reads the fleet, it does not create it.
 $vehicleData = Invoke-FleetFlowApi -Method 'Get' -Path '/api/vehicles' -Body $null
 $vehicles = @($vehicleData.vehicles)
-$vehicleSeeds = @(
-    @{ name = 'DEMO - Jakarta Van 01'; type = 'van'; status = 'available' },
-    @{ name = 'DEMO - Jakarta Truck 01'; type = 'truck'; status = 'available' },
-    @{ name = 'DEMO - Jakarta Car 01'; type = 'car'; status = 'available' }
-)
-foreach ($seed in $vehicleSeeds) {
-    $vehicle = Get-OrCreateRecord -Records $vehicles -Field 'name' -Value $seed.name `
-        -Path '/api/vehicles' -Body $seed
-    $vehicles += $vehicle
-}
 
 $driverData = Invoke-FleetFlowApi -Method 'Get' -Path '/api/drivers' -Body $null
 $drivers = @($driverData.drivers)
 $driverSeeds = @(
-    @{ name = 'DEMO - Driver 01'; contact = 'demo-driver-01@example.invalid' },
-    @{ name = 'DEMO - Driver 02'; contact = 'demo-driver-02@example.invalid' }
+    @{ name = 'Budi Santoso'; contact = '+62 812-3456-7890'; contact_phone = '+62 812-3456-7890'; license_class = 'B2 Umum'; shift_start = '07:00'; shift_end = '16:00'; availability = 'available'; contract_type = 'Full-time' },
+    @{ name = 'Agus Setiawan'; contact = '+62 813-9876-5432'; contact_phone = '+62 813-9876-5432'; license_class = 'B1'; shift_start = '08:00'; shift_end = '17:00'; availability = 'available'; contract_type = 'Contract' },
+    @{ name = 'Rian Hidayat'; contact = '+62 815-2233-4455'; contact_phone = '+62 815-2233-4455'; license_class = 'A'; shift_start = '08:00'; shift_end = '17:00'; availability = 'available'; contract_type = 'Full-time' },
+    @{ name = 'Eko Prasetyo'; contact = '+62 817-6677-8899'; contact_phone = '+62 817-6677-8899'; license_class = 'A'; shift_start = '06:00'; shift_end = '15:00'; availability = 'available'; contract_type = 'Contract' },
+    @{ name = 'Dimas Pratama'; contact = '+62 819-3344-5566'; contact_phone = '+62 819-3344-5566'; license_class = 'C'; shift_start = '09:00'; shift_end = '18:00'; availability = 'available'; contract_type = 'Freelance' }
 )
+$seededDrivers = @()
 foreach ($seed in $driverSeeds) {
-    $driver = Get-OrCreateRecord -Records $drivers -Field 'name' -Value $seed.name `
+    $seededDrivers += Get-OrCreateRecord -Records $drivers -Field 'name' -Value $seed.name `
         -Path '/api/drivers' -Body $seed
-    $drivers += $driver
 }
 
-Write-Output "Seeded demo fleet records at $BaseUrl."
-Write-Output 'Created or reused 3 demo vehicles and 2 demo drivers.'
-Write-Output 'No GPS positions were generated. DEMO records are sample data, not live fleet activity.'
+# Put each seeded driver on a registered vehicle so the register shows who is on
+# what. A driver who already holds a vehicle keeps it, and a vehicle someone else
+# holds is not handed out twice: the seeder makes the demo pairing once, it does
+# not reassign work the operator has moved.
+$held = @($drivers | Where-Object { $_.vehicle_id } | ForEach-Object { $_.vehicle_id })
+$freeVehicles = @($vehicles | Where-Object { $held -notcontains $_.id } | Sort-Object registration, name)
+$waiting = @($seededDrivers | Where-Object { -not $_.vehicle_id })
+$allocationCount = [Math]::Min($waiting.Count, $freeVehicles.Count)
+for ($i = 0; $i -lt $allocationCount; $i++) {
+    Invoke-FleetFlowApi -Method 'Put' -Path "/api/drivers/$($waiting[$i].id)/vehicle" -Body @{ vehicle_id = $freeVehicles[$i].id } | Out-Null
+}
+
+if ($vehicles.Count -eq 0) {
+    Write-Output 'No vehicles are registered yet, so no driver was allocated. Start a scenario to register the fleet, then run this again.'
+}
+
+Write-Output "Seeded fleet people at $BaseUrl."
+Write-Output "Created or verified $($driverSeeds.Count) drivers and allocated $allocationCount of them to registered vehicles."
+Write-Output 'The fleet itself is registered by completed scenarios. No GPS positions were generated.'

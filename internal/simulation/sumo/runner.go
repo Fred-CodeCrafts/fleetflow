@@ -118,7 +118,6 @@ func (r *Runner) Run(ctx context.Context, scenario Scenario) (Result, error) {
 		"--prefix", "fleetflow",
 		"--min-distance", strconv.Itoa(minTripDistanceM),
 		"--max-distance", strconv.Itoa(maxTripDistanceM),
-		"--no-validate",
 		"--vehicle-class", "passenger",
 	}
 	if _, err := r.runCommand(ctx, workDir, "generate seeded demand", r.tools.Python, args...); err != nil {
@@ -134,6 +133,7 @@ func (r *Runner) Run(ctx context.Context, scenario Scenario) (Result, error) {
 		"--output-file", routesPath,
 		"--seed", strconv.FormatInt(scenario.Seed, 10),
 		"--no-warnings", "true",
+		"--ignore-errors", "true",
 	}
 	if _, err := r.runCommand(ctx, workDir, "route seeded demand", r.tools.DuaRouter, args...); err != nil {
 		return Result{}, err
@@ -197,6 +197,7 @@ func (r *Runner) Run(ctx context.Context, scenario Scenario) (Result, error) {
 	}
 
 	return Result{
+		Runner:      "sumo",
 		SUMOVersion: r.version,
 		Seed:        scenario.Seed,
 		StartedAt:   startedAt,

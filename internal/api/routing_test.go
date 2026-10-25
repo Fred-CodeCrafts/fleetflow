@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"fleetflow/internal/osrm"
@@ -40,6 +41,30 @@ func TestRouteDelegatesToOSRM(t *testing.T) {
 	geometry, ok := body["geometry"].([]any)
 	if !ok || len(geometry) != 2 {
 		t.Fatalf("geometry = %v", body["geometry"])
+	}
+}
+
+// unhealthyRouter is a routing service that answers, and answers that it cannot
+// reach OSRM. Readiness has to report that, not report the service usable
+// because some router is configured.
+type unhealthyRouter struct{}
+
+func (unhealthyRouter) Health(context.Context) error { return errors.New("connection refused") }
+
+func (unhealthyRouter) Route(context.Context, osrm.Coordinate, osrm.Coordinate) (osrm.Route, error) {
+	return osrm.Route{}, errors.New("connection refused")
+}
+
+func TestReadyzReportsRoutingUnavailable(t *testing.T) {
+	s := testServer(t, WithRouter(unhealthyRouter{}))
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503: %s", rec.Code, rec.Body)
+	}
+	if got := decodeBody(t, rec)["routing"]; got != "unavailable" {
+		t.Fatalf("routing = %v, want unavailable", got)
 	}
 }
 

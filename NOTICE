@@ -46,9 +46,6 @@ react-router-dom
 maplibre-gl
   BSD 3-Clause License. Copyright (c) 2023 MapLibre contributors.
 
-@deck.gl/core, @deck.gl/layers, @deck.gl/mapbox
-  MIT License. Copyright Vis.gl contributors.
-
 vite, vitest
   MIT License. Copyright their respective contributors.
 
@@ -58,6 +55,41 @@ typescript
 @vitejs/plugin-react
   MIT License. Copyright Yuxi (Evan) You and Vite contributors.
 
+Runtimes and models invoked at execution time
+---------------------------------------------
+
+These are not linked into the Go binary. FleetFlow runs them or derives numbers
+from them, so they are recorded here.
+
+Eclipse SUMO, including duarouter and netconvert
+  Eclipse Public License 2.0. Copyright Eclipse Foundation and the SUMO
+  contributors. https://eclipse.dev/sumo/
+  FleetFlow invokes `duarouter` and `sumo` as child processes when a SUMO network
+  is configured, and reads their trip, route and emission output. SUMO is
+  installed separately or in the container image; none of its source or data is
+  copied into this repository.
+
+HBEFA3 emission classes, as implemented by SUMO
+  The HBEFA3 model is published by TU Graz and INFRAS (Handbook Emission Factors
+  for Road Transport). FleetFlow does not reimplement it: when a scenario runs
+  through SUMO, the emission class is set in the route file and SUMO returns the
+  emission figures. HBEFA3 is named in `internal/simulation/sumo` because that is
+  the model SUMO evaluated.
+
+FleetFlow class factors v1
+  Original to this project, no third-party rights. The synthetic scenario
+  generator's per-class fuel and CO2 factors (`internal/fleet`) are planning
+  assumptions written for this repository, not HBEFA3, not a certified
+  inventory, and not measured from an operator. The emissions page prints the
+  model name it used so the two paths are never confused.
+
+OSRM (Open Source Routing Machine)
+  BSD 2-Clause License. Copyright (c) 2016, Project OSRM contributors.
+  https://project-osrm.org/
+  Route geometry, distance and duration come from an OSRM server that FleetFlow
+  queries over HTTP. The server runs separately, from an image built by
+  `scripts/osrm`; no OSRM source is vendored here.
+
 Map data and tiles
 ------------------
 
@@ -65,3 +97,14 @@ The map uses OpenFreeMap tiles with OpenMapTiles and OpenStreetMap attribution.
 OpenStreetMap data is © OpenStreetMap contributors and is made available under
 the Open Database License (ODbL). The basemap's attribution control displays the
 provider and data credits.
+
+The OSRM Jakarta/Jabodetabek extract is downloaded from Geofabrik
+(https://download.geofabrik.de/asia/indonesia.html) and is derived from
+OpenStreetMap, so it carries the same ODbL obligations: attribution to
+OpenStreetMap contributors, and share-alike for any derived database that is
+published. The extract and the OSRM graph built from it stay under `data/osrm/`,
+which is ignored by Git, and are not redistributed by this repository.
+
+Emission factors reference no third-party data set; the figures in
+`internal/fleet` are stated assumptions with their sources named in the code.
+

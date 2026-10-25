@@ -16,6 +16,7 @@ import (
 	"fleetflow/internal/driver"
 	"fleetflow/internal/osrm"
 	"fleetflow/internal/simulation"
+	"fleetflow/internal/trip"
 	"fleetflow/internal/vehicle"
 	"fleetflow/web"
 )
@@ -37,6 +38,7 @@ var errNoAuth = domain.Unavailable("auth_unavailable", "API keys are not configu
 type Server struct {
 	vehicles   *vehicle.Service
 	drivers    *driver.Service
+	trips      *trip.Service
 	router     osrm.Router
 	simulation *simulation.Service
 	keys       *auth.Service
@@ -58,6 +60,10 @@ func WithVehicles(svc *vehicle.Service) Option {
 
 func WithDrivers(svc *driver.Service) Option {
 	return func(s *Server) { s.drivers = svc }
+}
+
+func WithTrips(svc *trip.Service) Option {
+	return func(s *Server) { s.trips = svc }
 }
 
 func WithSimulation(svc *simulation.Service) Option {
@@ -120,6 +126,8 @@ func NewServer(opts ...Option) *Server {
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /healthz", s.handleHealthz)
 	s.mux.Handle("GET /readyz", withTimeout(requestTimeout, http.HandlerFunc(s.handleReadyz)))
+	s.mux.HandleFunc("GET /api/healthz", s.handleHealthz)
+	s.mux.Handle("GET /api/readyz", withTimeout(requestTimeout, http.HandlerFunc(s.handleReadyz)))
 
 	s.mux.Handle("POST /api/locations", s.authed(s.handleCreateLocation))
 	s.mux.Handle("GET /api/locations", s.public(s.handleListLocations))
@@ -129,17 +137,28 @@ func (s *Server) routes() {
 	s.mux.Handle("POST /api/vehicles", s.public(s.handleCreateVehicle))
 	s.mux.Handle("GET /api/drivers", s.public(s.handleListDrivers))
 	s.mux.Handle("POST /api/drivers", s.public(s.handleCreateDriver))
+	s.mux.Handle("PUT /api/drivers/{id}/vehicle", s.public(s.handleAssignDriverVehicle))
+	s.mux.Handle("POST /api/drivers/{id}/vehicle", s.public(s.handleAssignDriverVehicle))
+	s.mux.Handle("GET /api/trips", s.public(s.handleListTrips))
+	s.mux.Handle("POST /api/trips", s.public(s.handleCreateTrip))
+	s.mux.Handle("PATCH /api/trips/{id}/status", s.public(s.handleUpdateTripStatus))
 	s.mux.Handle("POST /api/simulation/runs", s.public(s.handleCreateSimulationRun))
 	s.mux.Handle("GET /api/simulation/runs", s.public(s.handleListSimulationRuns))
 	s.mux.Handle("GET /api/simulation/runs/{id}", s.public(s.handleGetSimulationRun))
+	s.mux.Handle("GET /api/emissions/summary", s.public(s.handleEmissionsSummary))
+	s.mux.Handle("GET /api/hubs", s.public(s.handleListHubs))
 
 	console := s.public(web.Handler().ServeHTTP)
 	s.mux.Handle("GET /{$}", console)
 	s.mux.Handle("GET /assets/", console)
+	s.mux.Handle("GET /trips", console)
+	s.mux.Handle("GET /trips/", console)
 	s.mux.Handle("GET /operations", console)
 	s.mux.Handle("GET /operations/", console)
 	s.mux.Handle("GET /resources", console)
 	s.mux.Handle("GET /resources/", console)
+	s.mux.Handle("GET /sustainability", console)
+	s.mux.Handle("GET /sustainability/", console)
 	s.mux.Handle("GET /settings", console)
 	s.mux.Handle("GET /settings/", console)
 }

@@ -12,6 +12,7 @@ PROJECT_ID="${PROJECT_ID:-$(gcloud config get-value project 2>/dev/null || true)
 REGION="${REGION:-asia-southeast2}"
 SERVICE_NAME="fleetflow"
 REPO_NAME="fleetflow"
+OSRM_URL="${OSRM_URL:-https://router.project-osrm.org}"
 
 if [ -z "${PROJECT_ID}" ]; then
   echo "Error: PROJECT_ID is not set. Set with 'export PROJECT_ID=my-project-id' or 'gcloud config set project my-project-id'." >&2
@@ -64,6 +65,7 @@ gcloud run deploy "${SERVICE_NAME}" \
   --no-cpu-throttling \
   --port="8080" \
   --allow-unauthenticated \
+  --set-env-vars="OSRM_URL=${OSRM_URL}" \
   --project="${PROJECT_ID}" \
   --quiet
 

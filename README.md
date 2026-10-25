@@ -1,13 +1,21 @@
 # FleetFlow
 
-FleetFlow is a fleet operations console for Jakarta. Operators run repeatable
-SUMO scenarios and inspect generated vehicle trips, routes, position history,
-and modeled fuel/emissions. The console also manages fleet records, routes
-requests through OSRM, and keeps real GPS reports separate from simulation data.
+FleetFlow is a fleet operations console for Jakarta: dispatch, trip history, a
+live map, and a carbon ledger. Scenarios can run through Eclipse SUMO when a
+network is configured, or through the built-in Go generator; every run records
+which one produced it, and the console prints that field rather than implying
+SUMO always ran. The console also manages fleet records, routes requests through
+OSRM, and keeps real GPS reports separate from simulation data.
 
 The console uses MapLibre GL with OpenFreeMap tiles. FleetFlow does not generate
-real traffic or present simulated positions and emissions as measured fleet
-data. It does not run baseline-versus-dynamic comparisons or include AI controls.
+real traffic and does not present simulated positions or modelled emissions as
+measured fleet data. The routing-versus-baseline study in `docs/results.md` is a
+recorded experiment, not a feature in the console.
+
+- Submission summary: [`docs/submission-summary.md`](docs/submission-summary.md)
+- Three-minute demo script: [`docs/demo-script.md`](docs/demo-script.md)
+- Judge Q&A rehearsal: [`docs/qa.md`](docs/qa.md)
+- Deployment: [`deploy/README.md`](deploy/README.md)
 
 ## Routing, map, and simulation data
 
@@ -63,6 +71,15 @@ city SUMO route/connectivity validation has not been completed.
    docker compose --profile routing up -d osrm
    ```
 
+   Port 5000 is commonly taken by other local services. Publish OSRM on a
+   different host port and point the API at the same one:
+
+   ```powershell
+   $env:OSRM_PORT = '5001'
+   docker compose --profile routing up -d osrm
+   # then start the Go process with OSRM_URL=http://127.0.0.1:5001
+   ```
+
 3. In a second terminal, start the Go API from the repository root. Adjust
    `SUMO_HOME` if SUMO is installed elsewhere:
 
@@ -94,7 +111,7 @@ city SUMO route/connectivity validation has not been completed.
    run `npm run build` in `console\` before starting the Go process, then open
    `http://localhost:8080`.
 
-5. Optionally seed development fleet records from the repository root:
+5. Optionally seed demo drivers and allocate them to the registered fleet:
 
    ```powershell
    .\scripts\dev\seed-fleet.ps1
@@ -128,18 +145,22 @@ package events are generated from simulation traces; they are not real scans.
 
 ## Seed local demo records
 
-With the FleetFlow API running locally, seed sample vehicles and drivers:
+With the FleetFlow API running locally, seed sample drivers and pair each with a
+registered vehicle:
 
 ```powershell
 .\scripts\dev\seed-fleet.ps1
 ```
 
-The seeder is idempotent: it reuses matching records on repeat runs. Seeded
-records are labeled `DEMO`; it creates no trips or GPS positions. The live map
-stays empty until a vehicle reports a real position. Records use the running
-application's configured store, so a memory-backed local run loses them when
-the service restarts. This is a development convenience, not a production
-initialization command. Remote targets are refused unless `-AllowRemote` is
+The fleet belongs to the scenarios: a completed run registers the vehicles it
+drove, with their specifications, so run one from **Operations → SUMO
+Scenarios** first if the register is empty. The seeder then adds five drivers
+and gives each a free vehicle, once; a driver who already holds a vehicle keeps
+it, so repeat runs change nothing. It creates no vehicles, trips or GPS
+positions. Records use the running application's configured store, so a
+memory-backed local run loses them when the service restarts. This is a
+development convenience, not a production initialization command. Remote targets
+are refused unless `-AllowRemote` is
 explicitly provided; never use it against production.
 
 To run the Go app in a container while OSRM is running on the host, set
@@ -172,13 +193,29 @@ their attribution is displayed on the map.
   assignment is not exposed.
 - **General Settings** reports app health and the routing/map providers.
 
-Fuel and CO₂ values are SUMO HBEFA3 estimates for the explicitly assigned
-`HBEFA3/PC_G_EU4` Euro 4 gasoline passenger-car class. SUMO tripinfo values are
-converted from milligrams to kilograms, and the model, class, units, source, and
-assumptions are stored with each run. This generic class is not a fleet-specific
-measurement or verified carbon saving. Automatic fleet dispatch,
-time-controlled route playback, and trip history on individual fleet records
-are not yet implemented.
+### Emissions: two paths, each named
+
+What a trip emits depends on which runner produced it, and the run says which.
+
+- A **SUMO run** uses SUMO's HBEFA3 model: the route file assigns
+  `HBEFA3/PC_G_EU4` (a Euro 4 petrol passenger car) to every generated vehicle,
+  and `sumo` reports the emission values, which `internal/simulation/sumo`
+  converts from milligrams to kilograms. That class is a generic stand-in, not a
+  description of a Jakarta box truck, and the run stores it as such.
+- A **synthetic run** is charged by `internal/fleet`, which holds one fuel figure
+  per vehicle class and the carbon content of that fuel: 0.30 kg/km at 3.16 kg
+  CO2/kg for a 14 t diesel box truck, 0.18 for a 4.5 t truck, 0.11 for a diesel
+  van, 0.09 at 3.10 for a petrol van, and zero tailpipe CO2 for the electric
+  cargo motorcycle. These are planning assumptions for congested urban delivery
+  work, stated so the arithmetic can be checked by hand, and the API returns the
+  class next to every figure.
+
+Neither path is a measured inventory, and neither converts to rupiah. The
+`sustainability` page prints the model name with the numbers for that reason.
+
+Automatic fleet dispatch, scenario playback on the map, and trip history on
+individual fleet records are implemented; `/api/hubs` serves the hub catalogue
+the map draws.
 
 ## API
 
