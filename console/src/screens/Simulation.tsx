@@ -2,13 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { api, type Coordinate, type OSRMRoute, type SimulatedTrack, type SimulationRun } from '../api/client'
 import { RoutingMap } from '../map/RoutingMap'
-import { ErrorMessage, formatNumber, Loading, Metric, Page, Panel, Status, Table, useLoad } from './Shared'
-
-export const presets = {
-  light: { label: 'Light shift', vehicles: 20, departure_window_s: 300 },
-  peak: { label: 'Peak shift', vehicles: 50, departure_window_s: 900 },
-  heavy: { label: 'High demand', vehicles: 100, departure_window_s: 1800 },
-} as const
+import { ErrorMessage, formatNumber, Loading, Metric, Page, Panel, presets, runLabel, Status, Table, useLoad } from './Shared'
 
 export function useSimulationRun(runID: string) {
   const [run, setRun] = useState<SimulationRun | null>(null)
@@ -310,7 +304,7 @@ export function TripsPage() {
         {runs.loading ? <Loading /> : runs.error ? <ErrorMessage>{runs.error}</ErrorMessage> :
           <Table headers={['Run', 'Status', 'Seed', 'Requested vehicles', 'Created', 'Open']}>
             {(runs.data ?? []).map((run) => <tr key={run.id}>
-              <td>{(run.id || '').slice(0, 12)}</td><td><Status value={run.status} /></td><td>{run.scenario.seed}</td>
+              <td>{runLabel(run.id)}</td><td><Status value={run.status} /></td><td>{run.scenario.seed}</td>
               <td>{run.scenario.vehicles}</td><td>{new Date(run.created_at).toLocaleString()}</td>
               <td><button className="button" type="button" onClick={() => setSearchParams({ run: run.id })}>View simulation trips</button></td>
             </tr>)}

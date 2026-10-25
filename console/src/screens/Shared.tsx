@@ -1,6 +1,29 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { ApiError } from '../api/client'
 
+/**
+ * The three seeded scenario modes. They live here rather than in one screen
+ * because both the pages that start a run and the pages that report one name the
+ * same modes, and a mode should have one name.
+ */
+export const presets = {
+  light: { label: 'Light shift', vehicles: 20, departure_window_s: 300 },
+  peak: { label: 'Peak shift', vehicles: 50, departure_window_s: 900 },
+  heavy: { label: 'High demand', vehicles: 100, departure_window_s: 1800 },
+} as const
+
+/**
+ * runLabel names a scenario run the way a person chose it.
+ *
+ * A seeded preset keeps a readable id, and showing the mode name is both clearer
+ * and shorter than truncating that id to fit a column; a run someone started is
+ * named by its id, because there is nothing else to call it.
+ */
+export function runLabel(id: string) {
+  const mode = id.startsWith('sim_preset_') ? id.slice('sim_preset_'.length) : ''
+  return mode in presets ? presets[mode as keyof typeof presets].label : id
+}
+
 export function Page({ title, description, eyebrow, action, children }: {
   title: string
   description: string

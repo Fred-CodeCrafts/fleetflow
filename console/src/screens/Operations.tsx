@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, type Coordinate, type OSRMRoute, type Vehicle } from '../api/client'
 import { RoutingMap } from '../map/RoutingMap'
-import { ErrorMessage, formatNumber, Loading, Metric, Page, Panel, Status, Table, useLoad } from './Shared'
-import { presets, useSimulationRun } from './Simulation'
+import { ErrorMessage, formatNumber, Loading, Metric, Page, Panel, presets, Status, Table, useLoad } from './Shared'
+import { useSimulationRun } from './Simulation'
 
 function formatCoordinate(point: Coordinate | null) {
   return point ? `${point.lat.toFixed(5)}, ${point.lon.toFixed(5)}` : ''
@@ -523,7 +523,7 @@ export function FleetStatusPage() {
       {vehicles.loading ? <Loading /> : vehicles.error ? <ErrorMessage>{vehicles.error}</ErrorMessage> :
         <Table headers={['Vehicle', 'Model / Type', 'Status', 'Assigned Driver', 'Payload Capacity', 'Actions']}>
           {allVehicles.map((vehicle) => {
-            const isHighlighted = highlightVehicle && (highlightVehicle === vehicle.name || highlightVehicle === vehicle.id)
+            const isHighlighted = highlightVehicle && (highlightVehicle === vehicle.name || highlightVehicle === vehicle.id || highlightVehicle === vehicle.registration)
             return (
               <tr
                 key={vehicle.id}
