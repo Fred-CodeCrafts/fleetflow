@@ -77,6 +77,16 @@ export function TripsPage() {
   const inProgressCount = allOperationalTrips.filter((t) => t.status === 'in_progress').length
   const completedCount = allOperationalTrips.filter((t) => t.status === 'completed').length
 
+  // The scenario dispatch treats "this vehicle already ran between these two
+  // places" as the same trip and reuses it. A hand-scheduled trip is allowed to
+  // repeat, so the form names the match instead of blocking the operator.
+  const normalise = (value: string) => value.trim().toLowerCase()
+  const duplicateTrip = assignedVehicle && origin.trim() !== '' && destination.trim() !== ''
+    ? allOperationalTrips.find((t) => t.vehicle_id === assignedVehicle &&
+      normalise(t.origin) === normalise(origin) &&
+      normalise(t.destination) === normalise(destination))
+    : undefined
+
   const handleCreateTrip = async (e: FormEvent) => {
     e.preventDefault()
     setDispatchError('')
@@ -274,6 +284,11 @@ export function TripsPage() {
             {dispatchBusy ? 'Dispatching…' : 'Schedule Planned Trip'}
           </button>
         </form>
+        {duplicateTrip && <p className="help-text">
+          This vehicle already has a trip from {duplicateTrip.origin} to {duplicateTrip.destination}
+          {' '}({(duplicateTrip.id || '').slice(0, 12) || 'trip'}, {duplicateTrip.status.replaceAll('_', ' ')}).
+          Scheduling another is allowed and both will be listed separately.
+        </p>}
         {dispatchError && <ErrorMessage>{dispatchError}</ErrorMessage>}
       </Panel>
 
