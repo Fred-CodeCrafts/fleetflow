@@ -174,14 +174,15 @@ their attribution is displayed on the map.
 
 ## Operations
 
-- **SUMO Scenarios** starts seeded simulations and shows their progress and
-  generated position traces.
+- **Simulation** starts a seeded scenario, shows its progress, and draws the run's
+  animated positions with a playback bar.
 - **Trips** lists history from simulation runs, newest first, and is where a scheduled trip appears once the Route Planner creates it. Trip details show the
   vehicle's sampled simulated route, generated delivery stops, and ordered
   package-event timeline when available. These seeded events are simulation
   output, not live package scans.
-- **Live Map** shows only recently reported GPS locations. It starts empty until
-  a connected device sends positions; it does not show static preview markers.
+- **Live Map** shows only recently reported GPS locations, refreshed every five
+  seconds. It starts empty until a connected device sends positions; it does not
+  show static preview markers, and it starts no simulations.
 - **Route Planner** sends the selected coordinates to OSRM and draws the returned
   route geometry, distance, and estimated duration.
 - **Vehicles** and **Drivers** capture non-sensitive fleet profiles and display
