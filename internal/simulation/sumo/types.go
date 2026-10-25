@@ -65,6 +65,10 @@ type Trip struct {
 	DistanceM   float64    `json:"distance_m"`
 	CO2Kg       float64    `json:"co2_kg"`
 	FuelKg      float64    `json:"fuel_kg"`
+	// EmissionClass names the fleet class whose factors produced CO2Kg and
+	// FuelKg, so a reader can tell a diesel truck from an electric motorcycle
+	// without guessing.
+	EmissionClass string `json:"emission_class,omitempty"`
 }
 
 type Position struct {

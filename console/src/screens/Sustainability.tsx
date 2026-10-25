@@ -62,9 +62,10 @@ export function SustainabilityPage() {
       <Panel title="Vehicle attribution">
         {!data?.vehicles.length
           ? <p className="empty-state">No completed scenario has attributed emissions to a vehicle yet.</p>
-          : <Table headers={['Vehicle', 'Trips', 'Distance', 'CO₂', 'Fuel', 'CO₂ intensity']}>
+          : <Table headers={['Vehicle', 'Class', 'Trips', 'Distance', 'CO₂', 'Fuel', 'CO₂ intensity']}>
             {data.vehicles.map((vehicle) => <tr key={vehicle.vehicle_id}>
               <td>{vehicleCell(vehicle.vehicle_id, vehicles.data ?? [])}</td>
+              <td>{vehicle.class ?? '—'}</td>
               <td>{vehicle.trips}</td>
               <td>{formatNumber(vehicle.distance_km, 1)} km</td>
               <td>{formatNumber(vehicle.co2_kg, 2)} kg</td>

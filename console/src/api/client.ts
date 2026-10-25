@@ -181,6 +181,8 @@ export interface EmissionsVehicle {
   co2_kg: number
   fuel_kg: number
   g_co2_per_km: number
+  /** The emission class the vehicle's trips were charged at. */
+  class?: string
 }
 
 export interface EmissionsSummary {

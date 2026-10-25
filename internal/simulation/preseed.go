@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"fleetflow/internal/fleet"
 	"fleetflow/internal/simulation/sumo"
 )
 
@@ -147,8 +148,12 @@ func GenerateSyntheticScenario(seed int64, vehicles int, departureWindowS int) s
 		// Commercial speed ~ 8.88 m/s (32 km/h)
 		durS := math.Max(distM/8.88, 180.0)
 
-		fuelKg := math.Round((distM/1000.0*0.075)*1000) / 1000
-		co2Kg := math.Round((fuelKg*3.15)*1000) / 1000
+		// What the vehicle burns depends on what it is, not only on how far it
+		// went: the class comes from the fleet catalogue, so a loaded box truck
+		// and an electric cargo motorcycle on the same kilometre report different
+		// figures.
+		profile := fleet.For(vehID)
+		fuelKg, co2Kg, _ := fleet.Burn(profile.Class, distM)
 
 		// A completed trip arrives. The arrival is what the delivery history and
 		// the job's completion time are built from, so a trip without it is a
@@ -156,17 +161,18 @@ func GenerateSyntheticScenario(seed int64, vehicles int, departureWindowS int) s
 		arrivalS := departS + durS
 
 		trips = append(trips, sumo.Trip{
-			ID:          tripID,
-			VehicleID:   vehID,
-			Origin:      from.Name,
-			Destination: to.Name,
-			Status:      sumo.TripCompleted,
-			DepartS:     departS,
-			ArrivalS:    &arrivalS,
-			DurationS:   durS,
-			DistanceM:   math.Round(distM),
-			CO2Kg:       co2Kg,
-			FuelKg:      fuelKg,
+			ID:            tripID,
+			VehicleID:     vehID,
+			Origin:        from.Name,
+			Destination:   to.Name,
+			Status:        sumo.TripCompleted,
+			DepartS:       departS,
+			ArrivalS:      &arrivalS,
+			DurationS:     durS,
+			DistanceM:     math.Round(distM),
+			CO2Kg:         co2Kg,
+			FuelKg:        fuelKg,
+			EmissionClass: profile.Class,
 		})
 
 		// Build track positions (8 waypoints)
@@ -214,17 +220,17 @@ func GenerateSyntheticScenario(seed int64, vehicles int, departureWindowS int) s
 	}
 
 	return sumo.Result{
-		SUMOVersion: "Eclipse SUMO 1.15.0 / Pre-seeded Multi-Hub Scenario",
+		SUMOVersion: "FleetFlow synthetic generator (no SUMO process)",
 		Seed:        seed,
 		StartedAt:   baseTime,
 		FinishedAt:  finishTime,
 		Emissions: sumo.EmissionProvenance{
-			Model:       "HBEFA3",
-			Class:       "HBEFA3/PC_G_EU4",
-			Source:      "Jakarta multi-hub scenario generator",
-			InputUnit:   "km/h, gradient",
-			OutputUnit:  "kg CO2, kg fuel",
-			Assumptions: "Urban logistics fleet with Euro 4 diesel and electric commercial vehicles",
+			Model:       "FleetFlow class factors v1",
+			Class:       "per vehicle class",
+			Source:      "planning factors by fuel type and payload band",
+			InputUnit:   "kilometre",
+			OutputUnit:  "kg CO2 and kg fuel per trip",
+			Assumptions: "Fuel burn per kilometre by class, converted at 3.16 kg CO2/kg diesel and 3.10 kg CO2/kg petrol. Tailpipe only: electric vehicles report no direct CO2 and their grid energy is not counted. Planning assumptions for congested Jakarta delivery work, not a certified inventory.",
 		},
 		Trips:      trips,
 		Tracks:     tracks,

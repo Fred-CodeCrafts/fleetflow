@@ -6,6 +6,7 @@ import (
 	"sort"
 	"time"
 
+	"fleetflow/internal/fleet"
 	"fleetflow/internal/simulation"
 	"fleetflow/internal/simulation/sumo"
 )
@@ -57,6 +58,9 @@ type EmissionsVehicle struct {
 	CO2       float64 `json:"co2_kg"`
 	Fuel      float64 `json:"fuel_kg"`
 	CO2Rate   float64 `json:"g_co2_per_km"`
+	// Class names the emission class the vehicle's trips were charged at, so the
+	// console can show why two vehicles on the same distance differ.
+	Class string `json:"class,omitempty"`
 }
 
 // emissionsTally accumulates the figures one run or one vehicle contributed.
@@ -66,6 +70,7 @@ type emissionsTally struct {
 	distance float64
 	co2      float64
 	fuel     float64
+	class    string
 }
 
 func (t *emissionsTally) add(trip sumo.Trip) {
@@ -73,6 +78,9 @@ func (t *emissionsTally) add(trip sumo.Trip) {
 	t.distance += trip.DistanceM
 	t.co2 += trip.CO2Kg
 	t.fuel += trip.FuelKg
+	if trip.EmissionClass != "" {
+		t.class = trip.EmissionClass
+	}
 }
 
 // summariseEmissions folds the supplied runs into one summary. It treats a run
@@ -150,6 +158,7 @@ func summariseEmissions(runs []simulation.Run) EmissionsSummary {
 			CO2:       round3(vehicle.co2),
 			Fuel:      round3(vehicle.fuel),
 			CO2Rate:   round3(co2PerKm(vehicle.co2, vehicle.distance)),
+			Class:     classLabel(vehicle.class),
 		})
 	}
 	// Worst emitter first, so the table reads as a ranking. Ties fall back to
@@ -217,4 +226,14 @@ func (s *Server) handleEmissionsSummary(w http.ResponseWriter, r *http.Request) 
 	}
 
 	writeJSON(w, http.StatusOK, summariseEmissions(full))
+}
+
+// classLabel turns an emission class key into the name the console shows, and
+// passes an unknown key through unchanged: a class the catalogue no longer knows
+// is still more informative than a blank cell.
+func classLabel(key string) string {
+	if class, ok := fleet.Emission(key); ok {
+		return class.Name
+	}
+	return key
 }
