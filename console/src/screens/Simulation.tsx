@@ -383,7 +383,12 @@ export function SimulationPage() {
   }
 
   return <Page eyebrow="Operations" title="Simulations" description="Generate repeatable vehicle trips and review their simulated routes and history.">
-    <Panel title="Start a seeded scenario">
+    <Panel
+      title="Start a seeded scenario"
+      action={<span title="Not implemented yet: a custom scenario needs its own demand generator.">
+        <button className="button" type="button" disabled>Add custom scenario</button>
+      </span>}
+    >
       <form className="form-row" onSubmit={(event) => void start(event)}>
         <label className="field">Demand profile
           <select value={preset} onChange={(event) => setPreset(event.target.value as keyof typeof presets)}>
@@ -399,7 +404,7 @@ export function SimulationPage() {
           {busy ? 'Starting…' : active ? 'A scenario is running' : 'Run simulation'}
         </button>
       </form>
-      <p className="help-text">The same network, profile, and seed make demand generation repeatable. This output is simulated, not live GPS.</p>
+      <p className="help-text">The same network, profile, and seed make demand generation repeatable. This output is simulated, not live GPS. Custom scenarios — your own fleet size, demand window and origin mix — are not implemented yet.</p>
       {message && <p className="success" role="status">{message}</p>}
       {error && <ErrorMessage>{error}</ErrorMessage>}
     </Panel>
