@@ -7,7 +7,7 @@ services:
     runtime: docker
     plan: free
     region: singapore
-    dockerfilePath: ./Dockerfile
+    dockerfilePath: ./deploy/free/Dockerfile
     # /readyz is 503 in memory mode, so the platform must probe liveness, not
     # readiness. That is not a workaround: an instance without a database is not
     # ready to serve writes, and the app says so.

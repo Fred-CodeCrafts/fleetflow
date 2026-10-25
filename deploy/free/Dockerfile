@@ -1,7 +1,10 @@
-# A Hugging Face Docker Space for FleetFlow.
+# A slim image for free hosts (Render, or a Hugging Face Space on a paid plan).
 #
-# It builds the application from the public repository at a fixed tag, so the Space
-# and the release cannot drift apart. Bump FLEETFLOW_TAG to deploy the next release.
+# It builds the application from the public repository at a fixed tag, so the hosted
+# build cannot drift from the release: bumping FLEETFLOW_TAG is the whole update. It
+# leaves out the SUMO packages the Cloud Run image installs, because a hosted free
+# instance has no network file to run SUMO against and 400 MB of unused tooling only
+# makes the build slower.
 #
 # What it deliberately does not include: OSRM. A routing service needs a
 # multi-gigabyte Jakarta extract and its own process; without it the Route Planner
@@ -30,12 +33,12 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /out/fleetflow /fleetflow
 
-# Spaces exposes this port; the application reads it from PORT.
-ENV PORT=7860
+# The platform supplies PORT; this default is for a plain `docker run`.
+ENV PORT=8080
 ENV ENV=production
-EXPOSE 7860
+EXPOSE 8080
 
-# Spaces runs the container as an unprivileged user. Nothing here writes to disk:
-# with no DATABASE_URL the stores are in memory and the console is embedded.
+# Hosts run the container unprivileged. Nothing here writes to disk: with no
+# DATABASE_URL the stores are in memory and the console is embedded in the binary.
 USER 1000
 ENTRYPOINT ["/fleetflow"]

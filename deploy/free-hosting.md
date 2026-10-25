@@ -12,18 +12,37 @@ link to a judge.
 
 ## Render (about ten minutes, no card)
 
+This is the path that works. Render's free web service asks for no card and runs
+the slim image in [`free/Dockerfile`](./free/Dockerfile), which builds the console
+and the Go binary from the release tag and leaves out SUMO and OSRM.
+
 1. Push this repository to GitHub (already done).
-2. Create a Render account with GitHub, then **New → Blueprint**.
-3. Pick the repository. Render reads [`render.yaml`](../render.yaml) from the
-   default branch and shows one web service named `fleetflow`.
-4. Apply. The first build compiles the console, builds the Go binary and installs
-   SUMO in the runtime image; expect four to six minutes.
-5. Open the URL Render prints. It looks like
-   `https://fleetflow-xxxx.onrender.com`.
+2. Sign up at render.com with GitHub. No payment method is requested for the free
+   instance type.
+3. **New → Blueprint**, pick the `fleetflow` repository and the `main` branch.
+   Render reads [`render.yaml`](../render.yaml), which names the service, the
+   Dockerfile and the health check.
+4. Apply. The first build compiles the console, then the Go binary; expect four to
+   six minutes.
+5. Open the URL Render prints, or find it under the service's **Overview** tab. It
+   looks like `https://fleetflow-xxxx.onrender.com`.
 
 Render's free instance is 512 MB of RAM and a tenth of a CPU, and it sleeps after
 fifteen minutes without traffic. The first request after a sleep takes about a
 minute; the console then behaves normally. That is the price of zero.
+
+### Hugging Face Spaces, if you have PRO
+
+Hugging Face stopped offering free CPU hardware to new Spaces: their documentation
+states that Gradio and Docker Spaces "require a paid plan to create: PRO for
+personal accounts", and the only free hardware a new account sees is ZeroGPU, which
+is for GPU demos. Without PRO the Docker SDK is not selectable, so this is not a
+configuration mistake to work around.
+
+With PRO, the same image works: upload [`huggingface/README.md`](./huggingface/README.md)
+as the Space's `README.md`, upload [`free/Dockerfile`](./free/Dockerfile) as the
+Space's `Dockerfile`, and change `ENV PORT=8080` to `ENV PORT=7860` to match the
+`app_port` in the Space card.
 
 ## What works, and what does not
 

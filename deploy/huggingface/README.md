@@ -37,3 +37,15 @@ the Routing Lab that compares static with dynamic edge weights.
 
 Apache-2.0. The console embeds no third-party code beyond its declared dependencies;
 attribution for OSRM, SUMO and OpenStreetMap data is in the repository's NOTICE.
+
+---
+
+## Deploying this Space
+
+This card is kept for a paid account. Hugging Face stopped offering free CPU
+hardware to new Spaces — Docker Spaces need PRO, and the only free hardware a new
+account sees is ZeroGPU. Use the Space's `README.md` (this file) and
+[`../free/Dockerfile`](../free/Dockerfile) as its `Dockerfile`, with `ENV PORT`
+changed to `7860` to match `app_port` above. Bump `FLEETFLOW_TAG` in that Dockerfile
+with each release. For a card-free deployment, see
+[`../free-hosting.md`](../free-hosting.md).
