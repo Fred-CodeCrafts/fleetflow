@@ -11,6 +11,7 @@ The console uses MapLibre GL with OpenFreeMap tiles. FleetFlow does not generate
 real traffic and does not present simulated positions or modelled emissions as
 measured fleet data. The submission summary, the demo shot list and the
 questions this repository can answer are in [Submission pack](#submission-pack);
+the step-by-step operating checklist is in [DEMO.md](./DEMO.md);
 deployment notes are in [deploy/README.md](./deploy/README.md).
 
 ## Routing, map, and simulation data
