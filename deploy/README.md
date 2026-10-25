@@ -23,7 +23,12 @@ FleetFlow deploys to Google Cloud Run as a container service in `asia-southeast2
    for a showcase and not for production: it is shared, rate limited, and not
    the Jakarta extract. Point `OSRM_URL` at your own instance (`scripts/osrm`
    builds one) for real routing.
-6. **Probes.** `/healthz` is liveness, `/readyz` is readiness. Readiness reports
+6. **Operator writes.** Set `REQUIRE_OPERATOR_KEY=true` for a public deployment
+   and issue a key with the API's key-issuing flag; `/readyz` then reports
+   `writes: "protected"`. Left unset, the seven write routes accept any caller and
+   `/readyz` says `writes: "unauthenticated"`, which is honest but is not what a
+   public URL should show.
+7. **Probes.** `/healthz` is liveness, `/readyz` is readiness. Readiness reports
    `routing: "unavailable"` when OSRM does not answer and `database:
    "unreachable"` when the database does not, and answers 503 in both cases. A
    service that cannot route is not ready, and this deployment says so instead of
