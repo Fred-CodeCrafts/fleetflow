@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate, useNavigationType } from 'react-router-dom'
 import { allNavItems, locate, navigation, searchNav, visibleBranches } from './navigation'
 
 export function Layout() {
   const location = useLocation()
   const navigate = useNavigate()
+  const navigationType = useNavigationType()
   const [query, setQuery] = useState('')
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [apiOnline, setApiOnline] = useState<boolean | null>(null)
@@ -34,6 +35,15 @@ export function Layout() {
   useEffect(() => {
     setPaletteOpen(false)
   }, [location.pathname])
+
+  // A route change keeps the window's scroll offset, so a page opened after
+  // scrolling a long table started halfway down. A newly opened page starts at
+  // the top; a back or forward step is left alone, because the browser restores
+  // the offset it remembers for that history entry.
+  useEffect(() => {
+    if (navigationType === 'POP') return
+    window.scrollTo(0, 0)
+  }, [location.pathname, navigationType])
 
   const go = (path: string) => {
     navigate(path)
