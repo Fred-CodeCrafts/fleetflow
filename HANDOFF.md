@@ -7,9 +7,9 @@ FleetFlow is a fleet-operations console for Jakarta. Read
 source of truth for scope. Scenarios run through Eclipse SUMO when a network is
 configured, or through the built-in Go generator; every run records which one
 produced it (`runner`). OSRM answers route requests, MapLibre draws the map, and
-authenticated GPS reports are stored separately from simulation data. The
-baseline-versus-dynamic study in [docs/results.md](./docs/results.md) is a
-recorded experiment, not a console feature, and there are no AI controls.
+authenticated GPS reports are stored separately from simulation data. There are
+no AI controls, and the console routes nothing of its own: OSRM answers or the
+request fails with 503.
 
 ## Current implementation
 
@@ -44,8 +44,8 @@ recorded experiment, not a console feature, and there are no AI controls.
    account closed on 24 October, and Cloud Run refuses deploys without an open
    account. Restore billing, then `.\deploy\deploy.ps1 -Project fleetflow-4448 -Tag
    v0.1.0` puts the tagged image on the service and prints the URL.
-2. Record the three-minute demo following [docs/demo-script.md](./docs/demo-script.md)
-   and rehearse [docs/qa.md](./docs/qa.md).
+2. Record the three-minute demo using the shot list and the expected questions in
+   the README's Submission pack section.
 3. Produce one real SUMO scenario run so the demo can show `runner: "sumo"`
    beside a synthetic run, and validate the Jakarta network if that is claimed.
 4. Replace the emission planning factors with an operator's own fuel figures
