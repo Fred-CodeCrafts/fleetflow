@@ -64,13 +64,13 @@ Invoke-FleetFlowApi -Method 'Get' -Path '/healthz' -Body $null | Out-Null
 $vehicleData = Invoke-FleetFlowApi -Method 'Get' -Path '/api/vehicles' -Body $null
 $vehicles = @($vehicleData.vehicles)
 $vehicleSeeds = @(
-    @{ name = 'B-9012-JKT'; registration = 'B-9012-JKT'; make = 'Isuzu'; model = 'Giga FVM Heavy Cargo'; type = 'truck'; status = 'available'; body_type = 'Heavy Cargo Box'; capacity = 14000; year = 2022; color = 'White' },
-    @{ name = 'B-9431-JKT'; registration = 'B-9431-JKT'; make = 'Mitsubishi'; model = 'Fuso Canter 136 HDL'; type = 'truck'; status = 'available'; body_type = 'Box Truck'; capacity = 4500; year = 2023; color = 'Yellow' },
-    @{ name = 'B-9204-JKT'; registration = 'B-9204-JKT'; make = 'Toyota'; model = 'HiAce Commuter Cargo'; type = 'van'; status = 'available'; body_type = 'Van'; capacity = 1200; year = 2023; color = 'Silver' },
-    @{ name = 'B-9550-JKT'; registration = 'B-9550-JKT'; make = 'Daihatsu'; model = 'Gran Max Blind Van'; type = 'van'; status = 'available'; body_type = 'Blind Van'; capacity = 800; year = 2024; color = 'White' },
-    @{ name = 'B-9118-JKT'; registration = 'B-9118-JKT'; make = 'Honda'; model = 'PCX Electric Cargo'; type = 'motorcycle'; status = 'available'; body_type = 'Motorcycle Cargo'; capacity = 60; year = 2024; color = 'Blue' },
-    @{ name = 'B-9672-JKT'; registration = 'B-9672-JKT'; make = 'Hino'; model = 'Dutro 130 HD Cargo'; type = 'truck'; status = 'available'; body_type = 'Box Truck'; capacity = 4500; year = 2023; color = 'Green' },
-    @{ name = 'B-9801-JKT'; registration = 'B-9801-JKT'; make = 'Wuling'; model = 'Formo Blind Van'; type = 'van'; status = 'available'; body_type = 'Blind Van'; capacity = 650; year = 2023; color = 'White' }
+    @{ name = 'B-9001-JKT'; registration = 'B-9001-JKT'; make = 'Isuzu'; model = 'Giga FVM Heavy Cargo'; type = 'truck'; status = 'available'; body_type = 'Heavy Cargo Box'; capacity = 14000; year = 2022; color = 'White' },
+    @{ name = 'B-9002-JKT'; registration = 'B-9002-JKT'; make = 'Mitsubishi'; model = 'Fuso Canter 136 HDL'; type = 'truck'; status = 'available'; body_type = 'Box Truck'; capacity = 4500; year = 2023; color = 'Yellow' },
+    @{ name = 'B-9003-JKT'; registration = 'B-9003-JKT'; make = 'Toyota'; model = 'HiAce Commuter Cargo'; type = 'van'; status = 'available'; body_type = 'Van'; capacity = 1200; year = 2023; color = 'Silver' },
+    @{ name = 'B-9004-JKT'; registration = 'B-9004-JKT'; make = 'Daihatsu'; model = 'Gran Max Blind Van'; type = 'van'; status = 'available'; body_type = 'Blind Van'; capacity = 800; year = 2024; color = 'White' },
+    @{ name = 'B-9005-JKT'; registration = 'B-9005-JKT'; make = 'Honda'; model = 'PCX Electric Cargo'; type = 'motorcycle'; status = 'available'; body_type = 'Motorcycle Cargo'; capacity = 60; year = 2024; color = 'Blue' },
+    @{ name = 'B-9006-JKT'; registration = 'B-9006-JKT'; make = 'Hino'; model = 'Dutro 130 HD Cargo'; type = 'truck'; status = 'available'; body_type = 'Box Truck'; capacity = 4500; year = 2023; color = 'Green' },
+    @{ name = 'B-9007-JKT'; registration = 'B-9007-JKT'; make = 'Wuling'; model = 'Formo Blind Van'; type = 'van'; status = 'available'; body_type = 'Blind Van'; capacity = 650; year = 2023; color = 'White' }
 )
 foreach ($seed in $vehicleSeeds) {
     $vehicle = Get-OrCreateRecord -Records $vehicles -Field 'name' -Value $seed.name `
@@ -91,6 +91,17 @@ foreach ($seed in $driverSeeds) {
     $driver = Get-OrCreateRecord -Records $drivers -Field 'name' -Value $seed.name `
         -Path '/api/drivers' -Body $seed
     $drivers += $driver
+}
+
+# Give each seeded driver the vehicle at the same position, so the register shows
+# who is on what. Allocation belongs to the vehicle record, so the request is
+# made against the driver and the vehicle it is handed.
+$allocationCount = [Math]::Min($driverSeeds.Count, $vehicleSeeds.Count)
+for ($i = 0; $i -lt $allocationCount; $i++) {
+    $driver = $drivers[$i]
+    $vehicle = $vehicles[$i]
+    if ($null -eq $driver -or $null -eq $vehicle) { continue }
+    Invoke-FleetFlowApi -Method 'Put' -Path "/api/drivers/$($driver.id)/vehicle" -Body @{ vehicle_id = $vehicle.id } | Out-Null
 }
 
 Write-Output "Seeded realistic fleet records at $BaseUrl."
