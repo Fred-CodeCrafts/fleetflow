@@ -77,11 +77,12 @@ export function SustainabilityPage() {
               <Metric label="Avoidable at the tailpipe" value={`${formatNumber(vanCO2, 1)} kg`} note={`${formatNumber(vanShare, 1)}% of fleet CO₂`} />
             </div>
             <p className="help-text">
-              If every recorded van trip had run on the electric cargo motorcycle instead, tailpipe CO₂
-              would fall by the figure above: the electric class burns nothing at the pipe, and the
-              distance and stops are unchanged. Grid energy is not counted, so this is a lower bound on
-              the saving, not a full well-to-wheel one. It is arithmetic on trips already in the ledger,
-              not a projection.
+              If every recorded van kilometre had been ridden by the electric cargo motorcycle instead,
+              tailpipe CO₂ would fall by the figure above: the electric class burns nothing at the pipe.
+              Treat it as an upper bound, not a plan. A van carries 0.8 to 1.2 tonnes and the motorcycle
+              about 60 kg, so replacing a full van load takes many motorcycle runs, and those extra
+              kilometres are not in this arithmetic; grid energy is not counted either. What is counted is
+              the distance already in the ledger, charged at the class factors printed above.
             </p>
           </>}
       </Panel>
