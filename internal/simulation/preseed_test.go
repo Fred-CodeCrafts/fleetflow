@@ -3,6 +3,7 @@ package simulation_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"fleetflow/internal/simulation"
@@ -96,6 +97,27 @@ func TestSeedPresetRunsIsIdempotentAndComplete(t *testing.T) {
 // The fleet register is only as large as the widest preset: all three modes draw
 // from one plate sequence, so a peak run's vehicles are the first fifty of the
 // same fleet rather than a second one.
+// The dispatcher deduplicates a trip on its vehicle plus the two hubs, so two
+// preset modes must never produce that key for the same vehicle: if they did, the
+// second mode's trip would be silently skipped as a duplicate. This test is what
+// keeps the reuse a decision rather than a lucky collision.
+func TestPresetTripsDoNotCollide(t *testing.T) {
+	seen := map[string]string{}
+	for _, preset := range simulation.PresetRuns {
+		res := simulation.GenerateSyntheticScenario(preset.Scenario.Seed, preset.Scenario.Vehicles, preset.Scenario.DepartureWindowS)
+		for _, trip := range res.Trips {
+			key := strings.ToLower(trip.VehicleID) + "|" +
+				strings.ToLower(strings.TrimSpace(trip.Origin)) + "|" +
+				strings.ToLower(strings.TrimSpace(trip.Destination))
+			if other, ok := seen[key]; ok {
+				t.Fatalf("presets %q and %q both route %s from %s to %s; one of those trips would be dropped as a duplicate",
+					other, preset.ID, trip.VehicleID, trip.Origin, trip.Destination)
+			}
+			seen[key] = preset.ID
+		}
+	}
+}
+
 func TestPresetsShareOneFleetSequence(t *testing.T) {
 	seen := map[string]bool{}
 	for _, preset := range simulation.PresetRuns {
