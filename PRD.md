@@ -135,8 +135,8 @@ Delivered beyond the scope this document originally set:
 - AI, autonomous operational decisions, or opaque assignment/routing policies.
 - Baseline-versus-dynamic routing comparisons, experiment scoreboards, or
   thesis-result reporting inside the console. The dynamic-weights research is the
-  author's thesis; this product is the console that came after it, and it does not
-  claim to reproduce that research.
+  subject of the author's thesis proposal; this product is the console built
+  alongside it, and it does not claim to reproduce that research.
 - Automatic driver assignment by dispatch. Dispatch creates the vehicles and
   trips a run needs and leaves drivers to the operator, which is why the demo
   seeder pairs them.

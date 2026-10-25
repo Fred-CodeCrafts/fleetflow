@@ -113,7 +113,6 @@ export const navigation: NavBranch[] = [
         label: 'Simulation',
         icon: 'simulation',
         path: '/operations/simulations',
-        visible: false,
         keywords: ['scenario', 'seed', 'simulation', 'dispatch'],
       },
       {
