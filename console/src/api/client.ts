@@ -190,6 +190,15 @@ export interface EmissionsSummary {
   method?: EmissionProvenance
 }
 
+/** A place the scenario generator routes between, drawn on the map. */
+export interface LogisticsHub {
+  name: string
+  code: string
+  latitude: number
+  longitude: number
+  area: string
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -262,4 +271,5 @@ export const api = {
       body: JSON.stringify({ vehicle_id: vehicleId }),
     }),
   emissionsSummary: () => request<EmissionsSummary>('/api/emissions/summary'),
+  hubs: async () => (await request<{ hubs: LogisticsHub[] }>('/api/hubs')).hubs,
 }
