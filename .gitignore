@@ -19,6 +19,9 @@ bin/
 *.out
 coverage.txt
 
+# Presenter's private runbook, not shipped
+/DEMO.md
+
 # Environment files
 .env
 .env.local
