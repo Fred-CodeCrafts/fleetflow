@@ -1,8 +1,10 @@
 // Package arch holds architecture tests that guard the shape of the codebase.
 //
-// The routing core (internal/graph, internal/weights, internal/engine) is the
-// hot path: it must never import an HTTP or database package, so it cannot reach
-// the network or the database by accident (PRD US-5/US-12).
+// The domain and catalogue packages are pure: they must never import an HTTP or
+// database package, so a model or a factor table cannot reach the network or the
+// database by accident. The routing core this test was written for
+// (internal/graph, internal/weights, internal/engine) was removed with the
+// synthetic grid; the guard outlived it because the rule still matters.
 package arch
 
 import (
@@ -102,9 +104,9 @@ func TestRoutingCoreImports(t *testing.T) {
 		dir         string
 		wantBlocked bool // true when the package is expected to trip the checker
 	}{
-		{name: "graph", dir: "../graph"},
-		{name: "weights", dir: "../weights"},
-		{name: "engine", dir: "../engine"},
+		{name: "domain", dir: "../domain"},
+		{name: "fleet", dir: "../fleet"},
+		{name: "simulation", dir: "../simulation"},
 		{name: "api_control", dir: "../api", wantBlocked: true},
 	}
 
