@@ -73,6 +73,17 @@ export function TripsPage() {
     return t.status === activeTab
   })
 
+  // A trip carries the vehicle's id, so the plate has to be looked up rather than
+  // read off the row. Indexing once keeps the table from scanning the fleet per
+  // row, and the plate is shown beside the unit because that is what people read
+  // out over the radio.
+  const vehiclesById = new Map((vehicles.data ?? []).map((v) => [v.id, v]))
+  const vehicleText = (id: string) => {
+    const vehicle = vehiclesById.get(id)
+    if (!vehicle) return id
+    return vehicle.registration ? `${vehicle.name} · ${vehicle.registration}` : vehicle.name
+  }
+
   const plannedCount = allOperationalTrips.filter((t) => t.status === 'planned').length
   const inProgressCount = allOperationalTrips.filter((t) => t.status === 'in_progress').length
   const completedCount = allOperationalTrips.filter((t) => t.status === 'completed').length
@@ -172,7 +183,7 @@ export function TripsPage() {
       >
         {vehicleFilter && (
           <p className="help-text">
-            Filtering trips for vehicle: <strong>{vehicleFilter}</strong>.{' '}
+            Filtering trips for vehicle: <strong>{vehicleText(vehicleFilter)}</strong>.{' '}
             <button className="button" style={{ padding: '2px 8px', fontSize: '11px' }} onClick={() => setSearchParams({})}>
               Clear filter
             </button>
@@ -197,7 +208,7 @@ export function TripsPage() {
                 <td>
                   {t.vehicle_id ? (
                     <Link to={`/operations/fleet?vehicle=${encodeURIComponent(t.vehicle_id)}`}>
-                      {(vehicles.data ?? []).find((v) => v.id === t.vehicle_id)?.name ?? t.vehicle_id}
+                      {vehicleText(t.vehicle_id)}
                     </Link>
                   ) : (
                     <span className="muted">Unassigned</span>
@@ -276,7 +287,10 @@ export function TripsPage() {
             <select value={assignedVehicle} onChange={(e) => setAssignedVehicle(e.target.value)}>
               <option value="">Unassigned</option>
               {(vehicles.data ?? []).map((v) => (
-                <option key={v.id} value={v.id}>{v.name} ({v.model || v.type})</option>
+                <option key={v.id} value={v.id}>
+                  {v.registration ? `${v.name} · ${v.registration}` : v.name}
+                  {` (${v.model || v.type})`}
+                </option>
               ))}
             </select>
           </label>
@@ -534,7 +548,8 @@ export function OperationalTripPage() {
   const drivers = useLoad(api.drivers)
 
   const trip = (trips.data ?? []).find((t) => t.id === tripID)
-  const vehicle = (vehicles.data ?? []).find((v) => v.name === trip?.vehicle_id || v.id === trip?.vehicle_id)
+  const vehicle = (vehicles.data ?? []).find((v) =>
+    v.id === trip?.vehicle_id || v.registration === trip?.vehicle_id || v.name === trip?.vehicle_id)
   const driver = (drivers.data ?? []).find((d) => d.vehicle_id === vehicle?.id)
 
   const [route, setRoute] = useState<OSRMRoute | null>(null)
@@ -597,7 +612,12 @@ export function OperationalTripPage() {
         <Metric label="Status" value={trip.status.replace('_', ' ').toUpperCase()} />
         <Metric label="Origin" value={trip.origin} />
         <Metric label="Destination" value={trip.destination} />
-        <Metric label="Assigned Vehicle" value={trip.vehicle_id || 'Unassigned'} />
+        <Metric
+          label="Assigned Vehicle"
+          value={vehicle
+            ? `${vehicle.name}${vehicle.registration ? ` · ${vehicle.registration}` : ''}`
+            : trip.vehicle_id || 'Unassigned'}
+        />
         {route && <Metric label="Estimated Distance" value={`${formatNumber(route.distance_m / 1000, 2)} km`} />}
         {route && <Metric label="Estimated Duration" value={`${formatNumber(route.duration_s / 60, 1)} min`} />}
       </div>
@@ -642,7 +662,8 @@ export function OperationalTripPage() {
             <td>
               {vehicle ? (
                 <Link to={`/resources/vehicles/${encodeURIComponent(vehicle.id)}`}>
-                  {vehicle.name} ({vehicle.model || vehicle.type})
+                  {vehicle.name}
+                  {vehicle.registration ? ` · ${vehicle.registration}` : ''} ({vehicle.model || vehicle.type})
                 </Link>
               ) : (
                 trip.vehicle_id || 'Unassigned'
