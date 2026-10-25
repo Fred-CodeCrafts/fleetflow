@@ -17,8 +17,9 @@ request fails with 503.
   runs (memory and PostgreSQL repositories), dispatch, emissions summary, the hub
   catalogue at `GET /api/hubs`, and Flyway-managed schema in `db/migration`.
 - Dispatch turns a completed run into fleet records: vehicles get a unit name and
-  a separate plate, drivers are assigned, trips are deduplicated by vehicle,
-  origin and destination, and each trip links back to the run that produced it.
+  a separate plate, trips are deduplicated by vehicle, origin and destination, and
+  each trip links back to the run that produced it. Dispatch assigns no drivers;
+  `scripts/dev/seed-fleet.ps1` pairs the demo drivers with vehicles.
 - React console: MapLibre/OpenFreeMap map with hubs above routes and below
   vehicles, route planner, vehicle and driver detail pages with trip history, run
   ledger, and one sustainability page holding fleet totals, per-vehicle

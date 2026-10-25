@@ -287,9 +287,11 @@ reports zero tailpipe CO2 and its grid energy is not counted.
 
 ### The three-minute demo
 
-Pre-flight: Postgres and OSRM up, API started with `OSRM_URL`, `/readyz` showing
-`routing: available` and `database: reachable`, `/sustainability` showing three
-runs with distinct per-class intensities. Close everything else.
+Pre-flight: Postgres and OSRM up; API started with `OSRM_URL`; run
+`scripts/dev/seed-fleet.ps1` so the five demo drivers exist and are paired with
+vehicles; `/readyz` showing `routing: available`, `database: reachable` and the
+`writes` mode you expect; `/sustainability` showing three runs with distinct
+per-class intensities. Close everything else.
 
 | time | screen | say |
 |---|---|---|
