@@ -272,11 +272,12 @@ Reads stay public in both modes.
 
 ## Where the dynamic-weights idea came from
 
-The routing idea behind FleetFlow is the author's thesis: *Implementation of
-Stateful Dynamic Edge Weights to Avoid Congestion in SUMO-Based Routing Systems*
-— per-edge congestion state derived from probe reports, exponential smoothing,
-temporal decay, and metric customization. **This repository does not implement
-that research.** There is no CCH here, no TraCI loop and no LuST scenario, and the
+The routing idea behind FleetFlow comes from the author's thesis proposal,
+*Implementation of Stateful Dynamic Edge Weights to Avoid Congestion in SUMO-Based
+Routing Systems*: per-edge congestion state derived from probe reports,
+exponential smoothing, temporal decay, and metric customization. It is a proposal,
+not a finished study, and **this repository does not implement the research it
+describes.** There is no CCH here, no TraCI loop and no LuST scenario, and the
 console routes through OSRM rather than a FleetFlow-owned router.
 
 An earlier prototype in this repository applied the *idea* at a much smaller
@@ -286,8 +287,9 @@ snapshot behind an atomic pointer so a route query never takes a write lock. It
 was removed on 25 October 2026, because nothing in the console consumed it, the
 script that generated its network was no longer in the tree, and its numbers could
 not be reproduced from a clone. The code is retrievable at tag `v0.1.1`
-(`internal/weights`, `internal/engine`, `internal/sim`); the thesis is where that
-work continues, and this repository is the operational console that came after it.
+(`internal/weights`, `internal/engine`, `internal/sim`). The proposal is where
+that research is heading; this repository is the operational console built
+alongside it.
 
 ## Status
 
