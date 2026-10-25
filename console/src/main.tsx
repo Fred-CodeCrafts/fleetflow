@@ -68,6 +68,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             <Route path="/resources/vehicles/:vehicleID" element={<VehicleDetailPage />} />
             <Route path="/resources/drivers/:driverID" element={<DriverDetailPage />} />
             <Route path="/resources/fleet" element={<Navigate to="/operations/fleet" replace />} />
+            <Route path="/sustainability/emissions" element={<Navigate to="/sustainability" replace />} />
             <Route path="/trips" element={<Navigate to="/operations/trips" replace />} />
             <Route path="/trips/*" element={<Navigate to="/operations/trips" replace />} />
             {navigation.filter((branch) => !allNavItems().some((item) => item.path === branch.path)).map((branch) => (
