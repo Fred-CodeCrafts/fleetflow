@@ -142,15 +142,23 @@ type execer interface {
 // that vehicle may take the trip is the caller's decision; this only stores what
 // it is given.
 func insertTrip(ctx context.Context, db execer, t trip.Trip) error {
-	const q = `insert into trips (id, origin, destination, vehicle_id, status)
-		values ($1, $2, $3, $4, $5)`
+	const q = `insert into trips (id, origin, destination, vehicle_id, status, started_at, finished_at)
+		values ($1, $2, $3, $4, $5, $6, $7)`
 
-	var vehicleID any
+	var vehicleID, startedAt, finishedAt any
 	if t.VehicleID != "" {
 		vehicleID = t.VehicleID
 	}
+	// A caller that knows when the trip ran supplies the times; the status
+	// transitions then find them set and leave them alone.
+	if !t.StartedAt.IsZero() {
+		startedAt = t.StartedAt.UTC()
+	}
+	if !t.FinishedAt.IsZero() {
+		finishedAt = t.FinishedAt.UTC()
+	}
 
-	_, err := db.Exec(ctx, q, t.ID, t.Origin, t.Destination, vehicleID, t.Status.String())
+	_, err := db.Exec(ctx, q, t.ID, t.Origin, t.Destination, vehicleID, t.Status.String(), startedAt, finishedAt)
 	return err
 }
 

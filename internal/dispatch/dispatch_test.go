@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"fleetflow/internal/dispatch"
 	"fleetflow/internal/simulation/sumo"
@@ -53,6 +54,8 @@ func (f *fakeTrips) Create(_ context.Context, in trip.CreateInput) (trip.Trip, e
 		Origin:      in.Origin,
 		Destination: in.Destination,
 		VehicleID:   in.VehicleID,
+		StartedAt:   in.StartedAt,
+		FinishedAt:  in.FinishedAt,
 	}
 	f.trips = append(f.trips, t)
 	return t, nil
@@ -138,5 +141,47 @@ func TestDispatchWithoutStoresIsANoOp(t *testing.T) {
 	}
 	if err := dispatch.New(nil, nil).Dispatch(context.Background(), "sim", result()); err != nil {
 		t.Fatalf("empty dispatcher returned error: %v", err)
+	}
+}
+
+// A dispatched trip carries the scenario's clock, not the import's. Without
+// this, a 26 km trip imported a week later reports a duration of a few
+// milliseconds, which is how long the import took.
+func TestDispatchKeepsTheScenarioClock(t *testing.T) {
+	fleet := &fakeFleet{}
+	trips := &fakeTrips{}
+	dispatcher := dispatch.New(fleet, trips)
+
+	started := time.Date(2026, 10, 25, 6, 0, 0, 0, time.UTC)
+	arrival := started.Add(42 * time.Minute).Sub(started).Seconds()
+	out := sumo.Result{
+		StartedAt: started,
+		Trips: []sumo.Trip{{
+			ID:          "t1",
+			VehicleID:   "B-9001-JKT",
+			Origin:      "Tanjung Priok Port Terminal",
+			Destination: "Glodok Commercial District",
+			Status:      sumo.TripCompleted,
+			DepartS:     600,
+			ArrivalS:    &arrival,
+			DurationS:   2520,
+		}},
+	}
+
+	if err := dispatcher.Dispatch(context.Background(), "run-1", out); err != nil {
+		t.Fatalf("dispatch: %v", err)
+	}
+	if len(trips.trips) != 1 {
+		t.Fatalf("recorded %d trips, want 1", len(trips.trips))
+	}
+	recorded := trips.trips[0]
+	if want := started.Add(10 * time.Minute); !recorded.StartedAt.Equal(want) {
+		t.Errorf("started at %v, want %v", recorded.StartedAt, want)
+	}
+	if want := started.Add(42 * time.Minute); !recorded.FinishedAt.Equal(want) {
+		t.Errorf("finished at %v, want %v", recorded.FinishedAt, want)
+	}
+	if duration, ok := recorded.Duration(); !ok || duration != 32*time.Minute {
+		t.Errorf("duration = %v (reported %v), want 32m", duration, ok)
 	}
 }

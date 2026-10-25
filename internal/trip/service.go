@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"strings"
+	"time"
 
 	"fleetflow/internal/domain"
 )
@@ -82,6 +83,13 @@ type CreateInput struct {
 	Destination string
 	VehicleID   string
 	Status      string
+	// StartedAt and FinishedAt are for a caller replaying work that already
+	// happened, such as a dispatcher importing a finished scenario. Left zero,
+	// the status transitions stamp them from the wall clock as usual. Without
+	// this, a 26 km trip imported from a run reports a duration of five
+	// milliseconds, because that is how long the import took.
+	StartedAt  time.Time
+	FinishedAt time.Time
 }
 
 // Service applies the trip rules on top of a Repository.
@@ -103,6 +111,8 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (Trip, error) {
 		return Trip{}, err
 	}
 	t.ID = id
+	t.StartedAt = in.StartedAt
+	t.FinishedAt = in.FinishedAt
 
 	stored, err := s.repo.Create(ctx, t)
 	if err != nil {
