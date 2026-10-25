@@ -7,6 +7,7 @@ export interface MaintenanceRecord {
   id: string
   vehicle_id?: string
   vehicle_name: string
+  vehicle_registration?: string
   service_date: string
   service_type: string
   odometer_km: number
@@ -19,7 +20,8 @@ export interface MaintenanceRecord {
 const defaultRecords: MaintenanceRecord[] = [
   {
     id: 'maint-01',
-    vehicle_name: 'B-9012-JKT',
+    vehicle_name: 'Unit 12',
+    vehicle_registration: 'B-9012-JKT',
     service_date: '2026-10-18',
     service_type: 'Scheduled 20,000 km Service',
     odometer_km: 20450,
@@ -30,7 +32,8 @@ const defaultRecords: MaintenanceRecord[] = [
   },
   {
     id: 'maint-02',
-    vehicle_name: 'B-9431-JKT',
+    vehicle_name: 'Unit 48',
+    vehicle_registration: 'B-9048-JKT',
     service_date: '2026-10-21',
     service_type: 'Brake Pad Replacement & Alignment',
     odometer_km: 35120,
@@ -41,7 +44,8 @@ const defaultRecords: MaintenanceRecord[] = [
   },
   {
     id: 'maint-03',
-    vehicle_name: 'B-9204-JKT',
+    vehicle_name: 'Unit 63',
+    vehicle_registration: 'B-9063-JKT',
     service_date: '2026-10-24',
     service_type: 'Cooling System & Battery Diagnostic',
     odometer_km: 18900,
@@ -52,17 +56,32 @@ const defaultRecords: MaintenanceRecord[] = [
   },
 ]
 
-const STORAGE_KEY = 'fleetflow_maintenance_records_v2'
+const STORAGE_KEY = 'fleetflow_maintenance_records_v3'
+const LEGACY_STORAGE_KEY = 'fleetflow_maintenance_records_v2'
 
 function loadStoredRecords(): MaintenanceRecord[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return defaultRecords
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : defaultRecords
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed
+    }
+
+    // The v2 seeded rows named a unit by its registration alone, so filtering by
+    // unit name could not find them. Rows the operator logged under v2 are kept;
+    // only the three seeded rows are replaced by ones naming a real unit.
+    const legacy = localStorage.getItem(LEGACY_STORAGE_KEY)
+    if (legacy) {
+      const parsed = JSON.parse(legacy) as MaintenanceRecord[]
+      if (Array.isArray(parsed)) {
+        const seeded = new Set(defaultRecords.map((record) => record.id))
+        return [...parsed.filter((record) => !seeded.has(record.id)), ...defaultRecords]
+      }
+    }
   } catch {
-    return defaultRecords
+    // Ignore storage errors in restricted contexts
   }
+  return defaultRecords
 }
 
 function saveStoredRecords(records: MaintenanceRecord[]) {
@@ -71,6 +90,34 @@ function saveStoredRecords(records: MaintenanceRecord[]) {
   } catch {
     // Ignore storage errors in restricted contexts
   }
+}
+
+/** A record names a unit and a plate, so a row reads the same whether it was
+ *  written with a name, a registration, or both. The fleet is the source of
+ *  truth for which pair belongs together; a row whose unit has left the fleet
+ *  keeps whatever it was written with. */
+export function describeRecord(record: MaintenanceRecord, fleet: Vehicle[]) {
+  const wantedPlate = (record.vehicle_registration || record.vehicle_name).toLowerCase()
+  const wantedName = record.vehicle_name.toLowerCase()
+  const byPlate = fleet.find((vehicle) => vehicle.registration?.toLowerCase() === wantedPlate)
+  const unit = byPlate ?? fleet.find((vehicle) => vehicle.name.toLowerCase() === wantedName)
+  return {
+    name: unit?.name ?? record.vehicle_name,
+    registration: unit?.registration ?? record.vehicle_registration ?? '',
+  }
+}
+
+/** True when the chosen filter value names this record's unit, by either half of
+ *  its identity. A legacy row stores the plate where a name would go, and that is
+ *  exactly the case an equality check on the name alone used to miss. */
+export function recordMatches(record: MaintenanceRecord, fleet: Vehicle[], selected: string) {
+  const unit = describeRecord(record, fleet)
+  const wanted = selected.toLowerCase()
+  return (
+    unit.name.toLowerCase() === wanted ||
+    unit.registration.toLowerCase() === wanted ||
+    record.vehicle_name.toLowerCase() === wanted
+  )
 }
 
 export function MaintenancePage() {
@@ -95,9 +142,18 @@ export function MaintenancePage() {
 
   const allVehicles: Vehicle[] = vehicles.data ?? []
 
+  // The filter takes a unit, but a record may have been written with the plate,
+  // so both sides are matched by name and by registration.
   const filteredRecords = selectedVehicle
-    ? records.filter((r) => r.vehicle_name.toLowerCase() === selectedVehicle.toLowerCase())
+    ? records.filter((record) => recordMatches(record, allVehicles, selectedVehicle))
     : records
+
+  // Units that appear in the log but not in the fleet still need a way to be
+  // filtered for, so they are offered after the fleet.
+  const logOnlyUnits = records
+    .map((record) => describeRecord(record, allVehicles))
+    .filter((unit, index, all) => all.findIndex((other) => other.name === unit.name) === index)
+    .filter((unit) => !allVehicles.some((vehicle) => vehicle.name === unit.name))
 
   const completedCount = records.filter((r) => r.status === 'completed').length
   const inProgressCount = records.filter((r) => r.status === 'in_progress').length
@@ -115,6 +171,7 @@ export function MaintenancePage() {
     const newRecord: MaintenanceRecord = {
       id: `maint-${Date.now()}`,
       vehicle_name: targetVehicle,
+      vehicle_registration: allVehicles.find((vehicle) => vehicle.name === targetVehicle)?.registration ?? undefined,
       service_date: serviceDate,
       service_type: serviceType,
       odometer_km: Number(odometerKm),
@@ -162,12 +219,11 @@ export function MaintenancePage() {
                     {v.name} {v.registration ? `(${v.registration})` : ''}
                   </option>
                 ))}
-                {records
-                  .map((r) => r.vehicle_name)
-                  .filter((name, i, arr) => arr.indexOf(name) === i && !allVehicles.some((v) => v.name === name))
-                  .map((name) => (
-                    <option key={name} value={name}>{name}</option>
-                  ))}
+                {logOnlyUnits.map((unit) => (
+                  <option key={unit.name} value={unit.name}>
+                    {unit.name} {unit.registration ? `(${unit.registration})` : ''}
+                  </option>
+                ))}
               </select>
             </label>
             {selectedVehicle && (
@@ -185,11 +241,14 @@ export function MaintenancePage() {
           </div>
         }
       >
-        <Table headers={['Vehicle', 'Service Date', 'Service Type', 'Odometer', 'Workshop / Facility', 'Cost (IDR)', 'Service Notes', 'Status']}>
-          {filteredRecords.map((r) => (
+        <Table headers={['Unit / Registration', 'Service Date', 'Service Type', 'Odometer', 'Workshop / Facility', 'Cost (IDR)', 'Service Notes', 'Status']}>
+          {filteredRecords.map((r) => {
+            const unit = describeRecord(r, allVehicles)
+            return (
             <tr key={r.id}>
               <td>
-                <strong>{r.vehicle_name}</strong>
+                <strong>{unit.name}</strong>
+                {unit.registration && <div className="muted"><small>{unit.registration}</small></div>}
               </td>
               <td>{r.service_date}</td>
               <td>{r.service_type}</td>
@@ -203,7 +262,8 @@ export function MaintenancePage() {
                 <Status value={r.status === 'completed' ? 'available' : r.status === 'in_progress' ? 'assigned' : 'idle'} />
               </td>
             </tr>
-          ))}
+            )
+          })}
         </Table>
         {filteredRecords.length === 0 && (
           <p className="empty-state">No maintenance records found for the selected filter.</p>
