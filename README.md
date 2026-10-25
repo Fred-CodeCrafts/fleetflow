@@ -103,7 +103,7 @@ city SUMO route/connectivity validation has not been completed.
    run `npm run build` in `console\` before starting the Go process, then open
    `http://localhost:8080`.
 
-5. Optionally seed development fleet records from the repository root:
+5. Optionally seed demo drivers and allocate them to the registered fleet:
 
    ```powershell
    .\scripts\dev\seed-fleet.ps1
@@ -137,18 +137,22 @@ package events are generated from simulation traces; they are not real scans.
 
 ## Seed local demo records
 
-With the FleetFlow API running locally, seed sample vehicles and drivers:
+With the FleetFlow API running locally, seed sample drivers and pair each with a
+registered vehicle:
 
 ```powershell
 .\scripts\dev\seed-fleet.ps1
 ```
 
-The seeder is idempotent: it reuses matching records on repeat runs. Seeded
-records are labeled `DEMO`; it creates no trips or GPS positions. The live map
-stays empty until a vehicle reports a real position. Records use the running
-application's configured store, so a memory-backed local run loses them when
-the service restarts. This is a development convenience, not a production
-initialization command. Remote targets are refused unless `-AllowRemote` is
+The fleet belongs to the scenarios: a completed run registers the vehicles it
+drove, with their specifications, so run one from **Operations → SUMO
+Scenarios** first if the register is empty. The seeder then adds five drivers
+and gives each a free vehicle, once; a driver who already holds a vehicle keeps
+it, so repeat runs change nothing. It creates no vehicles, trips or GPS
+positions. Records use the running application's configured store, so a
+memory-backed local run loses them when the service restarts. This is a
+development convenience, not a production initialization command. Remote targets
+are refused unless `-AllowRemote` is
 explicitly provided; never use it against production.
 
 To run the Go app in a container while OSRM is running on the host, set
