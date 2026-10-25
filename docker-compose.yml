@@ -14,7 +14,9 @@ services:
     profiles: ["routing"]
     restart: unless-stopped
     ports:
-      - "5000:5000"
+      # Host port is overridable because 5000 is commonly taken by other local
+      # services. Set OSRM_PORT and point OSRM_URL at the same port.
+      - "${OSRM_PORT:-5000}:5000"
     volumes:
       - ./data/osrm:/data:ro
     command: ["osrm-routed", "--algorithm", "mld", "/data/jakarta-metro.osrm"]

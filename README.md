@@ -63,6 +63,15 @@ city SUMO route/connectivity validation has not been completed.
    docker compose --profile routing up -d osrm
    ```
 
+   Port 5000 is commonly taken by other local services. Publish OSRM on a
+   different host port and point the API at the same one:
+
+   ```powershell
+   $env:OSRM_PORT = '5001'
+   docker compose --profile routing up -d osrm
+   # then start the Go process with OSRM_URL=http://127.0.0.1:5001
+   ```
+
 3. In a second terminal, start the Go API from the repository root. Adjust
    `SUMO_HOME` if SUMO is installed elsewhere:
 
