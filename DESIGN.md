@@ -95,22 +95,34 @@ flowchart LR
 - Basemap rendering depends on OpenFreeMap; routing and simulation runtime
   failures are surfaced rather than converted to fallback data.
 
-### Archived: the dynamic-weights prototype
+### The routing lab
 
-- An earlier prototype applied the idea from the author's thesis proposal —
-  per-edge congestion state from probe reports — at a smaller scale: a 36-node
-  grid, `rho` smoothed by an exponential moving average per edge, decay toward
-  free flow once per customization for edges that stopped reporting, and an
-  immutable metric snapshot published behind an atomic pointer so a route query
-  never takes a write lock. Each edge owns its `sync.RWMutex`, so a report on one
-  segment never blocks customization on another.
-- It is not the research the proposal describes: there is no CCH, no TraCI loop,
-  no LuST scenario, and no adoption-rate sweep in this repository. Shortest paths
-  came from Dijkstra over the grid.
-- It was removed on 25 October 2026 because nothing in the console consumed it,
-  its network generator was gone, and its survey could not be reproduced from a
-  clone. The code remains retrievable at tag `v0.1.1`; the console's routing is
-  OSRM only.
+- `internal/lab` applies the idea from the author's thesis proposal — per-edge
+  congestion state learned from probe reports — at grid scale. Each edge carries a
+  congestion ratio smoothed by an exponential moving average, decayed toward free
+  flow once per customization when it stops reporting, and published in an
+  immutable metric snapshot behind an atomic pointer, so a route query never takes
+  a write lock. Each edge owns its `sync.RWMutex`, so a report on one segment never
+  blocks customization on another.
+- The lab runs identical seeded demand twice on the same network: a static engine
+  that always costs edges at free-flow time, and the dynamic engine. Both arms are
+  priced against the congestion their own wave creates, so the comparison is between
+  routing policies and not between two traffic conditions.
+- Two modelling decisions decide whether the result means anything. Every simulated
+  vehicle reports the speed it achieved, not only those routing on the metric,
+  because that is what a fleet telematics feed is. And each driver reads the
+  published metric through a private perception error: a thousand vehicles reading
+  one number identically all divert onto the same street, which is a herding
+  artefact of the model, and it made an early version of the experiment negative at
+  full adoption.
+- The network is a lattice built in code, with fast arterials every third street.
+  Identical streets would leave the static router nothing to concentrate on, so
+  there would be nothing for dynamic weights to recover. The grid's identity is its
+  size, so a clone reproduces the experiment without a data file.
+- It is not the research the proposal describes: no CCH, no TraCI loop, no LuST
+  scenario, no Jakarta street plan, no measured traffic. Shortest paths come from
+  Dijkstra. `GET /api/lab/dynamic` and **Operations → Routing Lab** carry the same
+  statement in their method block, beside the numbers.
 
 ## Deployment and failure behavior
 

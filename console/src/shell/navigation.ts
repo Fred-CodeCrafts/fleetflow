@@ -122,6 +122,13 @@ export const navigation: NavBranch[] = [
         path: '/operations/routes',
         keywords: ['route', 'planner', 'origin', 'destination', 'OSRM', 'driving'],
       },
+      {
+        id: 'operations.lab',
+        label: 'Routing Lab',
+        icon: 'simulation',
+        path: '/operations/lab',
+        keywords: ['dynamic', 'weights', 'congestion', 'experiment', 'thesis', 'lab'],
+      },
     ],
   },
   {

@@ -1,6 +1,7 @@
 import { FleetStatusPage, LiveMapPage, RoutePlannerPage } from './Operations'
 import { DriversPage, VehiclesPage } from './Records'
 import { ModelsPage } from './Models'
+import { LabPage } from './Lab'
 import { MaintenancePage } from './Maintenance'
 import { SimulationPage, TripsPage } from './Simulation'
 import { GeneralSettingsPage } from './Settings'
@@ -12,6 +13,7 @@ const pages = {
   'operations.orders': TripsPage,
   'operations.simulations': SimulationPage,
   'operations.routes': RoutePlannerPage,
+  'operations.lab': LabPage,
   'resources.vehicles': VehiclesPage,
   'resources.models': ModelsPage,
   'resources.drivers': DriversPage,

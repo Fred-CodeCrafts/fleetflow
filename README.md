@@ -281,15 +281,26 @@ describes.** There is no CCH here, no TraCI loop and no LuST scenario, and the
 console routes through OSRM rather than a FleetFlow-owned router.
 
 An earlier prototype in this repository applied the *idea* at a much smaller
-scale: a 36-node grid, per-edge smoothed congestion written by the scenario's own
-speed reports, decay for edges that stopped reporting, and an immutable metric
-snapshot behind an atomic pointer so a route query never takes a write lock. It
-was removed on 25 October 2026, because nothing in the console consumed it, the
-script that generated its network was no longer in the tree, and its numbers could
-not be reproduced from a clone. The code is retrievable at tag `v0.1.1`
-(`internal/weights`, `internal/engine`, `internal/sim`). The proposal is where
-that research is heading; this repository is the operational console built
-alongside it.
+scale: per-edge smoothed congestion written by the vehicles' own speed reports,
+decay for edges that stopped reporting, and an immutable metric snapshot behind an
+atomic pointer so a route query never takes a write lock. It was removed on
+25 October because nothing in the console consumed it, its grid came from a file
+that was already gone, and its numbers could not be reproduced from a clone.
+
+It is back, because both reasons are answered. **Operations → Routing Lab** runs
+the comparison from a seeded configuration, and the grid is built in code, so a
+clone reproduces it with nothing but the repository. `GET /api/lab/dynamic` answers
+with the same experiment for anyone reading the API.
+
+The experiment routes identical seeded demand twice on a 6×6 lattice with fast
+arterials every third street: once on free-flow times, once on congestion the
+dynamic engine learned from the fleet's own reports. On the default configuration,
+ten seeds at 50% adoption improve between **4.6% and 8.4%**, mean **6.1%**, and 0%
+adoption ties the baseline exactly — kept as a control, so a reader can see the
+difference comes from the routing policy and not from noise. Those numbers describe
+this model. The screen and the endpoint both print what it is not: no CCH, no TraCI,
+no LuST scenario, no Jakarta street plan, no measured traffic. The proposal is where
+that research is heading; this repository is the console built alongside it.
 
 ## Status
 
@@ -326,7 +337,7 @@ per-class intensities. Close everything else.
 | 0:00–0:20 | landing | "A fleet operations console for Jakarta: dispatch, trip history, a live map, a carbon ledger. One rule: a number a model produced has to name the model." |
 | 0:20–0:55 | `/operations/routes` | "Twelve Jakarta hubs. Geometry, distance and duration come from OSRM over a Jakarta OpenStreetMap extract; this application computes no route itself." Draw one route. |
 | 0:55–1:30 | `/operations/simulations` | Start the peak preset. "Seeded demand, generated trips, positions, deliveries. When it finishes, the panel says what produced it: synthetic generator, because no SUMO process ran. I could have labelled it SUMO." Point at `runner`. |
-| 1:30–2:05 | dispatch | Dispatch the run, then read the register: 100 vehicles with ids and separate plates and 170 trips, accumulated from the three stored presets. "Press dispatch again and the counts do not move: a trip is deduplicated by vehicle, origin and destination, so a second click is not second work. The five drivers come from the demo seeder, and dispatch assigns none: the vehicles stay unassigned until someone pairs them." Then open a vehicle: trips, not a placeholder. |
+| 1:30–2:05 | `/operations/trips` | "The run became fleet records: one hundred vehicles with ids and separate plates, two hundred and twenty trips. The five drivers come from the demo seeder and dispatch assigns none. A trip is deduplicated by vehicle, origin and destination, so recording the same delivery twice is refused." Open a vehicle: trips, not a placeholder. |
 | 2:05–2:45 | `/sustainability` | "A 14-tonne diesel box truck is 948 grams per kilometre, a 4.5-tonne truck 569, a diesel van 348, an electric cargo motorcycle zero at the tailpipe. The class is on the row and the model is named above it: FleetFlow class factors, planning assumptions — not HBEFA3, not a certified inventory." |
 | 2:45–3:00 | close | "Apache-2.0, tests in the repo, and the limits are written down where you can check them." |
 
