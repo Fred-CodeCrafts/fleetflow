@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
-import { api, type EmissionsSummary } from '../api/client'
-import { ErrorMessage, Loading, Metric, Page, Panel, Table, formatNumber, useLoad } from './Shared'
+import { api, type EmissionsSummary, type Vehicle } from '../api/client'
+import { ErrorMessage, Loading, Metric, Page, Panel, runLabel, Table, formatNumber, useLoad } from './Shared'
 
 /**
  * The two emissions screens read one endpoint and are meant to be used in a row:
@@ -8,6 +8,24 @@ import { ErrorMessage, Loading, Metric, Page, Panel, Table, formatNumber, useLoa
  * that". They therefore share the aggregation, the provenance note and the
  * cross-link, so neither can show a number the other disagrees with.
  */
+
+/**
+ * vehicleCell attributes an emission total to a vehicle.
+ *
+ * A scenario names its vehicles by plate, and the plate is the registration, so
+ * the fleet is matched on that and the row links to the vehicle it describes
+ * rather than to the register in general. A plate the fleet does not know is
+ * still shown, because hiding the attribution would be worse than an unknown one.
+ */
+function vehicleCell(plate: string, vehicles: Vehicle[]) {
+  const vehicle = vehicles.find((candidate) => candidate.registration === plate)
+  if (!vehicle) {
+    return plate
+  }
+  return <Link to={`/resources/vehicles/${encodeURIComponent(vehicle.id)}`}>
+    {vehicle.name} · {plate}
+  </Link>
+}
 
 function provenanceNote(summary: EmissionsSummary | null) {
   const method = summary?.method
@@ -28,6 +46,7 @@ function EmissionsProvenance({ summary }: { summary: EmissionsSummary | null }) 
 
 export function GreenDashboardPage() {
   const summary = useLoad(api.emissionsSummary)
+  const vehicles = useLoad(api.vehicles)
   const data = summary.data
 
   return <Page
@@ -39,7 +58,7 @@ export function GreenDashboardPage() {
     {summary.loading ? <Loading /> : summary.error ? <ErrorMessage>{summary.error}</ErrorMessage> : <>
       <div className="metric-grid">
         <Metric label="CO₂ emitted" value={`${formatNumber(data?.totals.co2_kg, 1)} kg`} note="Model output" />
-        <Metric label="Fuel burned" value={`${formatNumber(data?.totals.fuel_kg, 1)} kg`}note="Model output" />
+        <Metric label="Fuel burned" value={`${formatNumber(data?.totals.fuel_kg, 1)} kg`} note="Model output" />
         <Metric label="Distance driven" value={`${formatNumber(data?.totals.distance_km, 1)} km`} />
         <Metric label="CO₂ intensity" value={`${formatNumber(data?.totals.g_co2_per_km, 1)} g/km`} note="Per kilometre driven" />
         <Metric label="Simulated trips" value={formatNumber(data?.totals.trips, 0)} />
@@ -51,7 +70,7 @@ export function GreenDashboardPage() {
           ? <p className="empty-state">No completed scenario has attributed emissions to a vehicle yet.</p>
           : <Table headers={['Vehicle', 'Trips', 'Distance', 'CO₂', 'Fuel', 'CO₂ intensity']}>
             {data.vehicles.slice(0, 15).map((vehicle) => <tr key={vehicle.vehicle_id}>
-              <td><Link to="/resources/vehicles">{vehicle.vehicle_id}</Link></td>
+              <td>{vehicleCell(vehicle.vehicle_id, vehicles.data ?? [])}</td>
               <td>{vehicle.trips}</td>
               <td>{formatNumber(vehicle.distance_km, 1)} km</td>
               <td>{formatNumber(vehicle.co2_kg, 1)} kg</td>
@@ -68,6 +87,7 @@ export function GreenDashboardPage() {
 
 export function EmissionsPage() {
   const summary = useLoad(api.emissionsSummary)
+  const vehicles = useLoad(api.vehicles)
   const data = summary.data
 
   return <Page
@@ -88,7 +108,7 @@ export function EmissionsPage() {
           ? <p className="empty-state">No completed scenario has been recorded yet.</p>
           : <Table headers={['Run', 'Recorded', 'Vehicles', 'Trips', 'Distance', 'CO₂', 'Fuel', 'CO₂ intensity', 'Open']}>
             {data.runs.map((run) => <tr key={run.run_id}>
-              <td><strong>{run.run_id.slice(0, 12)}</strong></td>
+              <td><strong>{runLabel(run.run_id)}</strong></td>
               <td>{new Date(run.created_at).toLocaleString()}</td>
               <td>{run.vehicles}</td>
               <td>{run.trips}</td>
@@ -106,7 +126,7 @@ export function EmissionsPage() {
           ? <p className="empty-state">No completed scenario has attributed emissions to a vehicle yet.</p>
           : <Table headers={['Vehicle', 'Trips', 'Distance', 'CO₂', 'Fuel', 'CO₂ intensity']}>
             {data.vehicles.map((vehicle) => <tr key={vehicle.vehicle_id}>
-              <td><Link to="/resources/vehicles">{vehicle.vehicle_id}</Link></td>
+              <td>{vehicleCell(vehicle.vehicle_id, vehicles.data ?? [])}</td>
               <td>{vehicle.trips}</td>
               <td>{formatNumber(vehicle.distance_km, 1)} km</td>
               <td>{formatNumber(vehicle.co2_kg, 2)} kg</td>
