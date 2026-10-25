@@ -156,6 +156,8 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /operations/", console)
 	s.mux.Handle("GET /resources", console)
 	s.mux.Handle("GET /resources/", console)
+	s.mux.Handle("GET /sustainability", console)
+	s.mux.Handle("GET /sustainability/", console)
 	s.mux.Handle("GET /settings", console)
 	s.mux.Handle("GET /settings/", console)
 }
