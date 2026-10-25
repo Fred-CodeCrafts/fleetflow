@@ -12,7 +12,7 @@
 # screen works. See deploy/free-hosting.md for the options that include it.
 
 ARG FLEETFLOW_REPO=https://github.com/Fred-CodeCrafts/fleetflow.git
-ARG FLEETFLOW_TAG=v0.1.6
+ARG FLEETFLOW_TAG=v0.1.7
 
 FROM node:24-alpine AS source
 ARG FLEETFLOW_REPO
