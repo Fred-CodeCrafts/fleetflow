@@ -3,21 +3,13 @@ import { Link } from 'react-router-dom'
 import * as maplibregl from 'maplibre-gl'
 import maplibreWorkerURL from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import { api, type Coordinate, type OSRMRoute, type SimulatedDeliveryStop, type SimulatedTrack, type VehicleLocation } from '../api/client'
-import { ErrorMessage, Panel } from '../screens/Shared'
+import { api, type Coordinate, type LogisticsHub, type OSRMRoute, type SimulatedDeliveryStop, type SimulatedTrack, type VehicleLocation } from '../api/client'
+import { ErrorMessage, Panel, useLoad } from '../screens/Shared'
 
 maplibregl.setWorkerUrl(maplibreWorkerURL)
 
 const jakarta: [number, number] = [106.8456, -6.2088]
 const openFreeMapStyle = 'https://tiles.openfreemap.org/styles/liberty'
-
-const logisticsHubs = [
-  { name: 'Tanjung Priok Port Terminal', code: 'HUB-TPK', lat: -6.1030, lon: 106.8833, area: 'North Jakarta' },
-  { name: 'Pluit Urban Logistics Depot', code: 'HUB-PLT', lat: -6.1245, lon: 106.7905, area: 'Northwest Jakarta' },
-  { name: 'Halim Air Cargo Terminal', code: 'HUB-HLM', lat: -6.2625, lon: 106.8911, area: 'East Jakarta' },
-  { name: 'Cilandak Urban Fulfillment Hub', code: 'HUB-CLK', lat: -6.2921, lon: 106.8042, area: 'South Jakarta' },
-  { name: 'Tomang Regional Logistics Spine', code: 'HUB-TMG', lat: -6.1750, lon: 106.7915, area: 'West Jakarta' },
-]
 
 const vehicleDetailsMap: Record<string, { model: string; driver: string; hub: string; dest: string; tripId: string }> = {
   'B-9012-JKT': { model: 'Isuzu Giga FVM (Heavy Truck)', driver: 'Budi Santoso', hub: 'Tanjung Priok Port Terminal', dest: 'Kelapa Gading Commercial District', tripId: 'trip_tpk_kgd' },
@@ -108,9 +100,9 @@ function deliveryStopFeatures(stops: SimulatedDeliveryStop[]): MapFeature[] {
   )
 }
 
-function hubFeatures(): MapFeature[] {
-  return logisticsHubs.map((hub) =>
-    pointFeature({ lat: hub.lat, lon: hub.lon }, hub.code, 'logistics-hub', { name: hub.name, area: hub.area }),
+function hubFeatures(hubs: LogisticsHub[]): MapFeature[] {
+  return hubs.map((hub) =>
+    pointFeature({ lat: hub.latitude, lon: hub.longitude }, hub.code, 'logistics-hub', { name: hub.name, area: hub.area }),
   )
 }
 
@@ -136,6 +128,10 @@ export function RoutingMap({ route, selectedPoints, onPickPoint, compact = false
   const [isPlaying, setIsPlaying] = useState(true)
   const [playbackSpeed, setPlaybackSpeed] = useState(1)
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null)
+
+  // The hubs come from the scenario catalogue rather than a copy in this file, so
+  // the map cannot fall behind the places the generator actually routes between.
+  const hubs = useLoad(api.hubs)
 
   const maxTrackTime = Math.max(
     ...simulationTracks.flatMap((t) => t.positions.map((p) => p.time_s)),
@@ -188,7 +184,9 @@ export function RoutingMap({ route, selectedPoints, onPickPoint, compact = false
         paint: { 'line-color': '#16866c', 'line-width': 5 },
       })
 
-      // Multi-hub Jakarta Logistics Hubs
+      // Multi-hub Jakarta Logistics Hubs. Added after the route lines so a hub
+      // sits above a line, and before the vehicles so a passing vehicle is never
+      // hidden under a hub.
       instance.addSource('logistics-hubs', { type: 'geojson', data: featureCollection([]) })
       instance.addLayer({
         id: 'logistics-hub-circles',
@@ -229,9 +227,9 @@ export function RoutingMap({ route, selectedPoints, onPickPoint, compact = false
         source: 'simulation-stops',
         paint: {
           'circle-color': '#ffffff',
-          'circle-radius': 8,
+          'circle-radius': 5,
           'circle-stroke-color': '#8a3ffc',
-          'circle-stroke-width': 3,
+          'circle-stroke-width': 2,
         },
       })
       instance.addLayer({
@@ -240,8 +238,8 @@ export function RoutingMap({ route, selectedPoints, onPickPoint, compact = false
         source: 'simulation-stops',
         layout: {
           'text-field': ['get', 'label'],
-          'text-offset': [0, 1.3],
-          'text-size': 11,
+          'text-offset': [0, 1.0],
+          'text-size': 10,
           'text-font': ['Noto Sans Regular'],
         },
         paint: { 'text-color': '#5825a4', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 },
@@ -389,7 +387,7 @@ export function RoutingMap({ route, selectedPoints, onPickPoint, compact = false
     vehicleSource.setData(featureCollection(positionMode === 'live' ? positionFeatures(positions) : []))
 
     const hubSource = instance.getSource('logistics-hubs') as maplibregl.GeoJSONSource
-    hubSource.setData(featureCollection(positionMode === 'simulation' ? hubFeatures() : []))
+    hubSource.setData(featureCollection(positionMode === 'simulation' ? hubFeatures(hubs.data ?? []) : []))
 
     const simulationSource = instance.getSource('simulation-routes') as maplibregl.GeoJSONSource
     const simulationFeatures = positionMode === 'simulation' ? simulatedRouteFeatures(simulationTracks) : []
@@ -431,7 +429,7 @@ export function RoutingMap({ route, selectedPoints, onPickPoint, compact = false
       if (waypoints.length > 1) instance.fitBounds(bounds, { padding: 72, maxZoom: 15, duration: 500 })
       else instance.easeTo({ center: coords[0], zoom: 14 })
     }
-  }, [loaded, playbackTime, positionMode, positions, route, selectedPoints, simulationStops, simulationTracks])
+  }, [hubs.data, loaded, playbackTime, positionMode, positions, route, selectedPoints, simulationStops, simulationTracks])
 
   const selectedVehicleInfo = selectedVehicleId ? vehicleDetailsMap[selectedVehicleId] : null
   const selectedTrack = selectedVehicleId ? simulationTracks.find((t) => t.vehicle_id === selectedVehicleId) : null

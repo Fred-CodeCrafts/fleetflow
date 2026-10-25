@@ -43,6 +43,7 @@ type Driver struct {
 	ShiftStart    string
 	ShiftEnd      string
 	Availability  string
+	ContractType  string
 	// VehicleID is the vehicle this driver currently holds, or empty when the
 	// driver is unassigned. The field is the assignment itself: a driver has at
 	// most one vehicle, and a store additionally rejects a vehicle that another

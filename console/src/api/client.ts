@@ -24,6 +24,7 @@ export interface Driver {
   shift_start: string | null
   shift_end: string | null
   availability: string | null
+  contract_type: string | null
   vehicle_id?: string
 }
 
@@ -46,6 +47,9 @@ export interface SimulationScenario {
 
 export interface SimulatedTrip {
   id: string
+  vehicle_id?: string
+  origin?: string
+  destination?: string
   status: 'running' | 'completed'
   depart_s: number
   arrival_s?: number
@@ -110,7 +114,9 @@ export interface EmissionProvenance {
 }
 
 export interface SimulationResult {
-  sumo_version: string
+  /** sumo or synthetic: what actually produced the result. */
+  runner?: string
+  sumo_version?: string
   seed: number
   started_at: string
   finished_at: string
@@ -148,6 +154,53 @@ export interface VehicleLocation extends Coordinate {
   speed_mps: number
   updated_at: string
   age_s: number
+}
+
+export interface EmissionsTotals {
+  trips: number
+  distance_km: number
+  co2_kg: number
+  fuel_kg: number
+  g_co2_per_km: number
+  runs: number
+}
+
+export interface EmissionsRun {
+  run_id: string
+  created_at: string
+  vehicles: number
+  trips: number
+  distance_km: number
+  co2_kg: number
+  fuel_kg: number
+  g_co2_per_km: number
+}
+
+export interface EmissionsVehicle {
+  vehicle_id: string
+  trips: number
+  distance_km: number
+  co2_kg: number
+  fuel_kg: number
+  g_co2_per_km: number
+  /** The emission class the vehicle's trips were charged at. */
+  class?: string
+}
+
+export interface EmissionsSummary {
+  totals: EmissionsTotals
+  runs: EmissionsRun[]
+  vehicles: EmissionsVehicle[]
+  method?: EmissionProvenance
+}
+
+/** A place the scenario generator routes between, drawn on the map. */
+export interface LogisticsHub {
+  name: string
+  code: string
+  latitude: number
+  longitude: number
+  area: string
 }
 
 export class ApiError extends Error {
@@ -214,6 +267,13 @@ export const api = {
     'capacity' | 'maintenance_history'>>) =>
     request<Vehicle>('/api/vehicles', { method: 'POST', body: JSON.stringify(vehicle) }),
   createDriver: (driver: Pick<Driver, 'name'> & Partial<Pick<Driver,
-    'contact' | 'contact_phone' | 'license_class' | 'license_expiry' | 'shift_start' | 'shift_end' | 'availability'>>) =>
+    'contact' | 'contact_phone' | 'license_class' | 'license_expiry' | 'shift_start' | 'shift_end' | 'availability' | 'contract_type'>>) =>
     request<Driver>('/api/drivers', { method: 'POST', body: JSON.stringify(driver) }),
+  assignDriverVehicle: (driverId: string, vehicleId: string) =>
+    request<Driver>(`/api/drivers/${encodeURIComponent(driverId)}/vehicle`, {
+      method: 'PUT',
+      body: JSON.stringify({ vehicle_id: vehicleId }),
+    }),
+  emissionsSummary: () => request<EmissionsSummary>('/api/emissions/summary'),
+  hubs: async () => (await request<{ hubs: LogisticsHub[] }>('/api/hubs')).hubs,
 }

@@ -14,7 +14,6 @@ export interface MaintenanceRecord {
   status: 'completed' | 'in_progress' | 'scheduled'
   facility: string
   notes: string
-  emission_impact?: string
 }
 
 const defaultRecords: MaintenanceRecord[] = [
@@ -27,8 +26,7 @@ const defaultRecords: MaintenanceRecord[] = [
     cost_idr: 1850000,
     status: 'completed',
     facility: 'Jakarta Pusat Fleet Depot',
-    notes: 'Engine oil replaced (5W-30 synthetic), air filter and fuel filter renewed. Catalytic converter inspected clean.',
-    emission_impact: 'Optimal Euro 4 compliance; HC and CO levels nominal',
+    notes: 'Engine oil replaced (15W-40 heavy-duty), oil filter and fuel filter renewed. Brake lines checked.',
   },
   {
     id: 'maint-02',
@@ -39,8 +37,7 @@ const defaultRecords: MaintenanceRecord[] = [
     cost_idr: 2400000,
     status: 'completed',
     facility: 'Cilandak Service Center',
-    notes: 'Front and rear ceramic pads installed. Rotor resurfaced. Tire pressure calibrated to 36 psi.',
-    emission_impact: 'Reduced rolling friction; estimated +2% fuel efficiency',
+    notes: 'Front and rear ceramic pads installed. Rotor resurfaced. Wheel alignment and tire pressure calibrated to 36 psi.',
   },
   {
     id: 'maint-03',
@@ -51,12 +48,11 @@ const defaultRecords: MaintenanceRecord[] = [
     cost_idr: 950000,
     status: 'in_progress',
     facility: 'Halim Logistics Garage',
-    notes: 'Radiator flushed and refilled with coolant. Alternator output verified 14.2V.',
-    emission_impact: 'Prevents thermal throttling and excess fuel burn',
+    notes: 'Radiator flushed and refilled with coolant. Alternator output verified 14.2V and battery terminals cleaned.',
   },
 ]
 
-const STORAGE_KEY = 'fleetflow_maintenance_records_v1'
+const STORAGE_KEY = 'fleetflow_maintenance_records_v2'
 
 function loadStoredRecords(): MaintenanceRecord[] {
   try {
@@ -126,7 +122,6 @@ export function MaintenancePage() {
       status,
       facility,
       notes,
-      emission_impact: 'Inspected and certified for city emission compliance',
     }
 
     const updated = [newRecord, ...records]
@@ -139,7 +134,7 @@ export function MaintenancePage() {
     <Page
       eyebrow="Resources"
       title="Maintenance History"
-      description="Track scheduled vehicle maintenance, workshop service logs, and emission inspection compliance across the Jakarta fleet."
+      description="Track scheduled vehicle maintenance, workshop service logs, and repairs across the Jakarta fleet."
     >
       <div className="metric-grid">
         <Metric label="Total Service Records" value={String(records.length)} />
@@ -190,7 +185,7 @@ export function MaintenancePage() {
           </div>
         }
       >
-        <Table headers={['Vehicle', 'Service Date', 'Service Type', 'Odometer', 'Workshop / Facility', 'Cost (IDR)', 'Emission Impact & Notes', 'Status']}>
+        <Table headers={['Vehicle', 'Service Date', 'Service Type', 'Odometer', 'Workshop / Facility', 'Cost (IDR)', 'Service Notes', 'Status']}>
           {filteredRecords.map((r) => (
             <tr key={r.id}>
               <td>
@@ -203,11 +198,6 @@ export function MaintenancePage() {
               <td>Rp {r.cost_idr.toLocaleString('id-ID')}</td>
               <td>
                 <div>{r.notes || 'Routine maintenance'}</div>
-                {r.emission_impact && (
-                  <small className="muted" style={{ display: 'block', marginTop: '2px', color: '#16866c' }}>
-                    🌿 {r.emission_impact}
-                  </small>
-                )}
               </td>
               <td>
                 <Status value={r.status === 'completed' ? 'available' : r.status === 'in_progress' ? 'assigned' : 'idle'} />
@@ -294,9 +284,9 @@ export function MaintenancePage() {
             </select>
           </label>
           <label className="field" style={{ flex: '1 1 100%' }}>
-            Service notes & emission check
+            Service notes
             <textarea
-              placeholder="Record replacement parts, technician diagnostics, and emissions inspection notes"
+              placeholder="Record replacement parts, technician diagnostics, and workshop repair notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
             />

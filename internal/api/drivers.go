@@ -18,6 +18,7 @@ type driverView struct {
 	ShiftStart    *string `json:"shift_start"`
 	ShiftEnd      *string `json:"shift_end"`
 	Availability  *string `json:"availability"`
+	ContractType  *string `json:"contract_type,omitempty"`
 	VehicleID     string  `json:"vehicle_id,omitempty"`
 }
 
@@ -27,7 +28,8 @@ func viewOfDriver(d driver.Driver) driverView {
 		ID: d.ID, Name: d.Name, Contact: d.Contact, ContactPhone: optionalText(d.ContactPhone),
 		LicenseClass: optionalText(d.LicenseClass), LicenseExpiry: optionalText(d.LicenseExpiry),
 		ShiftStart: optionalText(d.ShiftStart), ShiftEnd: optionalText(d.ShiftEnd),
-		Availability: optionalText(d.Availability), VehicleID: d.VehicleID,
+		Availability: optionalText(d.Availability), ContractType: optionalText(d.ContractType),
+		VehicleID: d.VehicleID,
 	}
 }
 
@@ -41,6 +43,7 @@ type createDriverRequest struct {
 	ShiftStart    string `json:"shift_start"`
 	ShiftEnd      string `json:"shift_end"`
 	Availability  string `json:"availability"`
+	ContractType  string `json:"contract_type"`
 }
 
 // handleListDrivers answers GET /api/drivers.
@@ -80,6 +83,7 @@ func (s *Server) handleCreateDriver(w http.ResponseWriter, r *http.Request) {
 		Name: req.Name, Contact: req.Contact, ContactPhone: req.ContactPhone,
 		LicenseClass: req.LicenseClass, LicenseExpiry: req.LicenseExpiry,
 		ShiftStart: req.ShiftStart, ShiftEnd: req.ShiftEnd, Availability: req.Availability,
+		ContractType: req.ContractType,
 	})
 	if err != nil {
 		writeError(w, r, err)
@@ -88,4 +92,32 @@ func (s *Server) handleCreateDriver(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Location", "/api/drivers/"+created.ID)
 	writeJSON(w, http.StatusCreated, viewOfDriver(created))
+}
+
+type assignDriverVehicleRequest struct {
+	VehicleID string `json:"vehicle_id"`
+}
+
+// handleAssignDriverVehicle answers PUT /api/drivers/{id}/vehicle and sets or clears
+// the assigned vehicle.
+func (s *Server) handleAssignDriverVehicle(w http.ResponseWriter, r *http.Request) {
+	if s.drivers == nil {
+		writeError(w, r, errNoFleet)
+		return
+	}
+
+	id := r.PathValue("id")
+	var req assignDriverVehicleRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeError(w, r, err)
+		return
+	}
+
+	updated, err := s.drivers.Assign(r.Context(), id, req.VehicleID)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, viewOfDriver(updated))
 }

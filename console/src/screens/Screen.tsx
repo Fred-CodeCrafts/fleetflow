@@ -4,6 +4,7 @@ import { ModelsPage } from './Models'
 import { MaintenancePage } from './Maintenance'
 import { SimulationPage, TripsPage } from './Simulation'
 import { GeneralSettingsPage } from './Settings'
+import { SustainabilityPage } from './Sustainability'
 
 const pages = {
   'operations.overview': LiveMapPage,
@@ -15,6 +16,7 @@ const pages = {
   'resources.models': ModelsPage,
   'resources.drivers': DriversPage,
   'resources.maintenance': MaintenancePage,
+  'sustainability.dashboard': SustainabilityPage,
   'settings.general': GeneralSettingsPage,
 }
 

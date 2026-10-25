@@ -60,6 +60,7 @@ type CreateInput struct {
 	ShiftStart    string
 	ShiftEnd      string
 	Availability  string
+	ContractType  string
 }
 
 // Service applies the driver rules on top of a Repository.
@@ -82,6 +83,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (Driver, error) {
 		return Driver{}, err
 	}
 	d.ID = id
+	d.ContractType = strings.TrimSpace(in.ContractType)
 
 	stored, err := s.repo.Create(ctx, d)
 	if err != nil {

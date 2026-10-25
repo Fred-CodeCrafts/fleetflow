@@ -92,6 +92,30 @@ func TestHealthz(t *testing.T) {
 	}
 }
 
+// Every sidebar section has to reach the console when Go serves it, not just
+// when Vite does. The route table allow-lists sections one by one, so a new
+// section that is not listed answers 404 in production and looks fine in
+// development — which is exactly how the sustainability pages shipped broken.
+func TestEveryConsoleSectionReachesTheConsole(t *testing.T) {
+	s := testServer(t)
+	for _, path := range []string{
+		"/operations",
+		"/operations/trips",
+		"/resources/vehicles",
+		"/sustainability",
+		"/sustainability/emissions",
+		"/settings/general",
+	} {
+		rec := httptest.NewRecorder()
+		s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		unbuilt := rec.Code == http.StatusServiceUnavailable &&
+			strings.Contains(rec.Body.String(), "console is not built")
+		if !unbuilt && rec.Code != http.StatusOK {
+			t.Errorf("GET %s answered %d, want the console document", path, rec.Code)
+		}
+	}
+}
+
 func TestConsoleRoutesDoNotChangeAPIErrorBehavior(t *testing.T) {
 	s := testServer(t)
 

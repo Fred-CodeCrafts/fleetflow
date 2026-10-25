@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, type Coordinate, type OSRMRoute, type Vehicle } from '../api/client'
 import { RoutingMap } from '../map/RoutingMap'
-import { ErrorMessage, formatNumber, Loading, Metric, Page, Panel, Status, Table, useLoad } from './Shared'
-import { presets, useSimulationRun } from './Simulation'
+import { ErrorMessage, formatNumber, Loading, Metric, Page, Panel, presets, Status, Table, useLoad } from './Shared'
+import { useSimulationRun } from './Simulation'
 
 function formatCoordinate(point: Coordinate | null) {
   return point ? `${point.lat.toFixed(5)}, ${point.lon.toFixed(5)}` : ''
@@ -19,12 +19,6 @@ export function LiveMapPage() {
   const [message, setMessage] = useState('')
 
   const selectedRun = useSimulationRun(selectedRunID)
-
-  useEffect(() => {
-    if (!selectedRunID && runs.data && runs.data.length > 0 && runs.data[0]) {
-      setSelectedRunID(runs.data[0].id)
-    }
-  }, [selectedRunID, runs.data])
 
   useEffect(() => {
     if (selectedRun.run?.status === 'completed' && selectedRun.run.result?.tracks?.length) {
@@ -63,8 +57,20 @@ export function LiveMapPage() {
         <form className="form-row" onSubmit={runSimulation} style={{ alignItems: 'flex-end', flexWrap: 'wrap', gap: '12px' }}>
           <div className="field" style={{ minWidth: '150px' }}>
             <span>Operating State</span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', height: '36px', padding: '0 10px', background: '#e6fcf5', color: '#0ca678', borderRadius: '4px', fontWeight: 600, fontSize: '13px' }}>
-              ● Multi-Hub Scenario Active
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                height: '36px',
+                padding: '0 10px',
+                background: isSimulationActive ? '#fff9db' : selectedRunID ? '#e6fcf5' : '#f1f3f5',
+                color: isSimulationActive ? '#f08c00' : selectedRunID ? '#0ca678' : '#868e96',
+                borderRadius: '4px',
+                fontWeight: 600,
+                fontSize: '13px',
+              }}
+            >
+              {isSimulationActive ? '● Simulating…' : selectedRunID && tracks.length > 0 ? `● ${tracks.length} Vehicles Running` : '○ Fleet Standby'}
             </span>
           </div>
           <label className="field">
@@ -132,6 +138,18 @@ const jakartaLocations = [
   { name: 'Pulogadung Industrial Estate', area: 'East Jakarta', lat: -6.1910, lon: 106.9120 },
 ]
 
+function parseCoordinate(input: string): Coordinate | null {
+  const parts = input.split(',').map((s) => Number(s.trim()))
+  if (parts.length === 2) {
+    const lat = parts[0]
+    const lon = parts[1]
+    if (lat !== undefined && lon !== undefined && !isNaN(lat) && !isNaN(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+      return { lat, lon }
+    }
+  }
+  return null
+}
+
 function LocationSearchInput({
   label,
   value,
@@ -196,9 +214,14 @@ function LocationSearchInput({
         value={query}
         onFocus={() => setOpen(true)}
         onChange={(e) => {
-          setQuery(e.target.value)
+          const val = e.target.value
+          setQuery(val)
           setOpen(true)
           setHighlightIndex(0)
+          const parsed = parseCoordinate(val)
+          if (parsed) {
+            onSelect({ name: val, lat: parsed.lat, lon: parsed.lon })
+          }
         }}
         onKeyDown={handleKeyDown}
       />
@@ -267,14 +290,27 @@ export function RoutePlannerPage() {
 
   const plan = async (event: FormEvent) => {
     event.preventDefault()
-    if (!from || !to) return
+    let routeFrom = from
+    let routeTo = to
+    if (!routeFrom && fromName) {
+      routeFrom = parseCoordinate(fromName)
+      if (routeFrom) setFrom(routeFrom)
+    }
+    if (!routeTo && toName) {
+      routeTo = parseCoordinate(toName)
+      if (routeTo) setTo(routeTo)
+    }
+    if (!routeFrom || !routeTo) {
+      setError('Please provide valid origin and destination locations or coordinates.')
+      return
+    }
     setBusy(true)
     setError('')
     setDispatchSuccess('')
     setPrimaryRoute(null)
     setAltRoute(null)
     try {
-      const main = await api.route(from, to)
+      const main = await api.route(routeFrom, routeTo)
       setPrimaryRoute(main)
       setSelectedRouteIndex(0)
 
@@ -371,7 +407,7 @@ export function RoutePlannerPage() {
             Pick destination on map
           </button>
 
-          <button className="button primary" type="submit" disabled={!from || !to || busy}>
+          <button className="button primary" type="submit" disabled={(!from && !parseCoordinate(fromName)) || (!to && !parseCoordinate(toName)) || busy}>
             {busy ? 'Calculating route…' : 'Find driving routes'}
           </button>
         </form>
@@ -487,7 +523,7 @@ export function FleetStatusPage() {
       {vehicles.loading ? <Loading /> : vehicles.error ? <ErrorMessage>{vehicles.error}</ErrorMessage> :
         <Table headers={['Vehicle', 'Model / Type', 'Status', 'Assigned Driver', 'Payload Capacity', 'Actions']}>
           {allVehicles.map((vehicle) => {
-            const isHighlighted = highlightVehicle && (highlightVehicle === vehicle.name || highlightVehicle === vehicle.id)
+            const isHighlighted = highlightVehicle && (highlightVehicle === vehicle.name || highlightVehicle === vehicle.id || highlightVehicle === vehicle.registration)
             return (
               <tr
                 key={vehicle.id}

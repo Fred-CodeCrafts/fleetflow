@@ -133,6 +133,7 @@ func parseTrips(reader io.Reader) ([]Trip, error) {
 
 		trip := Trip{
 			ID:        info.ID,
+			VehicleID: info.ID,
 			Status:    TripRunning,
 			DepartS:   depart,
 			DurationS: duration,

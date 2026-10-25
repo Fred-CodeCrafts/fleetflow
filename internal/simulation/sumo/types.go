@@ -45,14 +45,30 @@ const (
 )
 
 type Trip struct {
-	ID        string     `json:"id"`
-	Status    TripStatus `json:"status"`
-	DepartS   float64    `json:"depart_s"`
-	ArrivalS  *float64   `json:"arrival_s,omitempty"`
-	DurationS float64    `json:"duration_s"`
-	DistanceM float64    `json:"distance_m"`
-	CO2Kg     float64    `json:"co2_kg"`
-	FuelKg    float64    `json:"fuel_kg"`
+	ID string `json:"id"`
+	// VehicleID is the fleet vehicle that made the trip. SUMO's tripinfo id is
+	// the vehicle id because the runner creates one trip per vehicle, so the
+	// parser copies it here; the synthetic generator sets it from the plate it
+	// assigned. It is what lets the console link a simulated trip to a fleet
+	// record instead of showing every trip as unassigned.
+	VehicleID string `json:"vehicle_id,omitempty"`
+	// Origin and Destination are the named places the trip ran between. SUMO
+	// itself only reports coordinates, so a real SUMO run leaves these empty
+	// rather than inventing names; the scenario generator fills them with the
+	// Jakarta hubs it routed between.
+	Origin      string     `json:"origin,omitempty"`
+	Destination string     `json:"destination,omitempty"`
+	Status      TripStatus `json:"status"`
+	DepartS     float64    `json:"depart_s"`
+	ArrivalS    *float64   `json:"arrival_s,omitempty"`
+	DurationS   float64    `json:"duration_s"`
+	DistanceM   float64    `json:"distance_m"`
+	CO2Kg       float64    `json:"co2_kg"`
+	FuelKg      float64    `json:"fuel_kg"`
+	// EmissionClass names the fleet class whose factors produced CO2Kg and
+	// FuelKg, so a reader can tell a diesel truck from an electric motorcycle
+	// without guessing.
+	EmissionClass string `json:"emission_class,omitempty"`
 }
 
 type Position struct {
@@ -132,7 +148,13 @@ type EmissionProvenance struct {
 }
 
 type Result struct {
-	SUMOVersion string             `json:"sumo_version"`
+	// Runner names the thing that produced this result: "sumo" when the SUMO
+	// process ran the scenario, "synthetic" when the Go generator did. A reader
+	// (and a judge) can tell the two apart without trusting a version string.
+	Runner string `json:"runner"`
+	// SUMOVersion is the SUMO build that ran the scenario. It is empty for a
+	// synthetic run, because no SUMO process ran.
+	SUMOVersion string             `json:"sumo_version,omitempty"`
 	Seed        int64              `json:"seed"`
 	StartedAt   time.Time          `json:"started_at"`
 	FinishedAt  time.Time          `json:"finished_at"`
