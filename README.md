@@ -281,15 +281,26 @@ describes.** There is no CCH here, no TraCI loop and no LuST scenario, and the
 console routes through OSRM rather than a FleetFlow-owned router.
 
 An earlier prototype in this repository applied the *idea* at a much smaller
-scale: a 36-node grid, per-edge smoothed congestion written by the scenario's own
-speed reports, decay for edges that stopped reporting, and an immutable metric
-snapshot behind an atomic pointer so a route query never takes a write lock. It
-was removed on 25 October 2026, because nothing in the console consumed it, the
-script that generated its network was no longer in the tree, and its numbers could
-not be reproduced from a clone. The code is retrievable at tag `v0.1.1`
-(`internal/weights`, `internal/engine`, `internal/sim`). The proposal is where
-that research is heading; this repository is the operational console built
-alongside it.
+scale: per-edge smoothed congestion written by the vehicles' own speed reports,
+decay for edges that stopped reporting, and an immutable metric snapshot behind an
+atomic pointer so a route query never takes a write lock. It was removed on
+25 October because nothing in the console consumed it, its grid came from a file
+that was already gone, and its numbers could not be reproduced from a clone.
+
+It is back, because both reasons are answered. **Operations → Routing Lab** runs
+the comparison from a seeded configuration, and the grid is built in code, so a
+clone reproduces it with nothing but the repository. `GET /api/lab/dynamic` answers
+with the same experiment for anyone reading the API.
+
+The experiment routes identical seeded demand twice on a 6×6 lattice with fast
+arterials every third street: once on free-flow times, once on congestion the
+dynamic engine learned from the fleet's own reports. On the default configuration,
+ten seeds at 50% adoption improve between **4.6% and 8.4%**, mean **6.1%**, and 0%
+adoption ties the baseline exactly — kept as a control, so a reader can see the
+difference comes from the routing policy and not from noise. Those numbers describe
+this model. The screen and the endpoint both print what it is not: no CCH, no TraCI,
+no LuST scenario, no Jakarta street plan, no measured traffic. The proposal is where
+that research is heading; this repository is the console built alongside it.
 
 ## Status
 

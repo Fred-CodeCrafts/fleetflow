@@ -35,6 +35,10 @@ Delivered beyond the scope this document originally set:
   they do.
 - A console that loads the map renderer only where a map is shown, and assets
   served gzipped.
+- A routing lab that runs the idea from the author's thesis proposal on a
+  synthetic lattice, seeded and reproducible, and compares it with static routing
+  in the same run. It prints the network, the congestion curve and the exclusions
+  beside the numbers, and it is not the research the proposal describes.
 
 ## 2. Users
 
@@ -133,10 +137,11 @@ Delivered beyond the scope this document originally set:
 ## 5. Explicit non-goals
 
 - AI, autonomous operational decisions, or opaque assignment/routing policies.
-- Baseline-versus-dynamic routing comparisons, experiment scoreboards, or
-  thesis-result reporting inside the console. The dynamic-weights research is the
-  subject of the author's thesis proposal; this product is the console built
-  alongside it, and it does not claim to reproduce that research.
+- Baseline-versus-dynamic routing comparisons outside the Routing Lab, or any
+  claim about a real network drawn from it. The dynamic-weights research is the
+  subject of the author's thesis proposal; the lab demonstrates the idea on a
+  synthetic lattice at grid scale, and both the screen and the API say in their
+  method block what it is not (no CCH, no TraCI, no LuST, no Jakarta street plan).
 - Automatic driver assignment by dispatch. Dispatch creates the vehicles and
   trips a run needs and leaves drivers to the operator, which is why the demo
   seeder pairs them.
