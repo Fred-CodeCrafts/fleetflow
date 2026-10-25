@@ -3,6 +3,10 @@
 FleetFlow deploys to Google Cloud Run as a container service in `asia-southeast2`
 (Jakarta).
 
+If Cloud Run is blocked on billing, [free-hosting.md](./free-hosting.md) describes a
+public URL in the meantime on a host that asks for no card, with the list of what
+that deployment cannot do.
+
 ## What the image is
 
 1. **Container image.** Built from the root `Dockerfile`: the Go API binary, the
