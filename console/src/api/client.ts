@@ -216,6 +216,51 @@ export class ApiError extends Error {
   }
 }
 
+export interface LabWave {
+  index: number
+  static_mean_s: number
+  dynamic_mean_s: number
+  reports: number
+}
+
+export interface LabRun {
+  seed: number
+  share: number
+  static_mean_s: number
+  dynamic_mean_s: number
+  static_max_s: number
+  dynamic_max_s: number
+  improvement_pct: number
+  dynamic_route_changes: number
+  series: LabWave[]
+}
+
+export interface LabSummary {
+  runs: LabRun[]
+  share: number
+  static_mean_s: number
+  dynamic_mean_s: number
+  improvement_pct: number
+  improvement_min_pct: number
+  improvement_max_pct: number
+}
+
+export interface LabMethod {
+  model: string
+  network: string
+  routing: string
+  congestion: string
+  assumptions: string
+  not_included: string
+}
+
+export interface LabDynamicResponse {
+  config: { seeds: number; share: number; waves: number; vehicles: number; grid: number; base_seed: number }
+  summary: LabSummary
+  method: LabMethod
+  duration_ms: number
+}
+
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...init,
@@ -278,4 +323,8 @@ export const api = {
     }),
   emissionsSummary: () => request<EmissionsSummary>('/api/emissions/summary'),
   hubs: async () => (await request<{ hubs: LogisticsHub[] }>('/api/hubs')).hubs,
+  labDynamic: (params: { share: number; seeds: number }) => {
+    const query = new URLSearchParams({ share: String(params.share), seeds: String(params.seeds) })
+    return request<LabDynamicResponse>(`/api/lab/dynamic?${query.toString()}`)
+  },
 }

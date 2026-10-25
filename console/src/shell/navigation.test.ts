@@ -22,7 +22,7 @@ describe('navigation registry', () => {
     expect(searchNav('comparison')).toEqual([])
 
     const visibleOps = visibleBranches(() => true).find((b) => b.id === 'operations')?.children.map((c) => c.id)
-    expect(visibleOps).toEqual(['operations.overview', 'operations.fleet', 'operations.orders', 'operations.simulations', 'operations.routes'])
+    expect(visibleOps).toEqual(['operations.overview', 'operations.fleet', 'operations.orders', 'operations.simulations', 'operations.routes', 'operations.lab'])
     const visibleRes = visibleBranches(() => true).find((b) => b.id === 'resources')?.children.map((c) => c.id)
     expect(visibleRes).toContain('resources.models')
     expect(visibleRes).toContain('resources.maintenance')
