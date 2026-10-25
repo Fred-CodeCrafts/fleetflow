@@ -23,7 +23,15 @@ func (f *fakeFleet) List(context.Context, vehicle.ListFilter) ([]vehicle.Vehicle
 
 func (f *fakeFleet) Create(_ context.Context, in vehicle.CreateInput) (vehicle.Vehicle, error) {
 	f.created++
-	v := vehicle.Vehicle{ID: fmt.Sprintf("veh-%d", f.created), Name: in.Name, Status: vehicle.StatusAvailable}
+	v := vehicle.Vehicle{
+		ID:       fmt.Sprintf("veh-%d", f.created),
+		Name:     in.Name,
+		Type:     in.Type,
+		Make:     in.Make,
+		Model:    in.Model,
+		FuelType: in.FuelType,
+		Status:   vehicle.StatusAvailable,
+	}
 	f.vehicles = append(f.vehicles, v)
 	return v, nil
 }
@@ -91,6 +99,16 @@ func TestDispatchRecordsVehiclesAndTripsOnce(t *testing.T) {
 	}
 	if trips.trips[0].VehicleID != "veh-1" {
 		t.Fatalf("trip vehicle = %q, want the registered vehicle id", trips.trips[0].VehicleID)
+	}
+	// A registered vehicle needs a specification the register can show, and it
+	// must be derived from the plate so the same vehicle is described the same
+	// way on every dispatch.
+	if fleet.vehicles[0].Make == "" || fleet.vehicles[0].Model == "" || fleet.vehicles[0].Type == "" {
+		t.Fatalf("registered vehicle has no profile: %#v", fleet.vehicles[0])
+	}
+	// The profile follows the plate, so two plates get two specifications.
+	if fleet.vehicles[0].Model == fleet.vehicles[1].Model {
+		t.Fatalf("both vehicles got model %q, want a profile each", fleet.vehicles[0].Model)
 	}
 
 	// Dispatching the same scenario again must not grow the fleet or duplicate
