@@ -84,6 +84,14 @@ flowchart LR
 - SUMO fuel and emissions are estimates under the configured vehicle/emission
   model. Persist model/version, units, and run assumptions; never label them as
   measured activity or verified carbon savings.
+- A run records which engine produced it in a `runner` field (`sumo` or
+  `synthetic`), and a synthetic run carries no SUMO version. A scenario that did
+  not run through SUMO never claims it did.
+- Emissions are charged per vehicle class (`internal/fleet`): each class names
+  its fuel and its fuel burn per kilometre, and the class travels with every trip
+  so the console can show why two vehicles on the same distance differ. The two
+  paths are labelled separately because they are different models, and neither is
+  a measured inventory.
 - Basemap rendering depends on OpenFreeMap; routing and simulation runtime
   failures are surfaced rather than converted to fallback data.
 
