@@ -1,13 +1,21 @@
 # FleetFlow
 
-FleetFlow is a fleet operations console for Jakarta. Operators run repeatable
-SUMO scenarios and inspect generated vehicle trips, routes, position history,
-and modeled fuel/emissions. The console also manages fleet records, routes
-requests through OSRM, and keeps real GPS reports separate from simulation data.
+FleetFlow is a fleet operations console for Jakarta: dispatch, trip history, a
+live map, and a carbon ledger. Scenarios can run through Eclipse SUMO when a
+network is configured, or through the built-in Go generator; every run records
+which one produced it, and the console prints that field rather than implying
+SUMO always ran. The console also manages fleet records, routes requests through
+OSRM, and keeps real GPS reports separate from simulation data.
 
 The console uses MapLibre GL with OpenFreeMap tiles. FleetFlow does not generate
-real traffic or present simulated positions and emissions as measured fleet
-data. It does not run baseline-versus-dynamic comparisons or include AI controls.
+real traffic and does not present simulated positions or modelled emissions as
+measured fleet data. The routing-versus-baseline study in `docs/results.md` is a
+recorded experiment, not a feature in the console.
+
+- Submission summary: [`docs/submission-summary.md`](docs/submission-summary.md)
+- Three-minute demo script: [`docs/demo-script.md`](docs/demo-script.md)
+- Judge Q&A rehearsal: [`docs/qa.md`](docs/qa.md)
+- Deployment: [`deploy/README.md`](deploy/README.md)
 
 ## Routing, map, and simulation data
 
@@ -185,13 +193,29 @@ their attribution is displayed on the map.
   assignment is not exposed.
 - **General Settings** reports app health and the routing/map providers.
 
-Fuel and CO₂ values are SUMO HBEFA3 estimates for the explicitly assigned
-`HBEFA3/PC_G_EU4` Euro 4 gasoline passenger-car class. SUMO tripinfo values are
-converted from milligrams to kilograms, and the model, class, units, source, and
-assumptions are stored with each run. This generic class is not a fleet-specific
-measurement or verified carbon saving. Automatic fleet dispatch,
-time-controlled route playback, and trip history on individual fleet records
-are not yet implemented.
+### Emissions: two paths, each named
+
+What a trip emits depends on which runner produced it, and the run says which.
+
+- A **SUMO run** uses SUMO's HBEFA3 model: the route file assigns
+  `HBEFA3/PC_G_EU4` (a Euro 4 petrol passenger car) to every generated vehicle,
+  and `sumo` reports the emission values, which `internal/simulation/sumo`
+  converts from milligrams to kilograms. That class is a generic stand-in, not a
+  description of a Jakarta box truck, and the run stores it as such.
+- A **synthetic run** is charged by `internal/fleet`, which holds one fuel figure
+  per vehicle class and the carbon content of that fuel: 0.30 kg/km at 3.16 kg
+  CO2/kg for a 14 t diesel box truck, 0.18 for a 4.5 t truck, 0.11 for a diesel
+  van, 0.09 at 3.10 for a petrol van, and zero tailpipe CO2 for the electric
+  cargo motorcycle. These are planning assumptions for congested urban delivery
+  work, stated so the arithmetic can be checked by hand, and the API returns the
+  class next to every figure.
+
+Neither path is a measured inventory, and neither converts to rupiah. The
+`sustainability` page prints the model name with the numbers for that reason.
+
+Automatic fleet dispatch, scenario playback on the map, and trip history on
+individual fleet records are implemented; `/api/hubs` serves the hub catalogue
+the map draws.
 
 ## API
 
