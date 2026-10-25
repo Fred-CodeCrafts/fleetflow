@@ -13,13 +13,13 @@ const pages = {
   'operations.orders': TripsPage,
   'operations.simulations': SimulationPage,
   'operations.routes': RoutePlannerPage,
-  'operations.lab': LabPage,
   'resources.vehicles': VehiclesPage,
   'resources.models': ModelsPage,
   'resources.drivers': DriversPage,
   'resources.maintenance': MaintenancePage,
   'sustainability.dashboard': SustainabilityPage,
   'settings.general': GeneralSettingsPage,
+  'settings.lab': LabPage,
 }
 
 export function screenExists(id: string): boolean {

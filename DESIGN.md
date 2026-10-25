@@ -121,7 +121,7 @@ flowchart LR
   size, so a clone reproduces the experiment without a data file.
 - It is not the research the proposal describes: no CCH, no TraCI loop, no LuST
   scenario, no Jakarta street plan, no measured traffic. Shortest paths come from
-  Dijkstra. `GET /api/lab/dynamic` and **Operations → Routing Lab** carry the same
+  Dijkstra. `GET /api/lab/dynamic` and **Settings → Routing Lab** carry the same
   statement in their method block, beside the numbers.
 
 ## Deployment and failure behavior

@@ -122,13 +122,6 @@ export const navigation: NavBranch[] = [
         path: '/operations/routes',
         keywords: ['route', 'planner', 'origin', 'destination', 'OSRM', 'driving'],
       },
-      {
-        id: 'operations.lab',
-        label: 'Routing Lab',
-        icon: 'simulation',
-        path: '/operations/lab',
-        keywords: ['dynamic', 'weights', 'congestion', 'experiment', 'thesis', 'lab'],
-      },
     ],
   },
   {
@@ -200,6 +193,17 @@ export const navigation: NavBranch[] = [
         icon: 'settings',
         path: '/settings/general',
         keywords: ['general', 'environment', 'version', 'about'],
+      },
+      {
+        // A research experiment rather than a daily operation: it compares two
+        // routings of the same demand, which an operator never does. Settings is
+        // where a reader looks for the method behind the console, so it lives here
+        // with the H1 and the operator-key note.
+        id: 'settings.lab',
+        label: 'Routing Lab',
+        icon: 'simulation',
+        path: '/settings/lab',
+        keywords: ['dynamic', 'weights', 'congestion', 'experiment', 'thesis', 'lab', 'research'],
       },
     ],
   },

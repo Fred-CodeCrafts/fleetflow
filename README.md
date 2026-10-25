@@ -287,7 +287,7 @@ atomic pointer so a route query never takes a write lock. It was removed on
 25 October because nothing in the console consumed it, its grid came from a file
 that was already gone, and its numbers could not be reproduced from a clone.
 
-It is back, because both reasons are answered. **Operations → Routing Lab** runs
+It is back, because both reasons are answered. **Settings → Routing Lab** runs
 the comparison from a seeded configuration, and the grid is built in code, so a
 clone reproduces it with nothing but the repository. `GET /api/lab/dynamic` answers
 with the same experiment for anyone reading the API.

@@ -7,10 +7,11 @@ describe('navigation registry', () => {
     for (const item of allNavItems()) expect(screenExists(item.id), item.id).toBe(true)
   })
 
-  it('keeps only the general settings route', () => {
+  it('keeps settings small, with the routing lab as its research page', () => {
     const paths = navigation.find((branch) => branch.id === 'settings')?.children.map((item) => item.path)
-    expect(paths).toEqual(['/settings/general'])
+    expect(paths).toEqual(['/settings/general', '/settings/lab'])
     expect(new Set(paths).size).toBe(paths?.length)
+    expect(searchNav('congestion')[0]?.id).toBe('settings.lab')
   })
 
   it('routes fleet operations and excludes retired experiment pages', () => {
@@ -22,7 +23,7 @@ describe('navigation registry', () => {
     expect(searchNav('comparison')).toEqual([])
 
     const visibleOps = visibleBranches(() => true).find((b) => b.id === 'operations')?.children.map((c) => c.id)
-    expect(visibleOps).toEqual(['operations.overview', 'operations.fleet', 'operations.orders', 'operations.simulations', 'operations.routes', 'operations.lab'])
+    expect(visibleOps).toEqual(['operations.overview', 'operations.fleet', 'operations.orders', 'operations.simulations', 'operations.routes'])
     const visibleRes = visibleBranches(() => true).find((b) => b.id === 'resources')?.children.map((c) => c.id)
     expect(visibleRes).toContain('resources.models')
     expect(visibleRes).toContain('resources.maintenance')
