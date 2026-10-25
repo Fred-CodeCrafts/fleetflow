@@ -51,5 +51,6 @@ request fails with 503.
    beside a synthetic run, and validate the Jakarta network if that is claimed.
 4. Replace the emission planning factors with an operator's own fuel figures
    when one is available; until then do not convert the numbers to rupiah.
-5. `main` and `dev` are level at the `v0.1.0` tag. Keep the small-commit habit
-   and the branch model in [AGENTS.md](./AGENTS.md).
+5. `main` carries the released tag; `dev` runs ahead of it between releases, and
+   a release is a merge of `dev` into `main` plus a tag. Keep the small-commit
+   habit and the branch model in [AGENTS.md](./AGENTS.md).
