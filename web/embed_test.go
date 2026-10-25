@@ -1,7 +1,10 @@
 package web
 
 import (
+	"bytes"
+	"compress/gzip"
 	"errors"
+	"io"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
@@ -137,4 +140,92 @@ func TestHandlerDoesNotHideMissingAssets(t *testing.T) {
 			t.Errorf("GET %s answered %d, want 404", route, rec.Code)
 		}
 	}
+}
+
+// The console's assets are immutable and the map chunk alone is a megabyte, so
+// they are served gzipped when the client asks for it. The bytes must survive
+// the round trip, and a client that declines gzip must still get the file.
+func TestAssetsAreServedGzippedOnlyWhenAccepted(t *testing.T) {
+	if !consoleBuilt(t) {
+		t.Skip("console assets are not built; run npm run build from console/")
+	}
+
+	asset := largestJavaScriptAsset(t)
+	if asset == "" {
+		t.Skip("no JavaScript asset in the build to test compression against")
+	}
+
+	plain := httptest.NewRecorder()
+	Handler().ServeHTTP(plain, httptest.NewRequest(http.MethodGet, asset, nil))
+	if plain.Code != http.StatusOK {
+		t.Fatalf("GET %s answered %d, want 200", asset, plain.Code)
+	}
+	if encoding := plain.Header().Get("Content-Encoding"); encoding != "" {
+		t.Fatalf("uncompressed request was answered with %q", encoding)
+	}
+
+	request := httptest.NewRequest(http.MethodGet, asset, nil)
+	request.Header.Set("Accept-Encoding", "gzip, deflate")
+	packed := httptest.NewRecorder()
+	Handler().ServeHTTP(packed, request)
+	if packed.Code != http.StatusOK {
+		t.Fatalf("GET %s answered %d, want 200", asset, packed.Code)
+	}
+	if encoding := packed.Header().Get("Content-Encoding"); encoding != "gzip" {
+		t.Fatalf("Content-Encoding = %q, want gzip", encoding)
+	}
+	if vary := packed.Header().Get("Vary"); vary != "Accept-Encoding" {
+		t.Errorf("Vary = %q, want Accept-Encoding", vary)
+	}
+	if packed.Body.Len() >= plain.Body.Len() {
+		t.Errorf("gzip body is %d bytes, uncompressed is %d; compression is not helping", packed.Body.Len(), plain.Body.Len())
+	}
+
+	reader, err := gzip.NewReader(packed.Body)
+	if err != nil {
+		t.Fatalf("gzip body does not decompress: %v", err)
+	}
+	decoded, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("reading the decompressed body: %v", err)
+	}
+	if !bytes.Equal(decoded, plain.Body.Bytes()) {
+		t.Fatal("the compressed asset does not decompress to the asset on disk")
+	}
+
+	declined := httptest.NewRequest(http.MethodGet, asset, nil)
+	declined.Header.Set("Accept-Encoding", "gzip;q=0")
+	answer := httptest.NewRecorder()
+	Handler().ServeHTTP(answer, declined)
+	if encoding := answer.Header().Get("Content-Encoding"); encoding != "" {
+		t.Fatalf("a client that declined gzip was answered with %q", encoding)
+	}
+}
+
+// largestJavaScriptAsset returns the largest fingerprinted .js file in the build,
+// which is the map chunk and therefore the one worth compressing.
+func largestJavaScriptAsset(t *testing.T) string {
+	t.Helper()
+	var largest string
+	var largestSize int
+	err := fs.WalkDir(content, "dist/build/assets", func(file string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() || !strings.HasSuffix(file, ".js") {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		if int(info.Size()) > largestSize {
+			largest, largestSize = file, int(info.Size())
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walking the built assets: %v", err)
+	}
+	return strings.TrimPrefix(largest, "dist/build")
 }
