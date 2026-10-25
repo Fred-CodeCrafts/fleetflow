@@ -61,7 +61,11 @@ export function TripsPage() {
   const [dispatchBusy, setDispatchBusy] = useState(false)
   const [actionError, setActionError] = useState('')
 
-  const allOperationalTrips = tripsData.data ?? []
+  // Newest first: the trip that just moved is the one a dispatcher opens. The
+  // store returns oldest first, so the order is corrected here rather than
+  // claimed in a document and left untrue on the screen.
+  const allOperationalTrips = [...(tripsData.data ?? [])]
+    .sort((a, b) => (b.started_at ?? '').localeCompare(a.started_at ?? ''))
   const filteredTrips = allOperationalTrips.filter((t) => {
     if (vehicleFilter && t.vehicle_id !== vehicleFilter) return false
     if (activeTab === 'all') return true

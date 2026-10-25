@@ -353,7 +353,7 @@ export function RoutePlannerPage() {
   const activeRoute = primaryRoute
 
   return (
-    <Page eyebrow="Operations" title="Route Planner" description="Plan optimal driving routes across Jakarta logistics corridors, compare alternatives, and schedule fleet trips.">
+    <Page eyebrow="Operations" title="Route Planner" description="Ask OSRM for a driving route across Jakarta logistics corridors, then schedule it as a planned trip.">
       <Panel title="Plan a route">
         <form className="form-row" onSubmit={(event) => void plan(event)} style={{ alignItems: 'flex-end', flexWrap: 'wrap', gap: '12px' }}>
           <LocationSearchInput
