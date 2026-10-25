@@ -227,11 +227,19 @@ export function DriversPage() {
 export function VehicleDetailPage() {
   const { vehicleID = '' } = useParams()
   const vehicles = useLoad(api.vehicles)
+  const trips = useLoad(api.trips)
   const vehicle = vehicles.data?.find((item) => item.id === vehicleID)
 
   if (vehicles.loading) return <Page eyebrow="Resources" title="Vehicle profile" description="Loading vehicle record."><Loading /></Page>
   if (vehicles.error) return <Page eyebrow="Resources" title="Vehicle profile" description="The vehicle could not be loaded."><ErrorMessage>{vehicles.error}</ErrorMessage></Page>
   if (!vehicle) return <Page eyebrow="Resources" title="Vehicle profile" description="This vehicle record is unavailable."><ErrorMessage>Vehicle not found.</ErrorMessage></Page>
+
+  // A trip records the vehicle it used, so this vehicle's history is the trip
+  // list filtered by id — newest first, because the last job is what a fleet
+  // manager opens the profile to see.
+  const vehicleTrips = (trips.data ?? [])
+    .filter((trip) => trip.vehicle_id === vehicleID)
+    .sort((a, b) => (b.started_at ?? '').localeCompare(a.started_at ?? ''))
 
   return <Page eyebrow="Resources" title={vehicle.name} description="Vehicle specifications and maintenance record."
     action={<Link className="button" to="/resources/vehicles">Back to vehicles</Link>}>
@@ -257,7 +265,18 @@ export function VehicleDetailPage() {
       <p>Vehicle maintenance logs, workshop repairs, and service history are managed on the <Link to={`/resources/maintenance?vehicle=${encodeURIComponent(vehicle.name)}`}>Maintenance page</Link>.</p>
     </Panel>
     <Panel title="Scenario and trip history">
-      <p className="empty-state">Vehicle-to-trip history will appear after automatic dispatch links generated trips to fleet records.</p>
+      {trips.loading ? <Loading /> : trips.error ? <ErrorMessage>{trips.error}</ErrorMessage> :
+        vehicleTrips.length === 0
+          ? <p className="empty-state">No trips are recorded against this vehicle yet. Trips appear here once a scenario dispatch or a scheduled trip uses it.</p>
+          : <Table headers={['Route', 'Status', 'Started', 'Finished', 'Open']}>
+            {vehicleTrips.map((trip) => <tr key={trip.id}>
+              <td>{trip.origin} → {trip.destination}</td>
+              <td><Status value={trip.status} /></td>
+              <td>{trip.started_at ? new Date(trip.started_at).toLocaleString() : '—'}</td>
+              <td>{trip.finished_at ? new Date(trip.finished_at).toLocaleString() : '—'}</td>
+              <td><Link to={`/operations/trips/operational/${encodeURIComponent(trip.id)}`}>Open trip</Link></td>
+            </tr>)}
+          </Table>}
     </Panel>
   </Page>
 }
@@ -266,6 +285,7 @@ export function DriverDetailPage() {
   const { driverID = '' } = useParams()
   const drivers = useLoad(api.drivers)
   const vehicles = useLoad(api.vehicles)
+  const trips = useLoad(api.trips)
   const driver = drivers.data?.find((item) => item.id === driverID)
 
   if (drivers.loading || vehicles.loading) return <Page eyebrow="Resources" title="Driver profile" description="Loading driver record."><Loading /></Page>
@@ -277,6 +297,11 @@ export function DriverDetailPage() {
   if (!driver) return <Page eyebrow="Resources" title="Driver profile" description="This driver record is unavailable."><ErrorMessage>Driver not found.</ErrorMessage></Page>
 
   const assignedVehicle = vehicles.data?.find((vehicle) => vehicle.id === driver.vehicle_id)
+  // Trips belong to the vehicle, and a driver drives the vehicle they hold, so the
+  // driver's history is that vehicle's history while the assignment stands.
+  const driverTrips = (trips.data ?? [])
+    .filter((trip) => assignedVehicle && trip.vehicle_id === assignedVehicle.id)
+    .sort((a, b) => (b.started_at ?? '').localeCompare(a.started_at ?? ''))
   return <Page eyebrow="Resources" title={driver.name} description="Driver qualifications, availability, and current vehicle."
     action={<Link className="button" to="/resources/drivers">Back to drivers</Link>}>
     <Panel title="Driver profile">
@@ -288,7 +313,11 @@ export function DriverDetailPage() {
         <tr><th scope="row">Shift start</th><td>{unknown(driver.shift_start)}</td></tr>
         <tr><th scope="row">Shift end</th><td>{unknown(driver.shift_end)}</td></tr>
         <tr><th scope="row">Availability</th><td>{unknown(driver.availability)}</td></tr>
-        <tr><th scope="row">Current vehicle</th><td>{assignedVehicle?.name ?? 'Unassigned'}</td></tr>
+        <tr><th scope="row">Current vehicle</th><td>
+          {assignedVehicle
+            ? `${assignedVehicle.name}${assignedVehicle.registration ? ` · ${assignedVehicle.registration}` : ''}`
+            : 'Unassigned'}
+        </td></tr>
       </Table>
     </Panel>
     {assignedVehicle ? (
@@ -308,7 +337,18 @@ export function DriverDetailPage() {
       </Panel>
     )}
     <Panel title="Scenario and trip history">
-      <p className="empty-state">Driver-to-trip history will appear after automatic dispatch links generated trips to fleet records.</p>
+      {trips.loading ? <Loading /> : trips.error ? <ErrorMessage>{trips.error}</ErrorMessage> :
+        driverTrips.length === 0
+          ? <p className="empty-state">No trips are recorded for this driver's vehicle yet. Trips appear here once the vehicle is used by a scenario dispatch or a scheduled trip.</p>
+          : <Table headers={['Route', 'Status', 'Started', 'Finished', 'Open']}>
+            {driverTrips.map((trip) => <tr key={trip.id}>
+              <td>{trip.origin} → {trip.destination}</td>
+              <td><Status value={trip.status} /></td>
+              <td>{trip.started_at ? new Date(trip.started_at).toLocaleString() : '—'}</td>
+              <td>{trip.finished_at ? new Date(trip.finished_at).toLocaleString() : '—'}</td>
+              <td><Link to={`/operations/trips/operational/${encodeURIComponent(trip.id)}`}>Open trip</Link></td>
+            </tr>)}
+          </Table>}
     </Panel>
   </Page>
 }
