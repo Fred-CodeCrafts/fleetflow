@@ -88,7 +88,7 @@ foreach ($seed in $driverSeeds) {
 # holds is not handed out twice: the seeder makes the demo pairing once, it does
 # not reassign work the operator has moved.
 $held = @($drivers | Where-Object { $_.vehicle_id } | ForEach-Object { $_.vehicle_id })
-$freeVehicles = @($vehicles | Where-Object { $held -notcontains $_.id } | Sort-Object name)
+$freeVehicles = @($vehicles | Where-Object { $held -notcontains $_.id } | Sort-Object registration, name)
 $waiting = @($seededDrivers | Where-Object { -not $_.vehicle_id })
 $allocationCount = [Math]::Min($waiting.Count, $freeVehicles.Count)
 for ($i = 0; $i -lt $allocationCount; $i++) {
