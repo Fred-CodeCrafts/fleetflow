@@ -51,7 +51,7 @@ export function GreenDashboardPage() {
           ? <p className="empty-state">No completed scenario has attributed emissions to a vehicle yet.</p>
           : <Table headers={['Vehicle', 'Trips', 'Distance', 'CO₂', 'Fuel', 'CO₂ intensity']}>
             {data.vehicles.slice(0, 15).map((vehicle) => <tr key={vehicle.vehicle_id}>
-              <td><Link to={`/resources/vehicles?name=${encodeURIComponent(vehicle.vehicle_id)}`}>{vehicle.vehicle_id}</Link></td>
+              <td><Link to="/resources/vehicles">{vehicle.vehicle_id}</Link></td>
               <td>{vehicle.trips}</td>
               <td>{formatNumber(vehicle.distance_km, 1)} km</td>
               <td>{formatNumber(vehicle.co2_kg, 1)} kg</td>
@@ -106,7 +106,7 @@ export function EmissionsPage() {
           ? <p className="empty-state">No completed scenario has attributed emissions to a vehicle yet.</p>
           : <Table headers={['Vehicle', 'Trips', 'Distance', 'CO₂', 'Fuel', 'CO₂ intensity']}>
             {data.vehicles.map((vehicle) => <tr key={vehicle.vehicle_id}>
-              <td><Link to={`/resources/vehicles?name=${encodeURIComponent(vehicle.vehicle_id)}`}>{vehicle.vehicle_id}</Link></td>
+              <td><Link to="/resources/vehicles">{vehicle.vehicle_id}</Link></td>
               <td>{vehicle.trips}</td>
               <td>{formatNumber(vehicle.distance_km, 1)} km</td>
               <td>{formatNumber(vehicle.co2_kg, 2)} kg</td>
