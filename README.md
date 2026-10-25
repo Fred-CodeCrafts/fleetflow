@@ -9,7 +9,7 @@ OSRM, and keeps real GPS reports separate from simulation data.
 
 The console uses MapLibre GL with OpenFreeMap tiles. FleetFlow does not generate
 real traffic and does not present simulated positions or modelled emissions as
-measured fleet data. The submission summary, the three-minute demo and the
+measured fleet data. The submission summary, the demo shot list and the
 questions this repository can answer are in [Submission pack](#submission-pack);
 deployment notes are in [deploy/README.md](./deploy/README.md).
 
@@ -324,7 +324,7 @@ per-class intensities. Close everything else.
 | 0:00–0:20 | landing | "A fleet operations console for Jakarta: dispatch, trip history, a live map, a carbon ledger. One rule: a number a model produced has to name the model." |
 | 0:20–0:55 | `/route-planning` | "Twelve Jakarta hubs. Geometry, distance and duration come from OSRM over a Jakarta OpenStreetMap extract; this application computes no route itself." Draw one route. |
 | 0:55–1:30 | `/operations/simulations` | Start the peak preset. "Seeded demand, generated trips, positions, deliveries. When it finishes, the panel says what produced it: synthetic generator, because no SUMO process ran. I could have labelled it SUMO." Point at `runner`. |
-| 1:30–2:05 | dispatch | "That run becomes fleet records: 100 vehicles with ids and separate plates and 170 trips. The five drivers come from the demo seeder, and dispatch assigns none: the vehicles are unassigned until someone pairs them. Repeat trips are refused by vehicle, origin and destination." Open a vehicle: trips, not a placeholder. |
+| 1:30–2:05 | dispatch | Dispatch the run, then read the register: 100 vehicles with ids and separate plates and 170 trips, accumulated from the three stored presets. "Press dispatch again and the counts do not move: a trip is deduplicated by vehicle, origin and destination, so a second click is not second work. The five drivers come from the demo seeder, and dispatch assigns none: the vehicles stay unassigned until someone pairs them." Then open a vehicle: trips, not a placeholder. |
 | 2:05–2:45 | `/sustainability` | "A 14-tonne diesel box truck is 948 grams per kilometre, a 4.5-tonne truck 569, a diesel van 348, an electric cargo motorcycle zero at the tailpipe. The class is on the row and the model is named above it: FleetFlow class factors, planning assumptions — not HBEFA3, not a certified inventory." |
 | 2:45–3:00 | close | "Apache-2.0, tests in the repo, and the limits are written down where you can check them." |
 

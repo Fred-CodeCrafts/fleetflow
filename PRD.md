@@ -51,11 +51,13 @@ Delivered beyond the scope this document originally set:
 
 - Provide named scenario presets with defined demand, simulation duration, and
   reproducible random seeds.
-- Run scenarios using the SUMO executable, a documented Jakarta road network,
-  and SUMO-generated routes/vehicle movement. Record the SUMO version,
-  network identity, preset, seed, and run timestamps.
-- Show run lifecycle and actionable startup/runtime errors. An unavailable
-  SUMO executable or invalid network is an error, never a successful mock run.
+- Run scenarios with the SUMO executable, a documented Jakarta road network,
+  and SUMO-generated routes/vehicle movement when both are configured. Record the
+  SUMO version, network identity, preset, seed, and run timestamps.
+- Show run lifecycle and actionable startup/runtime errors. With no network
+  configured, the built-in generator produces the scenario and the run says so
+  (`runner`). A configured executable that is missing, or an invalid network, is
+  an error: it never falls back to the generator without saying so.
 - A run produces inspectable generated trips, vehicle locations, completed
   trips, route geometry, and ordered delivery events.
 - Label all run-derived movement and metrics as simulation output, distinct
@@ -162,8 +164,8 @@ Delivered beyond the scope this document originally set:
    version, and seed; verify its recorded inputs and generated demand.
 2. Confirm a scenario runs, records which engine produced it (`runner`), and fails
    clearly when a configured SUMO executable or network is unavailable.
-3. Start the console and inspect generated trips, automatic eligible
-   assignments, vehicle positions, and completed route/event history.
+3. Start the console and inspect generated trips, the vehicles dispatch
+   registered, vehicle positions, and completed route/event history.
 4. Verify trip details show the route on the map and ordered package events, and
    that a trip scheduled from the Route Planner appears in the list.
 5. Inspect vehicle and driver profiles, including maintenance, capacity,
