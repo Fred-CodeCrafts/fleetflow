@@ -59,7 +59,7 @@ Then:
 ## Deploy
 
 ```powershell
-.\deploy\deploy.ps1 -Project <project-id> -Tag v0.1.0
+.\deploy\deploy.ps1 -Project <project-id> -Tag v0.1.4
 ```
 
 It builds with Cloud Build, deploys with `min-instances 0`, `1` vCPU and `1Gi`,
