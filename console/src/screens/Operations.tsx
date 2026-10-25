@@ -2,25 +2,122 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, type Coordinate, type OSRMRoute, type Vehicle } from '../api/client'
 import { RoutingMap } from '../map/RoutingMap'
-import { ErrorMessage, formatNumber, Loading, Metric, Page, Panel, Status, Table, useLoad } from './Shared'
+import { ErrorMessage, formatNumber, Loading, Metric, Page, Panel, presets, Status, Table, useLoad } from './Shared'
+import { useSimulationRun } from './Simulation'
 
 function formatCoordinate(point: Coordinate | null) {
   return point ? `${point.lat.toFixed(5)}, ${point.lon.toFixed(5)}` : ''
 }
 
 export function LiveMapPage() {
+  const runs = useLoad(api.simulationRuns)
+  const [selectedRunID, setSelectedRunID] = useState<string>('')
+  const [preset, setPreset] = useState<keyof typeof presets>('light')
+  const [seed, setSeed] = useState(42)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+
+  const selectedRun = useSimulationRun(selectedRunID)
+
+  useEffect(() => {
+    if (selectedRun.run?.status === 'completed' && selectedRun.run.result?.tracks?.length) {
+      setMessage(`Simulation ready: ${selectedRun.run.result.trips.length} active fleet routes across Jakarta logistics hubs.`)
+    }
+  }, [selectedRun.run?.status, selectedRun.run?.result?.tracks?.length, selectedRun.run?.result?.trips?.length])
+
+  const runSimulation = async (event: FormEvent) => {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    setMessage('')
+    try {
+      const { vehicles, departure_window_s } = presets[preset]
+      const run = await api.startSimulation({ seed, vehicles, departure_window_s })
+      setSelectedRunID(run.id)
+      setMessage(`Simulation run queued. Generating traffic demand…`)
+      await runs.reload()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not start simulation.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const tracks = selectedRun.run?.result?.tracks ?? []
+  const isSimulationActive = selectedRun.run?.status === 'queued' || selectedRun.run?.status === 'running'
+
   return (
     <Page
       eyebrow="Operations"
       title="Live Fleet Map"
-      description="The last GPS position each vehicle reported, refreshed every five seconds. Scenarios are started on the Simulation page and drawn there with playback controls."
+      description="Monitor live GPS positions reported by fleet vehicles, or run traffic simulations on the Jakarta street network."
     >
-      <RoutingMap />
+      <Panel title="Simulation Mode">
+        <form className="form-row" onSubmit={runSimulation} style={{ alignItems: 'flex-end', flexWrap: 'wrap', gap: '12px' }}>
+          <div className="field" style={{ minWidth: '150px' }}>
+            <span>Operating State</span>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                height: '36px',
+                padding: '0 10px',
+                background: isSimulationActive ? '#fff9db' : selectedRunID ? '#e6fcf5' : '#f1f3f5',
+                color: isSimulationActive ? '#f08c00' : selectedRunID ? '#0ca678' : '#868e96',
+                borderRadius: '4px',
+                fontWeight: 600,
+                fontSize: '13px',
+              }}
+            >
+              {isSimulationActive ? '● Simulating…' : selectedRunID && tracks.length > 0 ? `● ${tracks.length} Vehicles Running` : '○ Fleet Standby'}
+            </span>
+          </div>
+          <label className="field">
+            Demand profile
+            <select value={preset} onChange={(e) => setPreset(e.target.value as keyof typeof presets)}>
+              {Object.entries(presets).map(([id, value]) => (
+                <option key={id} value={id}>
+                  {value.label} · {value.vehicles} trips over {value.departure_window_s} s
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field" style={{ maxWidth: '100px' }}>
+            Seed
+            <input
+              type="number"
+              min="0"
+              max="2147483647"
+              value={seed}
+              onChange={(e) => setSeed(Number(e.target.value))}
+              required
+            />
+          </label>
+          <button className="button primary" type="submit" disabled={busy || isSimulationActive}>
+            {busy ? 'Starting…' : isSimulationActive ? 'Simulation in progress…' : 'Run simulation'}
+          </button>
+          {selectedRunID && (
+            <Link className="button" to={`/operations/trips?run=${encodeURIComponent(selectedRunID)}`}>
+              View trips
+            </Link>
+          )}
+        </form>
+        {isSimulationActive && <Loading />}
+        {message && <p className="success" role="status">{message}</p>}
+        {error && <ErrorMessage>{error}</ErrorMessage>}
+      </Panel>
+
+      <RoutingMap
+        runID={selectedRunID}
+        positionMode="simulation"
+        showPlayback={false}
+        simulationTracks={tracks}
+        simulationStops={selectedRun.run?.result?.deliveries?.flatMap((d) => d.stops) ?? []}
+      />
 
       <p className="muted">
-        Every marker is a report a vehicle sent, not a prediction: a vehicle that has stopped
-        reporting keeps its last known point. Click a marker to open the vehicle, its trip and
-        its maintenance history.
+        Multi-hub simulation mode: displaying animated vehicle positions and logistics routes across Jakarta. Click on any vehicle marker or route line on the map to inspect vehicle details, maintenance history, and trip logs.
       </p>
     </Page>
   )

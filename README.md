@@ -180,9 +180,10 @@ their attribution is displayed on the map.
   vehicle's sampled simulated route, generated delivery stops, and ordered
   package-event timeline when available. These seeded events are simulation
   output, not live package scans.
-- **Live Map** shows only recently reported GPS locations, refreshed every five
-  seconds. It starts empty until a connected device sends positions; it does not
-  show static preview markers, and it starts no simulations.
+- **Live Map** shows recently reported GPS locations, refreshed every five
+  seconds, and can start a seeded scenario; the run's playback controls live on
+  the Simulation page. It starts empty until a connected device sends positions,
+  and it does not show static preview markers.
 - **Route Planner** sends the selected coordinates to OSRM and draws the returned
   route geometry, distance, and estimated duration.
 - **Vehicles** and **Drivers** capture non-sensitive fleet profiles and display

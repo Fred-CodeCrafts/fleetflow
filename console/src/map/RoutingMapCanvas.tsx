@@ -106,7 +106,7 @@ function hubFeatures(hubs: LogisticsHub[]): MapFeature[] {
   )
 }
 
-export function RoutingMap({ route, selectedPoints, onPickPoint, compact = false, positionMode = 'live', simulationTracks = [], simulationStops = [], runID }: {
+export function RoutingMap({ route, selectedPoints, onPickPoint, compact = false, positionMode = 'live', simulationTracks = [], simulationStops = [], runID, showPlayback = true }: {
   route?: OSRMRoute | null
   selectedPoints?: { from?: Coordinate; to?: Coordinate }
   onPickPoint?: (point: Coordinate) => void
@@ -115,6 +115,10 @@ export function RoutingMap({ route, selectedPoints, onPickPoint, compact = false
   simulationTracks?: SimulatedTrack[]
   simulationStops?: SimulatedDeliveryStop[]
   runID?: string
+  // Where a run is inspected, the reader wants to scrub it. On a page whose job is
+  // something else, the play/pause, slider and speed row is a second set of controls
+  // over the same picture, so the caller can leave it out.
+  showPlayback?: boolean
 }) {
   const container = useRef<HTMLDivElement>(null)
   const map = useRef<maplibregl.Map | null>(null)
@@ -440,7 +444,7 @@ export function RoutingMap({ route, selectedPoints, onPickPoint, compact = false
   }>
     {onPickPoint && <p className="help-text">Click the map to choose a location. OpenStreetMap roads are rendered by OpenFreeMap.</p>}
 
-    {positionMode === 'simulation' && simulationTracks.length > 0 && (
+    {positionMode === 'simulation' && simulationTracks.length > 0 && showPlayback && (
       <div className="form-row" style={{ alignItems: 'center', marginBottom: '10px', gap: '12px' }}>
         <button
           className="button primary"
