@@ -3,9 +3,8 @@
 **The problem.** A Jakarta delivery fleet answers two questions badly every day: which
 vehicle should take this load, and what did the run actually emit? The answers usually
 live in a spreadsheet, a chat group, and a fuel receipt. The hard part is knowing which
-number came from where. A dashboard that mixes a
-measured GPS position with a modelled emission figure is worse than none, because it
-looks auditable and is not.
+number came from where. A dashboard that mixes a measured GPS position with a modelled
+emission figure is worse than none, because it looks auditable and is not.
 
 **What is built.** FleetFlow is an operations console built around one rule: a number a
 model produced must name the model that produced it. The stack is Go 1.25 with
@@ -31,11 +30,12 @@ It improves trip time by 4.6% to 8.4%, mean 6.1%, and 0% adoption ties the basel
 exactly, kept as a control so a reader can see the gain comes from the policy and not
 from noise. The grid is built in code, so a clone reproduces the result.
 
-**What is not claimed.** There is no field evidence, no operator, no measured Jakarta
-traffic and no fuel bills, so no rupiah figure appears anywhere. The emission factors
-are planning assumptions for congested urban delivery work, not a certified inventory
-and not HBEFA3. The routing lab describes a model, not the city, and not the research
-the proposal describes: no CCH, no TraCI, no LuST scenario. Writes are unauthenticated
-by default so the demonstration console can operate; `REQUIRE_OPERATOR_KEY=true` closes
-them to API keys and `/readyz` publishes which mode is running. Apache-2.0, tests in the
-repository, and every limit written down where a reader can check it.
+**What is not claimed.** The emission factors are planning assumptions for congested
+urban delivery work, not a certified inventory and not HBEFA3. The routing lab describes
+a model, not the city, and not the research the proposal describes: no CCH, no TraCI, no
+LuST scenario. The business model sells the hosted console per vehicle per month to
+fleets that already carry GPS hardware; its prices are proposals, not quotes. Writes are
+unauthenticated by default so the demonstration console can operate;
+`REQUIRE_OPERATOR_KEY=true` closes them to API keys and `/readyz` publishes which mode
+is running. Apache-2.0, tests in the repository, and every limit written down where a
+reader can check it.
