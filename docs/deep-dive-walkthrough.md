@@ -20,7 +20,7 @@ separate from simulation; and emissions name their assumptions.
 | 5:15–6:45 | Guardrails | GPS, routing errors, emission labels |
 | 6:45–9:45 | Live demo | Route, seeded run, trips, emissions |
 | 9:45–11:30 | Routing Lab | Experiment, results, method notes |
-| 11:30–12:40 | Workflow lesson | Honest token-trial summary |
+| 11:30–12:40 | Profiling and workflow | Allocation improvement and honest token-trial summary |
 | 12:40–13:30 | Close | Limits and the core message |
 
 ## Narration and shots
@@ -136,19 +136,26 @@ method notes sit beside the numbers so the boundary stays visible.”
 
 Do not present the improvement percentage as an expected real-world gain.
 
-### 11:30–12:40 — Development and token lesson
+### 11:30–12:40 — Profiling and development lesson
 
-**Say:** “One recorded orchestration trial used 708,044 worker tokens in total;
-55,939 went to merge and conflict resolution. The estimated saving versus the
-lead reading the diff was only about 2,600 tokens, while the lead session had
-accumulated 59,714,220.”
+**Say:** “I profiled the Routing Lab's default five-seed sweep instead of guessing
+at a backend optimization. It took about 37 milliseconds and allocated roughly
+14 megabytes per sweep. Most of the allocation came from building a new random
+generator for every informed simulated vehicle.”
 
-“I would not call this a token-saving success. The useful lesson was to delegate
-only bounded work and keep the lead context short. Delegation has a cost,
-especially when a worker's context is discarded after resolving a conflict.”
+“I changed it to reseed and reuse one generator, and reused the graph router. The
+same benchmark then allocated about 4.5 megabytes, roughly 68% less. Runtime was
+in the same range, so I would claim reduced allocation pressure, not a major speed
+improvement. The result remains deterministic.”
 
-These are figures from one trial recorded in [AGENTS.md](../AGENTS.md), not a
-general benchmark.
+“I also tracked one agent-orchestration trial: 708,044 worker tokens total, with
+55,939 spent on merge and conflict resolution. The estimated saving versus the
+lead reading the diff was only about 2,600 tokens. I would not call that a
+token-saving success; the useful lesson was to delegate only bounded work and keep
+the lead context short.”
+
+The profile figures are one local benchmark, not production telemetry. The token
+figures are one trial recorded in [AGENTS.md](../AGENTS.md), not general benchmarks.
 
 ### 12:40–13:30 — Limits and close
 
