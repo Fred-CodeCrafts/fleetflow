@@ -26,9 +26,13 @@ export function runLabel(id: string) {
 
 /** Names what produced a run, so a synthetic scenario never reads as a SUMO one. */
 export function runnerLabel(result: { runner?: string; sumo_version?: string }) {
-  if (result.runner === 'sumo') return result.sumo_version ? `SUMO ${result.sumo_version}` : 'SUMO'
   if (result.runner === 'synthetic') return 'FleetFlow synthetic generator'
-  return result.sumo_version || 'Not recorded'
+  if (result.runner === 'sumo' || result.sumo_version) {
+    const version = result.sumo_version?.match(/\bversion\s+(\d+(?:\.\d+)+)\b/i)?.[1]
+      ?? result.sumo_version?.match(/^\s*v?(\d+(?:\.\d+)+)\s*$/i)?.[1]
+    return version ? `SUMO ${version}` : 'SUMO'
+  }
+  return 'Not recorded'
 }
 
 export function Page({ title, description, eyebrow, action, children }: {

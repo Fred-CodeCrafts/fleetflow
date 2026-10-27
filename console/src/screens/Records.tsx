@@ -219,7 +219,11 @@ export function DriversPage() {
             </tr>
           )
         })}</Table>}
-      {!drivers.loading && !drivers.error && drivers.data?.length === 0 && <p className="empty-state">No drivers registered.</p>}
+      {!drivers.loading && !drivers.error && drivers.data?.length === 0 && (
+        <p className="empty-state">
+          No drivers are registered in this FleetFlow database. Add a driver above to populate the roster; simulation runs do not create driver records.
+        </p>
+      )}
     </Panel>
   </Page>
 }

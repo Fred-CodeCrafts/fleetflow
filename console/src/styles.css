@@ -85,7 +85,7 @@ table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: lef
 th { padding: 10px 12px; border-bottom: 1px solid var(--line); color: #8b969a; font-size: 10px; font-weight: 700; letter-spacing: .7px; text-transform: uppercase; }
 td { padding: 12px; border-bottom: 1px solid #eef1f1; color: #435055; }
 tr:last-child td { border-bottom: 0; }
-.badge { display: inline-flex; align-items: center; padding: 4px 7px; border-radius: 20px; color: #277357; background: #e8f6ef; font-size: 10px; font-weight: 600; text-transform: capitalize; }
+.badge { display: inline-flex; align-items: center; padding: 4px 7px; border-radius: 20px; color: #277357; background: #e8f6ef; font-size: 10px; font-weight: 600; text-transform: capitalize; white-space: nowrap; }
 .badge.neutral { color: #687579; background: #f0f3f4; }
 .empty-state { padding: 22px; color: #8a9699; font-size: 12px; text-align: center; }
 .metric-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; }
