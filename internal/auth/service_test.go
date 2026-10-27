@@ -120,6 +120,53 @@ func TestIssueRequiresNameAndStoresNothing(t *testing.T) {
 	}
 }
 
+func TestRegisterStoresOnlyHashAndAuthenticatesKey(t *testing.T) {
+	svc, repo := newService()
+	ctx := context.Background()
+	plaintext, err := auth.Generate()
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+
+	record, err := svc.Register(ctx, auth.RegisterInput{Name: "operator", Key: plaintext})
+	if err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	if record.Name != "operator" || !bytes.Equal(record.Hash, auth.Hash(plaintext)) {
+		t.Errorf("Register returned record %+v with unexpected name or hash", record)
+	}
+	if strings.Contains(record.Prefix, plaintext) {
+		t.Error("Register retained the plaintext in the visible prefix")
+	}
+	if _, err := svc.Authenticate(ctx, plaintext); err != nil {
+		t.Fatalf("Authenticate registered key: %v", err)
+	}
+	stored, err := repo.ByHash(ctx, auth.Hash(plaintext))
+	if err != nil {
+		t.Fatalf("ByHash: %v", err)
+	}
+	if !bytes.Equal(stored.Hash, auth.Hash(plaintext)) {
+		t.Error("Register did not persist the key hash")
+	}
+}
+
+func TestRegisterRejectsInvalidKeyWithoutStoring(t *testing.T) {
+	for _, key := range []string{"", "not-a-key", auth.KeyPrefix + "short"} {
+		svc, repo := newService()
+		_, err := svc.Register(context.Background(), auth.RegisterInput{Name: "operator", Key: key})
+		if code, _, ok := domain.Public(err); !ok || code != "api_key_invalid" {
+			t.Errorf("Register(%q) error = %v, want invalid-key error", key, err)
+		}
+		list, listErr := repo.List(context.Background())
+		if listErr != nil {
+			t.Fatalf("List: %v", listErr)
+		}
+		if len(list) != 0 {
+			t.Errorf("Register(%q) persisted a key", key)
+		}
+	}
+}
+
 func TestAuthenticateAcceptsAnIssuedKey(t *testing.T) {
 	svc, _ := newService()
 	ctx := context.Background()

@@ -79,8 +79,39 @@ func issueAPIKey(logger *slog.Logger, dsn, name string) {
 		slog.String("id", record.ID))
 }
 
+func registerAPIKey(logger *slog.Logger, dsn, name, plaintext string) {
+	if dsn == "" {
+		fatal(logger, "registering an API key needs a database")
+	}
+	if plaintext == "" {
+		fatal(logger, "registering an API key needs OPERATOR_KEY")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), issueKeyTimeout)
+	defer cancel()
+	pool, err := store.Open(ctx, dsn)
+	if err != nil {
+		fatal(logger, "database configured but unusable", slog.String("error", err.Error()))
+	}
+	defer pool.Close()
+
+	record, err := auth.NewService(authpostgres.New(pool)).Register(ctx, auth.RegisterInput{
+		Name: name,
+		Key:  plaintext,
+	})
+	if err != nil {
+		fatal(logger, "could not register an api key", slog.String("error", err.Error()))
+	}
+	logger.Info("registered api key",
+		slog.String("name", record.Name),
+		slog.String("prefix", record.Prefix),
+		slog.String("id", record.ID))
+}
+
 func main() {
 	issueKeyName := flag.String("issue-key", "", "issue an API key with this name, print it once, and exit")
+	registerKey := flag.Bool("register-key", false, "register OPERATOR_KEY without printing it, then exit")
+	registerKeyName := flag.String("register-key-name", "operator", "name for a registered API key")
 	flag.Parse()
 
 	cfg, err := config.Load(os.Getenv)
@@ -99,6 +130,13 @@ func main() {
 	})
 	slog.SetDefault(logger)
 
+	if *issueKeyName != "" && *registerKey {
+		fatal(logger, "-issue-key and -register-key cannot be used together")
+	}
+	if *registerKey {
+		registerAPIKey(logger, cfg.DatabaseDSN, *registerKeyName, os.Getenv("OPERATOR_KEY"))
+		return
+	}
 	if *issueKeyName != "" {
 		issueAPIKey(logger, cfg.DatabaseDSN, *issueKeyName)
 		return
