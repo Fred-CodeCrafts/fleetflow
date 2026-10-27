@@ -146,6 +146,62 @@ func (s stubRepo) Assign(context.Context, string, string) (driver.Driver, error)
 	return driver.Driver{}, s.err
 }
 
+func (s stubRepo) UpdateProfile(context.Context, string, driver.Driver) (driver.Driver, error) {
+	return driver.Driver{}, s.err
+}
+
+func TestServiceUpdateProfilePreservesAssignedVehicle(t *testing.T) {
+	repo := memory.New()
+	svc := driver.NewService(repo)
+	created, err := svc.Create(context.Background(), driver.CreateInput{
+		Name: "Old Demo Name", ContractType: "Contract",
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if _, err := svc.Assign(context.Background(), created.ID, "vehicle-2"); err != nil {
+		t.Fatalf("Assign: %v", err)
+	}
+
+	got, err := svc.UpdateProfile(context.Background(), created.ID, driver.CreateInput{
+		Name: "Demo Driver 2", Contact: "demo-driver-2@example.invalid",
+		ContactPhone: "00000000002", LicenseClass: "B1",
+		LicenseExpiry: "2030-12-31", ContractType: "Full-time",
+	})
+	if err != nil {
+		t.Fatalf("UpdateProfile: %v", err)
+	}
+	if got.Name != "Demo Driver 2" || got.ContractType != "Full-time" ||
+		got.VehicleID != "vehicle-2" || got.ContactPhone != "00000000002" {
+		t.Errorf("UpdateProfile returned %+v, want updated profile retaining assignment", got)
+	}
+}
+
+func TestServiceUpdateProfileRejectsUnknownContractType(t *testing.T) {
+	svc := newService()
+	created, err := svc.Create(context.Background(), driver.CreateInput{Name: "Demo Driver"})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	_, err = svc.UpdateProfile(context.Background(), created.ID, driver.CreateInput{
+		Name: "Demo Driver", ContractType: "Permanent",
+	})
+	if code, _, ok := domain.Public(err); !ok || code != "driver_contract_type_unknown" {
+		t.Errorf("UpdateProfile error = %v, want contract type validation error", err)
+	}
+}
+
+func TestServiceCreateRejectsUnknownContractType(t *testing.T) {
+	svc := newService()
+	_, err := svc.Create(context.Background(), driver.CreateInput{
+		Name: "Demo Driver", ContractType: "Permanent",
+	})
+	if code, _, ok := domain.Public(err); !ok || code != "driver_contract_type_unknown" {
+		t.Errorf("Create error = %v, want contract type validation error", err)
+	}
+}
+
 func TestServiceHidesRawStorageError(t *testing.T) {
 	raw := errors.New("pq: dial tcp 10.0.0.7:5432: connection refused")
 	svc := driver.NewService(stubRepo{err: raw})

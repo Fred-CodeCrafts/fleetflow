@@ -29,7 +29,7 @@ that deployment cannot do.
    builds one) for real routing.
 6. **Operator writes.** Set `REQUIRE_OPERATOR_KEY=true` for a public deployment
    and issue a key with the API's key-issuing flag; `/readyz` then reports
-   `writes: "protected"`. Left unset, the seven write routes accept any caller and
+   `writes: "protected"`. Left unset, the eight write routes accept any caller and
    `/readyz` says `writes: "unauthenticated"`, which is honest but is not what a
    public URL should show.
 7. **Probes.** `/healthz` is liveness, `/readyz` is readiness. Readiness reports

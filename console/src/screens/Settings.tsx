@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
+import { getOperatorKey, saveOperatorKey } from '../api/client'
 import { ErrorMessage, Page, Panel } from './Shared'
 
 export function GeneralSettingsPage() {
-  const [health, setHealth] = useState<{ live?: string; ready?: string; routing?: string }>({})
+  const [health, setHealth] = useState<{ live?: string; ready?: string; routing?: string; writes?: string }>({})
   const [error, setError] = useState('')
+  const [operatorKey, setOperatorKey] = useState(getOperatorKey)
+  const [keySaved, setKeySaved] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -11,13 +14,14 @@ export function GeneralSettingsPage() {
         ? response.text()
         : Promise.reject(new Error(`Health check returned ${response.status}`))),
       fetch('/api/readyz').then(async (response) => {
-        const body = (await response.json().catch(() => ({}))) as { status?: string; routing?: string; error?: string }
+        const body = (await response.json().catch(() => ({}))) as { status?: string; routing?: string; writes?: string; error?: string }
         return {
           ready: body.status ?? (response.ok ? 'ok' : `unavailable (${response.status})`),
           routing: body.routing ?? 'available',
+          writes: body.writes ?? 'unknown',
         }
       }),
-    ]).then(([live, readyInfo]) => setHealth({ live, ready: readyInfo.ready, routing: readyInfo.routing })).catch((cause: unknown) =>
+    ]).then(([live, readyInfo]) => setHealth({ live, ready: readyInfo.ready, routing: readyInfo.routing, writes: readyInfo.writes })).catch((cause: unknown) =>
       setError(cause instanceof Error ? cause.message : 'Could not check server health.'))
   }, [])
 
@@ -42,9 +46,33 @@ export function GeneralSettingsPage() {
       </div>
       <div><dt>Liveness</dt><dd>{health.live ?? 'Checking…'}</dd></div>
       <div><dt>Readiness</dt><dd>{health.ready ?? 'Checking…'}</dd></div>
+      <div><dt>Write access</dt><dd>{health.writes ?? 'Checking…'}</dd></div>
       <div><dt>Routing provider</dt><dd>OSRM driving profile (Jakarta Metropolitan Area)</dd></div>
       <div><dt>Map data attribution</dt><dd>MapLibre GL with OpenFreeMap tiles · OpenStreetMap contributors (ODbL)</dd></div>
     </dl></Panel>
+    <Panel title="Operator API key">
+      <p className="muted">When write access is protected, enter the operator key to enable changes from this console. The key is kept in this browser tab only.</p>
+      <form className="form-row" onSubmit={(event) => {
+        event.preventDefault()
+        saveOperatorKey(operatorKey)
+        setOperatorKey(getOperatorKey())
+        setKeySaved(true)
+      }}>
+        <label className="field">Bearer key
+          <input type="password" autoComplete="off" value={operatorKey} onChange={(event) => {
+            setOperatorKey(event.target.value)
+            setKeySaved(false)
+          }} />
+        </label>
+        <button className="button primary" type="submit">Save key for this tab</button>
+        <button className="button" type="button" onClick={() => {
+          saveOperatorKey('')
+          setOperatorKey('')
+          setKeySaved(false)
+        }}>Clear key</button>
+      </form>
+      {keySaved && <p className="success" role="status">Operator key saved in this tab.</p>}
+    </Panel>
     <Panel title="Routing service">
       <p className="muted">The server delegates driving route calculations to OSRM with the Jakarta metropolitan dataset. Configure the service with <code>OSRM_URL</code>; the default is <code>http://127.0.0.1:5000</code>.</p>
       <p className="muted">A built-in Jakarta fallback router ensures route planning and fleet simulation remain operational when the standalone OSRM container is starting or offline.</p>

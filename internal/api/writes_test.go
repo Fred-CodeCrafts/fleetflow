@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -38,6 +39,17 @@ func TestUnprotectedOperatorWritesStayOpen(t *testing.T) {
 	body := `{"name":"Unit 502","registration":"B-9502-JKT","type":"van"}`
 	if rec := postJSONAs(t, s, "/api/vehicles", body, ""); rec.Code == http.StatusUnauthorized {
 		t.Fatalf("an unprotected process refused a write: %s", rec.Body)
+	}
+}
+
+func TestProtectedDriverProfileUpdatesRequireAnAPIKey(t *testing.T) {
+	protected := testServer(t, WithOperatorWritesProtected(true))
+	req := httptest.NewRequest(http.MethodPut, "/api/drivers/driver-1", strings.NewReader(`{"name":"Demo Driver 1"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	protected.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("profile update without a key answered %d, want 401: %s", rec.Code, rec.Body)
 	}
 }
 
