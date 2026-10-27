@@ -83,6 +83,7 @@ func TestProfileFieldsRoundTripAndSurviveAssignment(t *testing.T) {
 		ID: "d1", Name: "Ada Lovelace", ContactPhone: "+62 812-3456-7890",
 		LicenseClass: "B1", LicenseExpiry: "2027-05-31",
 		ShiftStart: "08:30", ShiftEnd: "17:45", Availability: "available",
+		ContractType: "Contract",
 	}
 	mustCreate(t, repo, want)
 
@@ -92,7 +93,7 @@ func TestProfileFieldsRoundTripAndSurviveAssignment(t *testing.T) {
 	}
 	if len(got) != 1 || got[0].ContactPhone != want.ContactPhone ||
 		got[0].LicenseClass != want.LicenseClass || got[0].LicenseExpiry != want.LicenseExpiry ||
-		got[0].ShiftStart != want.ShiftStart || got[0].ShiftEnd != want.ShiftEnd ||
+		got[0].ShiftStart != want.ShiftStart || got[0].ShiftEnd != want.ShiftEnd || got[0].ContractType != want.ContractType ||
 		got[0].Availability != want.Availability {
 		t.Fatalf("profile round trip = %+v, want %+v", got, want)
 	}
@@ -103,9 +104,30 @@ func TestProfileFieldsRoundTripAndSurviveAssignment(t *testing.T) {
 	}
 	if assigned.ContactPhone != want.ContactPhone || assigned.LicenseClass != want.LicenseClass ||
 		assigned.LicenseExpiry != want.LicenseExpiry || assigned.ShiftStart != want.ShiftStart ||
-		assigned.ShiftEnd != want.ShiftEnd ||
+		assigned.ShiftEnd != want.ShiftEnd || assigned.ContractType != want.ContractType ||
 		assigned.Availability != want.Availability {
 		t.Errorf("Assign dropped profile data: %+v", assigned)
+	}
+}
+
+func TestUpdateProfilePreservesVehicleAssignment(t *testing.T) {
+	repo, pool := newRepository(t)
+	mustVehicle(t, pool, "v1")
+	mustCreate(t, repo, driver.Driver{
+		ID: "d1", Name: "Old Demo Name", VehicleID: "v1", ContractType: "Contract",
+	})
+
+	got, err := repo.UpdateProfile(context.Background(), "d1", driver.Driver{
+		Name: "Demo Driver 2", Contact: "demo-driver-2@example.invalid",
+		ContactPhone: "00000000002", LicenseClass: "B1",
+		LicenseExpiry: "2030-12-31", ContractType: "Full-time",
+	})
+	if err != nil {
+		t.Fatalf("UpdateProfile: %v", err)
+	}
+	if got.Name != "Demo Driver 2" || got.VehicleID != "v1" ||
+		got.ContactPhone != "00000000002" || got.ContractType != "Full-time" {
+		t.Errorf("UpdateProfile returned %+v, want updated profile and retained vehicle", got)
 	}
 }
 

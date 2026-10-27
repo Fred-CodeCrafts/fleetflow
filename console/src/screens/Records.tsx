@@ -21,7 +21,7 @@ const initialVehicle = (models: VehicleModel[]) => {
 }
 
 const emptyDriver = () => ({
-  name: '', contact_phone: '', license_class: '', license_expiry: '', shift_start: '', shift_end: '', availability: '', contract_type: 'Full-time',
+  name: '', contact: '', contact_phone: '', license_class: '', license_expiry: '', shift_start: '', shift_end: '', availability: '', contract_type: 'Full-time',
 })
 
 const unknown = (value: string | number | null | undefined) => value ?? 'Unknown'
@@ -156,20 +156,24 @@ export function DriversPage() {
   const drivers = useLoad(api.drivers)
   const vehicles = useLoad(api.vehicles)
   const [form, setForm] = useState(emptyDriver)
+  const [editingDriverID, setEditingDriverID] = useState('')
   const [error, setError] = useState('')
 
   const create = async (event: FormEvent) => {
     event.preventDefault()
     setError('')
     try {
-      await api.createDriver(form)
+      if (editingDriverID) await api.updateDriver(editingDriverID, form)
+      else await api.createDriver(form)
       setForm(emptyDriver())
+      setEditingDriverID('')
       await drivers.reload()
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not create driver.') }
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not save driver profile.') }
   }
   return <Page eyebrow="Resources" title="Drivers" description="Manage driver contact details, qualifications, shifts, availability, contract types, and vehicle assignments.">
-    <Panel title="Add driver"><form className="form-row" onSubmit={create}>
+    <Panel title={editingDriverID ? 'Edit driver profile' : 'Add driver'}><form className="form-row" onSubmit={create}>
       <label className="field">Full name<input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
+      <label className="field">Contact email<input type="email" value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })} /></label>
       <label className="field">Contract type
         <select value={form.contract_type} onChange={(e) => setForm({ ...form, contract_type: e.target.value })}>
           <option value="Full-time">Full-time (PKWT/PKWTT)</option>
@@ -186,11 +190,16 @@ export function DriversPage() {
       <label className="field">Availability<select value={form.availability} onChange={(e) => setForm({ ...form, availability: e.target.value })}>
         <option value="">Unknown</option><option value="available">Available</option><option value="unavailable">Unavailable</option>
       </select></label>
-      <button className="button primary">Add driver</button>
+      <button className="button primary">{editingDriverID ? 'Save profile' : 'Add driver'}</button>
+      {editingDriverID && <button className="button" type="button" onClick={() => {
+        setEditingDriverID('')
+        setForm(emptyDriver())
+        setError('')
+      }}>Cancel</button>}
     </form>{error && <ErrorMessage>{error}</ErrorMessage>}</Panel>
     <Panel title="Driver register">
       {drivers.loading ? <Loading /> : drivers.error ? <ErrorMessage>{drivers.error}</ErrorMessage> :
-        <Table headers={['Name', 'Contract', 'Contact phone', 'License class', 'License expiry', 'Shift', 'Availability', 'Assigned car', 'Maintenance']}>{(drivers.data ?? []).map((d) => {
+        <Table headers={['Name', 'Contract', 'Contact phone', 'License class', 'License expiry', 'Shift', 'Availability', 'Assigned car', 'Maintenance', 'Actions']}>{(drivers.data ?? []).map((d) => {
           const heldVehicle = vehicles.data?.find((v) => v.id === d.vehicle_id)
           return (
             <tr key={d.id}><td><Link to={`/resources/drivers/${encodeURIComponent(d.id)}`}>{d.name}</Link></td>
@@ -216,6 +225,21 @@ export function DriversPage() {
                   <span className="muted">—</span>
                 )}
               </td>
+              <td><button className="button" type="button" onClick={() => {
+                setEditingDriverID(d.id)
+                setForm({
+                  name: d.name,
+                  contact: d.contact,
+                  contact_phone: d.contact_phone ?? '',
+                  license_class: d.license_class ?? '',
+                  license_expiry: d.license_expiry ?? '',
+                  shift_start: d.shift_start ?? '',
+                  shift_end: d.shift_end ?? '',
+                  availability: d.availability ?? '',
+                  contract_type: d.contract_type ?? 'Full-time',
+                })
+                setError('')
+              }}>Edit</button></td>
             </tr>
           )
         })}</Table>}

@@ -94,6 +94,32 @@ func (s *Server) handleCreateDriver(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, viewOfDriver(created))
 }
 
+// handleUpdateDriver replaces an existing driver's profile without changing
+// their vehicle assignment.
+func (s *Server) handleUpdateDriver(w http.ResponseWriter, r *http.Request) {
+	if s.drivers == nil {
+		writeError(w, r, errNoFleet)
+		return
+	}
+
+	var req createDriverRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	updated, err := s.drivers.UpdateProfile(r.Context(), r.PathValue("id"), driver.CreateInput{
+		Name: req.Name, Contact: req.Contact, ContactPhone: req.ContactPhone,
+		LicenseClass: req.LicenseClass, LicenseExpiry: req.LicenseExpiry,
+		ShiftStart: req.ShiftStart, ShiftEnd: req.ShiftEnd, Availability: req.Availability,
+		ContractType: req.ContractType,
+	})
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, viewOfDriver(updated))
+}
+
 type assignDriverVehicleRequest struct {
 	VehicleID string `json:"vehicle_id"`
 }

@@ -2,6 +2,8 @@ package api
 
 import (
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -96,6 +98,52 @@ func TestDrivers_AssignVehicle(t *testing.T) {
 	}
 	if got := field(t, assigned, "contract_type"); got != "Full-time" {
 		t.Errorf("contract_type = %q, want Full-time", got)
+	}
+}
+
+func TestDrivers_UpdateProfilePreservesVehicleAssignment(t *testing.T) {
+	s := fleetServer(t)
+	created := postJSON(t, s, "/api/drivers", `{"name":"FleetFlow Demo Driver 2","contract_type":"Contract"}`)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create status = %d: %s", created.Code, created.Body)
+	}
+	id := field(t, decodeBody(t, created), "id")
+	if assigned := postJSON(t, s, "/api/drivers/"+id+"/vehicle", `{"vehicle_id":"vehicle-2"}`); assigned.Code != http.StatusOK {
+		t.Fatalf("assign status = %d: %s", assigned.Code, assigned.Body)
+	}
+
+	req := httptest.NewRequest(http.MethodPut, "/api/drivers/"+id, strings.NewReader(
+		`{"name":"Demo Driver 2","contact":"demo-driver-2@example.invalid","contact_phone":"00000000002","license_class":"B1","license_expiry":"2030-12-31","availability":"available","contract_type":"Full-time"}`,
+	))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+testAPIKey)
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update status = %d: %s", rec.Code, rec.Body)
+	}
+	updated := decodeBody(t, rec)
+	if field(t, updated, "name") != "Demo Driver 2" ||
+		field(t, updated, "contact_phone") != "00000000002" ||
+		field(t, updated, "contract_type") != "Full-time" ||
+		field(t, updated, "vehicle_id") != "vehicle-2" {
+		t.Errorf("updated driver = %v, want profile fields and vehicle assignment", updated)
+	}
+}
+
+func TestDrivers_UpdateRejectsUnknownContractType(t *testing.T) {
+	s := fleetServer(t)
+	created := postJSON(t, s, "/api/drivers", `{"name":"Demo Driver"}`)
+	id := field(t, decodeBody(t, created), "id")
+	req := httptest.NewRequest(http.MethodPut, "/api/drivers/"+id, strings.NewReader(
+		`{"name":"Demo Driver","contract_type":"Permanent"}`,
+	))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+testAPIKey)
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", rec.Code, rec.Body)
 	}
 }
 

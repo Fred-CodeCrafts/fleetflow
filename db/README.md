@@ -16,6 +16,10 @@ Names follow Flyway's convention: `V<version>__<description>.sql`, for example
 `V1__fleet_records.sql`. The double underscore separates the version from the
 description.
 
+`V10__driver_contract_type.sql` adds the driver's contract type to the stored
+profile. Apply it with the same Flyway workflow before deploying code that reads
+or writes that field.
+
 Flyway keeps its own bookkeeping in `flyway_schema_history`, which records which
 versions ran and whether they succeeded.
 
