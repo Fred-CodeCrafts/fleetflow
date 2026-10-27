@@ -9,9 +9,10 @@ OSRM, and keeps real GPS reports separate from simulation data.
 
 The console uses MapLibre GL with OpenFreeMap tiles. FleetFlow does not generate
 real traffic and does not present simulated positions or modelled emissions as
-measured fleet data. The submission summary, the demo shot list and the
-questions this repository can answer are in [Submission pack](#submission-pack);
-deployment notes are in [deploy/README.md](./deploy/README.md).
+measured fleet data. The written summary is [docs/summary.md](./docs/summary.md)
+(493 words); the demo shot list and the questions this repository can answer are
+in [Submission pack](#submission-pack); deployment notes are in
+[deploy/README.md](./deploy/README.md).
 
 ## Routing, map, and simulation data
 
