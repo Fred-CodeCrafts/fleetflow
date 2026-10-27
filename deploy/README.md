@@ -32,6 +32,10 @@ that deployment cannot do.
    `writes: "protected"`. Left unset, the eight write routes accept any caller and
    `/readyz` says `writes: "unauthenticated"`, which is honest but is not what a
    public URL should show.
+   For a key held in Secret Manager, run a one-off job with that secret exposed
+   as `OPERATOR_KEY` and the binary's `-register-key` flag. It stores only the
+   digest and does not print the key; do not run `-issue-key` in a Cloud Run job,
+   because job output is retained in Cloud Logging.
 7. **Probes.** `/healthz` is liveness, `/readyz` is readiness. Readiness reports
    `routing: "unavailable"` when OSRM does not answer and `database:
    "unreachable"` when the database does not, and answers 503 in both cases. A
