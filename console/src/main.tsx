@@ -1,12 +1,15 @@
-import React, { Component, type ErrorInfo, type ReactNode } from 'react'
+import React, { Component, lazy, type ErrorInfo, type ReactNode } from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { Layout } from './shell/Layout'
 import { allNavItems, navigation } from './shell/navigation'
 import { Screen } from './screens/Screen'
-import { OperationalTripPage, SimulationTripPage } from './screens/Simulation'
-import { DriverDetailPage, VehicleDetailPage } from './screens/Records'
 import './styles.css'
+
+const OperationalTripPage = lazy(() => import('./screens/Simulation').then((module) => ({ default: module.OperationalTripPage })))
+const SimulationTripPage = lazy(() => import('./screens/Simulation').then((module) => ({ default: module.SimulationTripPage })))
+const DriverDetailPage = lazy(() => import('./screens/Records').then((module) => ({ default: module.DriverDetailPage })))
+const VehicleDetailPage = lazy(() => import('./screens/Records').then((module) => ({ default: module.VehicleDetailPage })))
 
 interface ErrorBoundaryProps {
   children: ReactNode
@@ -56,28 +59,30 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ErrorBoundary>
       <BrowserRouter>
-        <Routes>
-          <Route element={<Layout />}>
-            <Route index element={<Navigate to="/operations" replace />} />
-            {navigation.flatMap((branch) => branch.children.map((item) => (
-              <Route key={item.id} path={item.path} element={<Screen id={item.id} />} />
-            )))}
-            <Route path="/operations/trips/operational/:tripID" element={<OperationalTripPage />} />
-            <Route path="/operations/trips/:runID/:tripID" element={<SimulationTripPage />} />
-            <Route path="/operations/trips/:tripID" element={<OperationalTripPage />} />
-            <Route path="/resources/vehicles/:vehicleID" element={<VehicleDetailPage />} />
-            <Route path="/resources/drivers/:driverID" element={<DriverDetailPage />} />
-            <Route path="/resources/fleet" element={<Navigate to="/operations/fleet" replace />} />
-            <Route path="/operations/lab" element={<Navigate to="/settings/lab" replace />} />
-            <Route path="/sustainability/emissions" element={<Navigate to="/sustainability" replace />} />
-            <Route path="/trips" element={<Navigate to="/operations/trips" replace />} />
-            <Route path="/trips/*" element={<Navigate to="/operations/trips" replace />} />
-            {navigation.filter((branch) => !allNavItems().some((item) => item.path === branch.path)).map((branch) => (
-              <Route key={branch.id} path={branch.path} element={<Navigate to={branch.children[0]?.path ?? '/operations'} replace />} />
-            ))}
-            <Route path="*" element={<Navigate to="/operations" replace />} />
-          </Route>
-        </Routes>
+        <React.Suspense fallback={<div className="empty-state">Loading page…</div>}>
+          <Routes>
+            <Route element={<Layout />}>
+              <Route index element={<Navigate to="/operations" replace />} />
+              {navigation.flatMap((branch) => branch.children.map((item) => (
+                <Route key={item.id} path={item.path} element={<Screen id={item.id} />} />
+              )))}
+              <Route path="/operations/trips/operational/:tripID" element={<OperationalTripPage />} />
+              <Route path="/operations/trips/:runID/:tripID" element={<SimulationTripPage />} />
+              <Route path="/operations/trips/:tripID" element={<OperationalTripPage />} />
+              <Route path="/resources/vehicles/:vehicleID" element={<VehicleDetailPage />} />
+              <Route path="/resources/drivers/:driverID" element={<DriverDetailPage />} />
+              <Route path="/resources/fleet" element={<Navigate to="/operations/fleet" replace />} />
+              <Route path="/operations/lab" element={<Navigate to="/settings/lab" replace />} />
+              <Route path="/sustainability/emissions" element={<Navigate to="/sustainability" replace />} />
+              <Route path="/trips" element={<Navigate to="/operations/trips" replace />} />
+              <Route path="/trips/*" element={<Navigate to="/operations/trips" replace />} />
+              {navigation.filter((branch) => !allNavItems().some((item) => item.path === branch.path)).map((branch) => (
+                <Route key={branch.id} path={branch.path} element={<Navigate to={branch.children[0]?.path ?? '/operations'} replace />} />
+              ))}
+              <Route path="*" element={<Navigate to="/operations" replace />} />
+            </Route>
+          </Routes>
+        </React.Suspense>
       </BrowserRouter>
     </ErrorBoundary>
   </React.StrictMode>,
