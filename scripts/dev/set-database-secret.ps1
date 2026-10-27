@@ -4,13 +4,24 @@ $project = 'fleetflow-4448'
 $secretName = 'fleetflow-database-url'
 $placeholder = '[YOUR-PASSWORD]'
 
-$template = Read-Host "Supabase PostgreSQL URL containing $placeholder"
-if ($template -notmatch '^postgres(?:ql)?://.*\[YOUR-PASSWORD\]') {
-  throw "Enter a PostgreSQL URL containing $placeholder. No secret was sent."
-}
+$template = Read-Host "Supabase URL with $placeholder or an empty password (username:@host)"
 if ($template -match '[\r\n]') {
   throw 'The URL must be a single line. No secret was sent.'
 }
+
+$match = [regex]::Match(
+  $template,
+  '^(?<prefix>postgres(?:ql)?://[^:/@]+:)(?<password>[^@]*)(?<suffix>@[^/\r\n]+/[^?\r\n]+(?:\?.*)?)$'
+)
+if (-not $match.Success) {
+  throw 'Enter a PostgreSQL URL with a username and host. No secret was sent.'
+}
+
+$templatePassword = $match.Groups['password'].Value
+if ($templatePassword -and $templatePassword -cne $placeholder) {
+  throw "Leave the URL password empty or use the literal $placeholder. Do not put the password in the URL prompt."
+}
+$template = $match.Groups['prefix'].Value + $placeholder + $match.Groups['suffix'].Value
 
 $securePassword = Read-Host 'Supabase database password (input is hidden)' -AsSecureString
 $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePassword)
