@@ -75,6 +75,43 @@ replace` deployment (probes, secrets, environment). If you use it, update the
 image path to your own project and keep `minScale: "0"` unless you have accepted
 continuous-instance billing.
 
+## Deploy on a tag
+
+`cloudbuild.yaml` at the repository root is the deployment with a human removed:
+it builds the image, tags it with both the release tag and the commit SHA, pushes
+it to Artifact Registry, and deploys it. A Cloud Build trigger watching the
+repository for `^v[0-9]+\.[0-9]+\.[0-9]+$` makes `git push origin v0.1.9` the
+whole release.
+
+The one-time setup, all of it inside the project and none of it in this repo:
+
+1. **Connect the repository.** In the console, Cloud Build → Triggers → *Connect
+   repository* → GitHub, which authorises the Cloud Build GitHub App against the
+   account that owns the fork. This step needs a browser; a CLI cannot complete
+   the OAuth handshake.
+2. **Create the trigger** once the repository is connected:
+   `gcloud builds triggers create github --name=release-tag --repo-owner=<owner>
+   --repo-name=fleetflow --tag-pattern="^v[0-9]+\.[0-9]+\.[0-9]+$"
+   --build-config=cloudbuild.yaml --region=asia-southeast2
+   --project=<project-id>`.
+3. **Give the build permission to deploy.** The Cloud Build service account needs
+   `roles/run.admin`, `roles/artifactregistry.writer` and
+   `roles/iam.serviceAccountUser` on the project. Without the last one the deploy
+   fails at the point of setting the runtime service account, which reads like a
+   Cloud Run error and is not.
+
+Why a tag and not a push: a branch build would deploy every intermediate commit,
+and this project's history is deliberately many small commits. A tag is the one
+moment where "this is the release" was decided by a person.
+
+The image is tagged with `${TAG_NAME}` and `${COMMIT_SHA}`, so
+`gcloud run revisions describe` names the code a revision runs. The manual script
+still defaults to `:latest`, which does not; pass `-Tag <release>` to it.
+
+Nothing here works while the billing account is closed: Cloud Build and Cloud Run
+both refuse the work, and the service keeps the last revision it managed to
+deploy, which will not start. The configuration does not expire.
+
 ## Cost
 
 Staying inside the free tier means `minScale: "0"`, one vCPU, and no always-on
