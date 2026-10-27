@@ -143,6 +143,9 @@ func Run(cfg Config) (Result, error) {
 	if err != nil {
 		return Result{}, fmt.Errorf("lab: dynamic engine: %w", err)
 	}
+	// Re-seeding one source preserves each vehicle's stream without allocating a
+	// large random state for every informed vehicle.
+	perceptionRNG := rand.New(rand.NewSource(1))
 
 	waves := demand(cfg)
 	res := Result{Seed: cfg.Seed, Share: cfg.Share, Series: make([]Wave, 0, len(waves))}
@@ -170,8 +173,8 @@ func Run(cfg Config) (Result, error) {
 			// The driver reads the published metric through a private error, so
 			// informed vehicles spread over alternatives instead of all taking
 			// the same one. The draw is seeded, so the run stays reproducible.
-			view := withPerceptionNoise(g, metric, cfg.Seed, i, j)
-			q, err := engine.NewDijkstraRouter(g).Route(view, t.from, t.to)
+			view := withPerceptionNoise(g, metric, cfg.Seed, i, j, perceptionRNG)
+			q, err := router.Route(view, t.from, t.to)
 			if err != nil {
 				return Result{}, fmt.Errorf("lab: dynamic route %s->%s: %w", t.from, t.to, err)
 			}
@@ -362,11 +365,11 @@ func travelTimes(g *graph.Graph, paths [][]int) []float64 {
 // artefact of the model, not a finding about the idea. The error is drawn from
 // the run's seed, wave and vehicle index, so two runs of the same seed make the
 // same choices.
-func withPerceptionNoise(g *graph.Graph, m *engine.Metric, seed int64, wave, vehicle int) *engine.Metric {
+func withPerceptionNoise(g *graph.Graph, m *engine.Metric, seed int64, wave, vehicle int, rng *rand.Rand) *engine.Metric {
 	if m == nil {
 		return engine.NewStaticMetric(g)
 	}
-	rng := rand.New(rand.NewSource(seed*1_000_003 + int64(wave)*1_003 + int64(vehicle)))
+	rng.Seed(seed*1_000_003 + int64(wave)*1_003 + int64(vehicle))
 	costs := make([]float64, m.Len())
 	for i := range costs {
 		costs[i] = m.Cost(i) * (1 + perceptionNoise*rng.Float64())
