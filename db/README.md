@@ -38,6 +38,11 @@ Credentials come from the same `.env` the database reads, and they are passed to
 Flyway as environment variables rather than command-line flags, so they do not
 appear in `ps` output.
 
+For Cloud Run, `db/migration/Dockerfile` packages the same SQL files in a
+Flyway image. Its entrypoint converts the injected `DATABASE_URL` to Flyway's
+JDBC settings in process memory and removes the original variable before starting
+Flyway; it never prints the connection string.
+
 Rules that must hold under concurrent requests — one vehicle per driver, and one
 unfinished trip per vehicle — are unique constraints and partial indexes in the
 migration, not checks in Go. Two racing requests lose at the database, wherever
