@@ -48,6 +48,7 @@ type createDriverRequest struct {
 
 // handleListDrivers answers GET /api/drivers.
 func (s *Server) handleListDrivers(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	if s.drivers == nil {
 		writeError(w, r, errNoFleet)
 		return

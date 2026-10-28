@@ -8,8 +8,8 @@ import (
 )
 
 // A deployment that protects operator writes must refuse one without a key, and
-// accept one with it. Reads stay public either way: the console is a console,
-// not a private dashboard.
+// accept one with it. Non-driver reads stay public; driver records have their
+// own stricter gate because they contain personal and license information.
 func TestProtectedOperatorWritesRequireAnAPIKey(t *testing.T) {
 	protected := testServer(t, WithAPIKeys(testKeyService(t)), WithOperatorWritesProtected(true))
 
@@ -25,10 +25,28 @@ func TestProtectedOperatorWritesRequireAnAPIKey(t *testing.T) {
 
 	read := httptest.NewRecorder()
 	protected.ServeHTTP(read, httptest.NewRequest(http.MethodGet, "/api/vehicles", nil))
-	// Reads are public: this test server has no fleet store, so the request fails
-	// for its own reason, not for want of a key.
+	// Vehicle reads remain public: this server has no fleet store, so the request
+	// fails for its own reason, not for want of a key.
 	if read.Code == http.StatusUnauthorized {
 		t.Fatalf("read was refused: %s", read.Body)
+	}
+}
+
+func TestDriverReadsRequireAnAPIKeyEvenWhenWritesAreOpen(t *testing.T) {
+	s := testServer(t)
+
+	withoutKey := httptest.NewRecorder()
+	s.ServeHTTP(withoutKey, httptest.NewRequest(http.MethodGet, "/api/drivers", nil))
+	if withoutKey.Code != http.StatusUnauthorized {
+		t.Fatalf("driver read without a key answered %d, want 401: %s", withoutKey.Code, withoutKey.Body)
+	}
+
+	withKey := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/drivers", nil)
+	req.Header.Set("Authorization", "Bearer "+testAPIKey)
+	s.ServeHTTP(withKey, req)
+	if withKey.Code != http.StatusServiceUnavailable {
+		t.Fatalf("driver read with a key answered %d, want 503 from the unconfigured store: %s", withKey.Code, withKey.Body)
 	}
 }
 
