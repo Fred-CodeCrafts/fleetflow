@@ -33,16 +33,6 @@ func getJSON(t *testing.T, s *Server, path string) *httptest.ResponseRecorder {
 	return rec
 }
 
-func getJSONWithKey(t *testing.T, s *Server, path string, key string) *httptest.ResponseRecorder {
-	t.Helper()
-
-	req := httptest.NewRequest(http.MethodGet, path, nil)
-	req.Header.Set("Authorization", "Bearer "+key)
-	rec := httptest.NewRecorder()
-	s.ServeHTTP(rec, req)
-	return rec
-}
-
 // field reads a required string field from a decoded body.
 func field(t *testing.T, body map[string]any, key string) string {
 	t.Helper()

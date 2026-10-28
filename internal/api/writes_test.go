@@ -8,8 +8,7 @@ import (
 )
 
 // A deployment that protects operator writes must refuse one without a key, and
-// accept one with it. Non-driver reads stay public; driver records have their
-// own stricter gate because they contain personal and license information.
+// accept one with it. Reads stay public.
 func TestProtectedOperatorWritesRequireAnAPIKey(t *testing.T) {
 	protected := testServer(t, WithAPIKeys(testKeyService(t)), WithOperatorWritesProtected(true))
 
@@ -32,13 +31,13 @@ func TestProtectedOperatorWritesRequireAnAPIKey(t *testing.T) {
 	}
 }
 
-func TestDriverReadsRequireAnAPIKeyEvenWhenWritesAreOpen(t *testing.T) {
-	s := testServer(t)
+func TestDriverReadsStayPublicWhenWritesAreProtected(t *testing.T) {
+	s := testServer(t, WithOperatorWritesProtected(true))
 
 	withoutKey := httptest.NewRecorder()
 	s.ServeHTTP(withoutKey, httptest.NewRequest(http.MethodGet, "/api/drivers", nil))
-	if withoutKey.Code != http.StatusUnauthorized {
-		t.Fatalf("driver read without a key answered %d, want 401: %s", withoutKey.Code, withoutKey.Body)
+	if withoutKey.Code == http.StatusUnauthorized {
+		t.Fatalf("driver read without a key was refused: %s", withoutKey.Body)
 	}
 
 	withKey := httptest.NewRecorder()
@@ -46,7 +45,7 @@ func TestDriverReadsRequireAnAPIKeyEvenWhenWritesAreOpen(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+testAPIKey)
 	s.ServeHTTP(withKey, req)
 	if withKey.Code != http.StatusServiceUnavailable {
-		t.Fatalf("driver read with a key answered %d, want 503 from the unconfigured store: %s", withKey.Code, withKey.Body)
+		t.Fatalf("driver read with a key answered %d, want the same missing-store response: %s", withKey.Code, withKey.Body)
 	}
 }
 

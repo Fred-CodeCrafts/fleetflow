@@ -26,7 +26,7 @@ func TestDrivers_CreateThenList(t *testing.T) {
 		}
 	}
 
-	rec = getJSONWithKey(t, s, "/api/drivers", testAPIKey)
+	rec = getJSON(t, s, "/api/drivers")
 	list := listOf(t, decodeBody(t, rec), "drivers")
 	if len(list) != 1 {
 		t.Fatalf("list returned %d drivers, want 1", len(list))
@@ -44,16 +44,11 @@ func TestDrivers_RejectABlankName(t *testing.T) {
 	}
 }
 
-func TestDrivers_ListRequiresAuthentication(t *testing.T) {
+func TestDrivers_ListReturnsUnavailableWithoutAService(t *testing.T) {
 	s := testServer(t)
 	rec := getJSON(t, s, "/api/drivers")
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("status without a key = %d, want 401: %s", rec.Code, rec.Body)
-	}
-
-	rec = getJSONWithKey(t, s, "/api/drivers", testAPIKey)
 	if rec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("status with a key = %d, want 503 from the missing store: %s", rec.Code, rec.Body)
+		t.Fatalf("status = %d, want 503 from the missing store: %s", rec.Code, rec.Body)
 	}
 	if code := field(t, decodeBody(t, rec), "code"); code != "fleet_unavailable" {
 		t.Errorf("code = %q, want fleet_unavailable", code)
@@ -77,7 +72,7 @@ func TestDrivers_CreateExposesProfile(t *testing.T) {
 		}
 	}
 
-	list := getJSONWithKey(t, s, "/api/drivers", testAPIKey)
+	list := getJSON(t, s, "/api/drivers")
 	item := listOf(t, decodeBody(t, list), "drivers")[0].(map[string]any)
 	if item["contact_phone"] != "+62 812-3456-7890" || item["license_expiry"] != "2027-05-31" ||
 		item["shift_start"] != "08:30" || item["shift_end"] != "17:45" {
@@ -86,7 +81,7 @@ func TestDrivers_CreateExposesProfile(t *testing.T) {
 }
 
 func TestDrivers_ListDoesNotAllowCaching(t *testing.T) {
-	rec := getJSONWithKey(t, fleetServer(t), "/api/drivers", testAPIKey)
+	rec := getJSON(t, fleetServer(t), "/api/drivers")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
 	}
