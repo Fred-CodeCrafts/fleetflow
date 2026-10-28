@@ -49,12 +49,13 @@ func New(pool *pgxpool.Pool) *Repository { return &Repository{pool: pool} }
 // can classify it (DESIGN 3.8).
 func (r *Repository) Create(ctx context.Context, d driver.Driver) (driver.Driver, error) {
 	const q = `insert into drivers
-		(id, name, contact, vehicle_id, contact_phone, license_class, license_expiry, shift_start, shift_end, availability)
-		values ($1, $2, $3, $4, $5, $6, $7::text::date, $8::text::time, $9::text::time, $10)`
+		(id, name, contact, vehicle_id, contact_phone, license_class, license_expiry, shift_start, shift_end, availability, contract_type)
+		values ($1, $2, $3, $4, $5, $6, $7::text::date, $8::text::time, $9::text::time, $10, $11)`
 
 	if _, err := r.pool.Exec(ctx, q, d.ID, d.Name, d.Contact, nullableVehicle(d.VehicleID),
 		nullableText(d.ContactPhone), nullableText(d.LicenseClass), nullableText(d.LicenseExpiry),
-		nullableText(d.ShiftStart), nullableText(d.ShiftEnd), nullableText(d.Availability)); err != nil {
+		nullableText(d.ShiftStart), nullableText(d.ShiftEnd), nullableText(d.Availability),
+		nullableText(d.ContractType)); err != nil {
 		return driver.Driver{}, classifyCreate(err, d.ID)
 	}
 	return d, nil
@@ -64,7 +65,7 @@ func (r *Repository) Create(ctx context.Context, d driver.Driver) (driver.Driver
 // id: rows created in the same instant share a timestamp, and the id is the
 // deterministic tiebreaker that keeps the order stable.
 func (r *Repository) List(ctx context.Context) ([]driver.Driver, error) {
-	const q = `select id, name, contact, vehicle_id, contact_phone, license_class, license_expiry, shift_start, shift_end, availability
+	const q = `select id, name, contact, vehicle_id, contact_phone, license_class, license_expiry, shift_start, shift_end, availability, contract_type
 		from drivers order by created_at, id`
 
 	rows, err := r.pool.Query(ctx, q)
@@ -76,14 +77,14 @@ func (r *Repository) List(ctx context.Context) ([]driver.Driver, error) {
 	found := make([]driver.Driver, 0)
 	for rows.Next() {
 		var (
-			id, name, contact                 string
-			vehicle                           *string
-			phone, licenseClass, availability *string
-			licenseExpiry                     *time.Time
-			shiftStart, shiftEnd              *time.Time
+			id, name, contact                               string
+			vehicle                                         *string
+			phone, licenseClass, availability, contractType *string
+			licenseExpiry                                   *time.Time
+			shiftStart, shiftEnd                            *time.Time
 		)
 		if err := rows.Scan(&id, &name, &contact, &vehicle, &phone, &licenseClass, &licenseExpiry,
-			&shiftStart, &shiftEnd, &availability); err != nil {
+			&shiftStart, &shiftEnd, &availability, &contractType); err != nil {
 			return nil, err
 		}
 		found = append(found, driver.Driver{
@@ -96,6 +97,7 @@ func (r *Repository) List(ctx context.Context) ([]driver.Driver, error) {
 			ShiftStart:    clockValue(shiftStart),
 			ShiftEnd:      clockValue(shiftEnd),
 			Availability:  textValue(availability),
+			ContractType:  textValue(contractType),
 			VehicleID:     vehicleValue(vehicle),
 		})
 	}
@@ -117,18 +119,18 @@ func (r *Repository) List(ctx context.Context) ([]driver.Driver, error) {
 // another driver holds is a conflict (unique index).
 func (r *Repository) Assign(ctx context.Context, driverID, vehicleID string) (driver.Driver, error) {
 	const q = `update drivers set vehicle_id = $2 where id = $1
-		returning id, name, contact, vehicle_id, contact_phone, license_class, license_expiry, shift_start, shift_end, availability`
+		returning id, name, contact, vehicle_id, contact_phone, license_class, license_expiry, shift_start, shift_end, availability, contract_type`
 
 	var (
-		id, name, contact                 string
-		vehicle                           *string
-		phone, licenseClass, availability *string
-		licenseExpiry                     *time.Time
-		shiftStart, shiftEnd              *time.Time
+		id, name, contact                               string
+		vehicle                                         *string
+		phone, licenseClass, availability, contractType *string
+		licenseExpiry                                   *time.Time
+		shiftStart, shiftEnd                            *time.Time
 	)
 	err := r.pool.QueryRow(ctx, q, driverID, nullableVehicle(vehicleID)).
 		Scan(&id, &name, &contact, &vehicle, &phone, &licenseClass, &licenseExpiry,
-			&shiftStart, &shiftEnd, &availability)
+			&shiftStart, &shiftEnd, &availability, &contractType)
 	if err != nil {
 		return driver.Driver{}, classifyAssign(err, driverID, vehicleID)
 	}
@@ -142,7 +144,45 @@ func (r *Repository) Assign(ctx context.Context, driverID, vehicleID string) (dr
 		ShiftStart:    clockValue(shiftStart),
 		ShiftEnd:      clockValue(shiftEnd),
 		Availability:  textValue(availability),
+		ContractType:  textValue(contractType),
 		VehicleID:     vehicleValue(vehicle),
+	}, nil
+}
+
+// UpdateProfile replaces profile fields without changing the current vehicle.
+func (r *Repository) UpdateProfile(ctx context.Context, driverID string, profile driver.Driver) (driver.Driver, error) {
+	const q = `update drivers set name = $2, contact = $3, contact_phone = $4,
+		license_class = $5, license_expiry = $6::text::date, shift_start = $7::text::time,
+		shift_end = $8::text::time, availability = $9, contract_type = $10
+		where id = $1
+		returning id, name, contact, vehicle_id, contact_phone, license_class, license_expiry,
+		shift_start, shift_end, availability, contract_type`
+
+	var (
+		id, name, contact                               string
+		vehicle                                         *string
+		phone, licenseClass, availability, contractType *string
+		licenseExpiry                                   *time.Time
+		shiftStart, shiftEnd                            *time.Time
+	)
+	err := r.pool.QueryRow(ctx, q, driverID, profile.Name, profile.Contact,
+		nullableText(profile.ContactPhone), nullableText(profile.LicenseClass),
+		nullableText(profile.LicenseExpiry), nullableText(profile.ShiftStart),
+		nullableText(profile.ShiftEnd), nullableText(profile.Availability),
+		nullableText(profile.ContractType)).Scan(&id, &name, &contact, &vehicle, &phone,
+		&licenseClass, &licenseExpiry, &shiftStart, &shiftEnd, &availability, &contractType)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return driver.Driver{}, domain.NotFound("driver_not_found", "driver %s does not exist", driverID)
+		}
+		return driver.Driver{}, err
+	}
+	return driver.Driver{
+		ID: id, Name: name, Contact: contact, VehicleID: vehicleValue(vehicle),
+		ContactPhone: textValue(phone), LicenseClass: textValue(licenseClass),
+		LicenseExpiry: dateValue(licenseExpiry), ShiftStart: clockValue(shiftStart),
+		ShiftEnd: clockValue(shiftEnd), Availability: textValue(availability),
+		ContractType: textValue(contractType),
 	}, nil
 }
 

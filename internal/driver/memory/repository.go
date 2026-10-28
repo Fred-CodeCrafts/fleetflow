@@ -106,3 +106,22 @@ func (r *Repository) Assign(ctx context.Context, driverID, vehicleID string) (dr
 	r.drivers[pos].VehicleID = vehicleID
 	return r.drivers[pos], nil
 }
+
+// UpdateProfile replaces profile fields while preserving identity and vehicle.
+func (r *Repository) UpdateProfile(ctx context.Context, driverID string, profile driver.Driver) (driver.Driver, error) {
+	if err := ctx.Err(); err != nil {
+		return driver.Driver{}, err
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	pos, exists := r.index[driverID]
+	if !exists {
+		return driver.Driver{}, domain.NotFound("driver_not_found", "driver %s does not exist", driverID)
+	}
+	profile.ID = driverID
+	profile.VehicleID = r.drivers[pos].VehicleID
+	r.drivers[pos] = profile
+	return profile, nil
+}

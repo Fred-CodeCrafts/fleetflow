@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"strings"
@@ -77,6 +78,13 @@ type IssueInput struct {
 	Name string
 }
 
+// RegisterInput stores a caller-generated key without returning or logging its
+// plaintext. It is intended for secret-backed bootstrap workflows.
+type RegisterInput struct {
+	Name string
+	Key  string
+}
+
 // Service issues and authenticates API keys on top of a Repository.
 type Service struct {
 	repo Repository
@@ -98,11 +106,32 @@ func (s *Service) Issue(ctx context.Context, in IssueInput) (string, Key, error)
 	if err != nil {
 		return "", Key{}, err
 	}
-	id, err := newID()
+
+	stored, err := s.store(ctx, name, plaintext)
 	if err != nil {
 		return "", Key{}, err
 	}
+	return plaintext, stored, nil
+}
 
+// Register stores a generated key's hash without returning the plaintext.
+func (s *Service) Register(ctx context.Context, in RegisterInput) (Key, error) {
+	name := strings.TrimSpace(in.Name)
+	if name == "" {
+		return Key{}, domain.Invalid(codeNameRequired, "api key name is required")
+	}
+	key := strings.TrimSpace(in.Key)
+	if !validGeneratedKey(key) {
+		return Key{}, domain.Invalid("api_key_invalid", "api key must be a generated FleetFlow key")
+	}
+	return s.store(ctx, name, key)
+}
+
+func (s *Service) store(ctx context.Context, name, plaintext string) (Key, error) {
+	id, err := newID()
+	if err != nil {
+		return Key{}, err
+	}
 	record := Key{
 		ID:        id,
 		Name:      name,
@@ -110,12 +139,19 @@ func (s *Service) Issue(ctx context.Context, in IssueInput) (string, Key, error)
 		Hash:      Hash(plaintext),
 		CreatedAt: time.Now().UTC(),
 	}
-
 	stored, err := s.repo.Create(ctx, record)
 	if err != nil {
-		return "", Key{}, storageError(codeCreateFailed, err)
+		return Key{}, storageError(codeCreateFailed, err)
 	}
-	return plaintext, stored, nil
+	return stored, nil
+}
+
+func validGeneratedKey(key string) bool {
+	if !strings.HasPrefix(key, KeyPrefix) {
+		return false
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(key, KeyPrefix))
+	return err == nil && len(decoded) == secretBytes
 }
 
 // Authenticate checks a presented key against the stored records and returns the

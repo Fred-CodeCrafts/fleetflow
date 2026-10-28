@@ -2,6 +2,8 @@ package api
 
 import (
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -42,11 +44,11 @@ func TestDrivers_RejectABlankName(t *testing.T) {
 	}
 }
 
-func TestDrivers_Answer503WithoutAService(t *testing.T) {
+func TestDrivers_ListReturnsUnavailableWithoutAService(t *testing.T) {
 	s := testServer(t)
 	rec := getJSON(t, s, "/api/drivers")
 	if rec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("status = %d, want 503: %s", rec.Code, rec.Body)
+		t.Fatalf("status = %d, want 503 from the missing store: %s", rec.Code, rec.Body)
 	}
 	if code := field(t, decodeBody(t, rec), "code"); code != "fleet_unavailable" {
 		t.Errorf("code = %q, want fleet_unavailable", code)
@@ -78,6 +80,16 @@ func TestDrivers_CreateExposesProfile(t *testing.T) {
 	}
 }
 
+func TestDrivers_ListDoesNotAllowCaching(t *testing.T) {
+	rec := getJSON(t, fleetServer(t), "/api/drivers")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body)
+	}
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Errorf("Cache-Control = %q, want no-store", got)
+	}
+}
+
 func TestDrivers_AssignVehicle(t *testing.T) {
 	s := fleetServer(t)
 	rec := postJSON(t, s, "/api/drivers", `{"name":"Joko Widodo","contract_type":"Full-time"}`)
@@ -96,6 +108,52 @@ func TestDrivers_AssignVehicle(t *testing.T) {
 	}
 	if got := field(t, assigned, "contract_type"); got != "Full-time" {
 		t.Errorf("contract_type = %q, want Full-time", got)
+	}
+}
+
+func TestDrivers_UpdateProfilePreservesVehicleAssignment(t *testing.T) {
+	s := fleetServer(t)
+	created := postJSON(t, s, "/api/drivers", `{"name":"FleetFlow Demo Driver 2","contract_type":"Contract"}`)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create status = %d: %s", created.Code, created.Body)
+	}
+	id := field(t, decodeBody(t, created), "id")
+	if assigned := postJSON(t, s, "/api/drivers/"+id+"/vehicle", `{"vehicle_id":"vehicle-2"}`); assigned.Code != http.StatusOK {
+		t.Fatalf("assign status = %d: %s", assigned.Code, assigned.Body)
+	}
+
+	req := httptest.NewRequest(http.MethodPut, "/api/drivers/"+id, strings.NewReader(
+		`{"name":"Demo Driver 2","contact":"demo-driver-2@example.invalid","contact_phone":"00000000002","license_class":"B1","license_expiry":"2030-12-31","availability":"available","contract_type":"Full-time"}`,
+	))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+testAPIKey)
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update status = %d: %s", rec.Code, rec.Body)
+	}
+	updated := decodeBody(t, rec)
+	if field(t, updated, "name") != "Demo Driver 2" ||
+		field(t, updated, "contact_phone") != "00000000002" ||
+		field(t, updated, "contract_type") != "Full-time" ||
+		field(t, updated, "vehicle_id") != "vehicle-2" {
+		t.Errorf("updated driver = %v, want profile fields and vehicle assignment", updated)
+	}
+}
+
+func TestDrivers_UpdateRejectsUnknownContractType(t *testing.T) {
+	s := fleetServer(t)
+	created := postJSON(t, s, "/api/drivers", `{"name":"Demo Driver"}`)
+	id := field(t, decodeBody(t, created), "id")
+	req := httptest.NewRequest(http.MethodPut, "/api/drivers/"+id, strings.NewReader(
+		`{"name":"Demo Driver","contract_type":"Permanent"}`,
+	))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+testAPIKey)
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", rec.Code, rec.Body)
 	}
 }
 

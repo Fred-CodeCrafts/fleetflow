@@ -42,7 +42,7 @@ type Server struct {
 	router     osrm.Router
 	simulation *simulation.Service
 	keys       *auth.Service
-	// operatorKeyRequired closes the write routes to callers without a key.
+	// operatorKeyRequired closes fleet write routes to callers without a key.
 	operatorKeyRequired bool
 	live                *liveVehicles
 
@@ -87,8 +87,8 @@ func WithAPIKeys(svc *auth.Service) Option {
 }
 
 // WithOperatorWritesProtected makes every write that changes fleet data require
-// an API key: registering a vehicle or driver, assigning a driver, creating or
-// changing a trip, and starting a scenario. Reads stay public.
+// an API key: registering or editing a vehicle or driver, assigning a driver,
+// creating or changing a trip, and starting a scenario. Reads stay public.
 //
 // It is off in development, where the console has no key to present and the
 // demonstration has to work, and /readyz reports which of the two a running
@@ -150,6 +150,7 @@ func (s *Server) routes() {
 	s.mux.Handle("POST /api/vehicles", s.writes(s.handleCreateVehicle))
 	s.mux.Handle("GET /api/drivers", s.public(s.handleListDrivers))
 	s.mux.Handle("POST /api/drivers", s.writes(s.handleCreateDriver))
+	s.mux.Handle("PUT /api/drivers/{id}", s.writes(s.handleUpdateDriver))
 	s.mux.Handle("PUT /api/drivers/{id}/vehicle", s.writes(s.handleAssignDriverVehicle))
 	s.mux.Handle("POST /api/drivers/{id}/vehicle", s.writes(s.handleAssignDriverVehicle))
 	s.mux.Handle("GET /api/trips", s.public(s.handleListTrips))

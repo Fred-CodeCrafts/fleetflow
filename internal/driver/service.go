@@ -15,11 +15,13 @@ import (
 // developer debugging a report has to go on.
 const (
 	codeCreateFailed   = "driver_create_failed"
+	codeUpdateFailed   = "driver_update_failed"
 	codeListFailed     = "driver_list_failed"
 	codeAssignFailed   = "driver_assign_failed"
 	codeCanceled       = "request_cancelled"
 	codeIDFailed       = "driver_id_failed"
 	codeDriverRequired = "driver_id_required"
+	codeContractType   = "driver_contract_type_unknown"
 )
 
 // Repository stores and retrieves drivers. It is declared here, in the service
@@ -46,6 +48,10 @@ type Repository interface {
 	// act on. Implementations must apply an assignment as a single step: two
 	// requests racing for the same vehicle must not both succeed.
 	Assign(ctx context.Context, driverID, vehicleID string) (Driver, error)
+
+	// UpdateProfile updates profile fields while preserving the vehicle
+	// assignment and returns the stored record.
+	UpdateProfile(ctx context.Context, driverID string, profile Driver) (Driver, error)
 }
 
 // CreateInput is one create request as the transport receives it, so that
@@ -73,6 +79,9 @@ func NewService(repo Repository) *Service { return &Service{repo: repo} }
 
 // Create validates in, generates an id and stores the new driver.
 func (s *Service) Create(ctx context.Context, in CreateInput) (Driver, error) {
+	if err := validateContractType(in.ContractType); err != nil {
+		return Driver{}, err
+	}
 	d, err := NewProfile(in.Name, in.Contact, in.ContactPhone, in.LicenseClass,
 		in.LicenseExpiry, in.ShiftStart, in.ShiftEnd, in.Availability)
 	if err != nil {
@@ -90,6 +99,38 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (Driver, error) {
 		return Driver{}, storageError(codeCreateFailed, err)
 	}
 	return stored, nil
+}
+
+// UpdateProfile validates and stores an existing driver's profile. The
+// repository preserves the driver's vehicle assignment.
+func (s *Service) UpdateProfile(ctx context.Context, driverID string, in CreateInput) (Driver, error) {
+	driverID = strings.TrimSpace(driverID)
+	if driverID == "" {
+		return Driver{}, domain.Invalid(codeDriverRequired, "driver id is required")
+	}
+	if err := validateContractType(in.ContractType); err != nil {
+		return Driver{}, err
+	}
+	profile, err := NewProfile(in.Name, in.Contact, in.ContactPhone, in.LicenseClass,
+		in.LicenseExpiry, in.ShiftStart, in.ShiftEnd, in.Availability)
+	if err != nil {
+		return Driver{}, err
+	}
+	profile.ContractType = strings.TrimSpace(in.ContractType)
+	updated, err := s.repo.UpdateProfile(ctx, driverID, profile)
+	if err != nil {
+		return Driver{}, storageError(codeUpdateFailed, err)
+	}
+	return updated, nil
+}
+
+func validateContractType(value string) error {
+	switch strings.TrimSpace(value) {
+	case "", "Full-time", "Contract", "Freelance", "Mitra":
+		return nil
+	default:
+		return domain.Invalid(codeContractType, "contract type must be Full-time, Contract, Freelance, or Mitra")
+	}
 }
 
 // List returns every stored driver, oldest first.

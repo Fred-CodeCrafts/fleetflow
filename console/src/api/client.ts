@@ -28,6 +28,22 @@ export interface Driver {
   vehicle_id?: string
 }
 
+export type DriverProfileInput = Pick<Driver, 'name'> & Partial<Pick<Driver,
+  'contact' | 'contact_phone' | 'license_class' | 'license_expiry' | 'shift_start' |
+  'shift_end' | 'availability' | 'contract_type'>>
+
+const OPERATOR_KEY_STORAGE_KEY = 'fleetflow_operator_key'
+
+export function getOperatorKey() {
+  return sessionStorage.getItem(OPERATOR_KEY_STORAGE_KEY) ?? ''
+}
+
+export function saveOperatorKey(key: string) {
+  const trimmed = key.trim()
+  if (trimmed) sessionStorage.setItem(OPERATOR_KEY_STORAGE_KEY, trimmed)
+  else sessionStorage.removeItem(OPERATOR_KEY_STORAGE_KEY)
+}
+
 export interface OperationalTrip {
   id: string
   origin: string
@@ -262,9 +278,13 @@ export interface LabDynamicResponse {
 }
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers)
+  if (init?.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
+  const operatorKey = getOperatorKey()
+  if (operatorKey && !headers.has('Authorization')) headers.set('Authorization', `Bearer ${operatorKey}`)
   const response = await fetch(path, {
     ...init,
-    headers: { ...(init?.body ? { 'Content-Type': 'application/json' } : {}), ...init?.headers },
+    headers,
   })
   if (!response.ok) {
     let detail = `Request failed (${response.status})`
@@ -313,9 +333,13 @@ export const api = {
     'registration' | 'make' | 'model' | 'year' | 'color' | 'body_type' | 'fuel_type' |
     'capacity' | 'maintenance_history'>>) =>
     request<Vehicle>('/api/vehicles', { method: 'POST', body: JSON.stringify(vehicle) }),
-  createDriver: (driver: Pick<Driver, 'name'> & Partial<Pick<Driver,
-    'contact' | 'contact_phone' | 'license_class' | 'license_expiry' | 'shift_start' | 'shift_end' | 'availability' | 'contract_type'>>) =>
+  createDriver: (driver: DriverProfileInput) =>
     request<Driver>('/api/drivers', { method: 'POST', body: JSON.stringify(driver) }),
+  updateDriver: (id: string, driver: DriverProfileInput) =>
+    request<Driver>(`/api/drivers/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(driver),
+    }),
   assignDriverVehicle: (driverId: string, vehicleId: string) =>
     request<Driver>(`/api/drivers/${encodeURIComponent(driverId)}/vehicle`, {
       method: 'PUT',
