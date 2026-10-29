@@ -86,9 +86,9 @@ func WithAPIKeys(svc *auth.Service) Option {
 	return func(s *Server) { s.keys = svc }
 }
 
-// WithOperatorWritesProtected makes every write that changes fleet data require
-// an API key: registering or editing a vehicle or driver, assigning a driver,
-// creating or changing a trip, and starting a scenario. Reads stay public.
+// WithOperatorWritesProtected makes writes that change fleet data require an
+// API key: registering or editing a vehicle or driver, assigning a driver, and
+// creating or changing a trip. Starting a simulation stays public. Reads stay public.
 //
 // It is off in development, where the console has no key to present and the
 // demonstration has to work, and /readyz reports which of the two a running
@@ -156,7 +156,7 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/trips", s.public(s.handleListTrips))
 	s.mux.Handle("POST /api/trips", s.writes(s.handleCreateTrip))
 	s.mux.Handle("PATCH /api/trips/{id}/status", s.writes(s.handleUpdateTripStatus))
-	s.mux.Handle("POST /api/simulation/runs", s.writes(s.handleCreateSimulationRun))
+	s.mux.Handle("POST /api/simulation/runs", s.public(s.handleCreateSimulationRun))
 	s.mux.Handle("GET /api/simulation/runs", s.public(s.handleListSimulationRuns))
 	s.mux.Handle("GET /api/simulation/runs/{id}", s.public(s.handleGetSimulationRun))
 	s.mux.Handle("GET /api/emissions/summary", s.public(s.handleEmissionsSummary))

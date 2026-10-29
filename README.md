@@ -268,12 +268,12 @@ Copy `.env.example` to `.env` for the Compose database values. Set `OSRM_URL`
 in the environment of the Go process; local shell processes do not load `.env`
 automatically.
 
-`REQUIRE_OPERATOR_KEY=true` closes the seven write routes to callers without an
-API key (registering vehicles and drivers, assigning a driver, creating a trip,
-changing a trip's status, and starting a scenario). It is unset by default so the
-demonstration console, which has no key to present, can write; `/readyz` reports
-`writes: "protected"` or `"unauthenticated"` so the running mode is never a guess.
-Reads stay public in both modes.
+`REQUIRE_OPERATOR_KEY=true` protects fleet changes (registering vehicles and
+drivers, assigning a driver, creating a trip, changing a trip's status, and GPS
+ingestion). Starting a SUMO scenario stays available without a key and remains
+rate-limited. The setting is unset by default; `/readyz` reports `writes:
+"protected"` or `"unauthenticated"` for the fleet-change routes. Reads stay
+public in both modes.
 
 ## Where the dynamic-weights idea came from
 
@@ -365,11 +365,8 @@ every figure, and `internal/fleet/fleet_test.go` proves a diesel truck and an
 electric motorcycle differ on the same kilometre. No operator, no measured Jakarta
 speeds, no fuel bills — so any rupiah figure would be invented, and none is given.
 
-**"Your writes are unauthenticated. What stops me scripting your booth?"** This
-process can close them: `REQUIRE_OPERATOR_KEY=true` makes every write that changes
-fleet data require the same API key as GPS ingestion, and `/readyz` publishes
-which mode is running (`writes: "protected"` or `"unauthenticated"`). The
-demonstration runs in the open mode because the console has no key to present, and
-it says so rather than implying it is safe. Independently of the mode, a rate limit
-of 100 requests per second with a burst of 200 and a 64 KiB body cap keep one
-caller from wedging the process: availability, not authorisation.
+**"Can anyone change my fleet data or script a simulation?"** `REQUIRE_OPERATOR_KEY=true`
+protects fleet changes and GPS ingestion; scenario starts remain public so a
+visitor can run the demo without an operator key. Every route is rate-limited to
+100 requests per second with a burst of 200 and a 64 KiB body cap. This limits
+request pressure; it is not authorization for simulation compute.
