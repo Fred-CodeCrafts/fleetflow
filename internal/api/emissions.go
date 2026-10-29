@@ -19,9 +19,10 @@ type EmissionsSummary struct {
 	Totals   EmissionsTotals    `json:"totals"`
 	Runs     []EmissionsRun     `json:"runs"`
 	Vehicles []EmissionsVehicle `json:"vehicles"`
-	// Method is the emission provenance of the most recent contributing run,
-	// passed through unchanged. It is absent when no run contributed, because
-	// then there is no model to name.
+	// Methods lists each distinct provenance represented in the totals.
+	Methods []sumo.EmissionProvenance `json:"methods"`
+	// Method is retained when the totals use one method, for existing clients.
+	// It is absent when the totals combine methods or no run contributed.
 	Method *sumo.EmissionProvenance `json:"method,omitempty"`
 }
 
@@ -95,10 +96,12 @@ func summariseEmissions(runs []simulation.Run) EmissionsSummary {
 	summary := EmissionsSummary{
 		Runs:     []EmissionsRun{},
 		Vehicles: []EmissionsVehicle{},
+		Methods:  []sumo.EmissionProvenance{},
 	}
 
 	var total emissionsTally
 	byVehicle := make(map[string]*emissionsTally)
+	methods := make(map[sumo.EmissionProvenance]struct{})
 
 	for _, run := range runs {
 		if run.Status != simulation.StatusCompleted || run.Result == nil {
@@ -136,12 +139,16 @@ func summariseEmissions(runs []simulation.Run) EmissionsSummary {
 			Fuel:      round3(runTally.fuel),
 			CO2Rate:   round3(co2PerKm(runTally.co2, runTally.distance)),
 		})
-		// The newest contributing run comes first, so the first one seen sets
-		// the method the console names.
-		if summary.Method == nil {
+		if runTally.trips > 0 && run.Result.Emissions != (sumo.EmissionProvenance{}) {
 			provenance := run.Result.Emissions
-			summary.Method = &provenance
+			if _, exists := methods[provenance]; !exists {
+				methods[provenance] = struct{}{}
+				summary.Methods = append(summary.Methods, provenance)
+			}
 		}
+	}
+	if len(summary.Methods) == 1 {
+		summary.Method = &summary.Methods[0]
 	}
 
 	summary.Totals = EmissionsTotals{

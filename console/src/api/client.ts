@@ -209,6 +209,7 @@ export interface EmissionsSummary {
   totals: EmissionsTotals
   runs: EmissionsRun[]
   vehicles: EmissionsVehicle[]
+  methods?: EmissionProvenance[]
   method?: EmissionProvenance
 }
 

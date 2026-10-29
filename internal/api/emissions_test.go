@@ -132,10 +132,36 @@ func TestSummariseEmissions(t *testing.T) {
 	wantFloat(t, "FL-02.g_co2_per_km", wantFL02.CO2Rate, 300)
 
 	if summary.Method == nil {
-		t.Fatal("method is absent, want the newest contributing run's provenance")
+		t.Fatal("method is absent, want the single method used by contributing runs")
 	}
 	if summary.Method.Model != "HBEFA3" || summary.Method.Class != "HBEFA3/PC_G_EU4" {
 		t.Errorf("method = %+v, want HBEFA3/PC_G_EU4 passed through", *summary.Method)
+	}
+	if len(summary.Methods) != 1 || summary.Methods[0] != *summary.Method {
+		t.Errorf("methods = %+v, want the single method", summary.Methods)
+	}
+}
+
+func TestSummariseEmissionsReportsMixedMethods(t *testing.T) {
+	created := time.Now().UTC()
+	sumoRun := completedRun("sumo", created, 1, completedTrip("FL-01", 1000, 0.2, 0.07))
+	syntheticRun := completedRun("synthetic", created.Add(-time.Minute), 1,
+		completedTrip("FL-02", 1000, 0.3, 0.1))
+	syntheticRun.Result.Emissions = sumo.EmissionProvenance{
+		Model: "FleetFlow class factors v1", Class: "per vehicle class",
+		Source: "planning factors", InputUnit: "kilometre", OutputUnit: "kg",
+	}
+
+	summary := summariseEmissions([]simulation.Run{sumoRun, syntheticRun})
+	if summary.Method != nil {
+		t.Fatalf("method = %+v, want absent for mixed methods", *summary.Method)
+	}
+	if len(summary.Methods) != 2 || summary.Methods[0].Model != "HBEFA3" ||
+		summary.Methods[1].Model != "FleetFlow class factors v1" {
+		t.Errorf("methods = %+v, want both contributing methods in run order", summary.Methods)
+	}
+	if summary.Totals.Trips != 2 {
+		t.Errorf("totals.trips = %d, want both runs counted", summary.Totals.Trips)
 	}
 }
 
