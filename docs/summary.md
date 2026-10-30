@@ -1,10 +1,22 @@
-# FleetFlow — written summary
+# FleetFlow
+
+- **Tagline:** A dashboard that keeps measured data distinct from modelled results.
+- **Live URL:** Cloud Run deployment is blocked on an open billing account.
+- **Landing Page URL:** [Add landing page URL]
+- **Repository:** https://github.com/Fred-CodeCrafts/fleetflow
+- **Short Demo Video (<= 3 min):** [Add YouTube link]
+- **Technical Deep-Dive Video (<= 15 min):** [Add video link]
+- **Presentation Deck:** Fleetflow_ppt.pdf (uploaded as a submission attachment).
+
+## 1. Problem Statement
 
 **The problem.** A Jakarta delivery fleet answers two questions badly every day: which
 vehicle should take this load, and what did the run actually emit? The answers usually
 live in a spreadsheet, a chat group, and a fuel receipt. The hard part is knowing which
 number came from where. A dashboard that mixes a measured GPS position with a modelled
 emission figure is worse than none, because it looks auditable and is not.
+
+## 2. Solution & Core Features
 
 **What is built.** FleetFlow is an operations console built around one rule: a number a
 model produced must name the model that produced it. The stack is Go 1.25 with
@@ -29,6 +41,20 @@ times and once on congestion learned from the fleet's own speed reports, over te
 It improves trip time by 4.6% to 8.4%, mean 6.1%, and 0% adoption ties the baseline
 exactly, kept as a control so a reader can see the gain comes from the policy and not
 from noise. The grid is built in code, so a clone reproduces the result.
+
+## 3. Architecture & Tech Stack
+
+- **Frontend / Client:** A React and Vite console, MapLibre GL over OpenFreeMap tiles.
+- **Backend / Microservices:** Go 1.25 with PostgreSQL and Flyway migrations; OSRM over a Jakarta/Jabodetabek extract of OpenStreetMap.
+- **AI / LLM Integration:** No AI/LLM integration is described in this project summary.
+- **Security & Guardrails:** GPS reports from real devices are authenticated by API key, kept in their own store, and never blended with simulated positions on a map. Writes are unauthenticated by default so the demonstration console can operate; `REQUIRE_OPERATOR_KEY=true` closes them to API keys and `/readyz` publishes which mode is running.
+- **Deployment & Ops:** Google Cloud Run deployment is blocked on an open billing account.
+
+## 4. Local Setup & Reproduction Steps
+
+See [README.md](../README.md) for local setup and reproduction instructions.
+
+## Limits & Assumptions
 
 **What is not claimed.** The emission factors are planning assumptions for congested
 urban delivery work, not a certified inventory and not HBEFA3. The routing lab describes
