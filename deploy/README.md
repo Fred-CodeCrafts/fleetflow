@@ -27,14 +27,12 @@ that deployment cannot do.
    for a showcase and not for production: it is shared, rate limited, and not
    the Jakarta extract. Point `OSRM_URL` at your own instance (`scripts/osrm`
    builds one) for real routing.
-6. **Operator writes.** Set `REQUIRE_OPERATOR_KEY=true` for a public deployment
-   and issue a key with the API's key-issuing flag; `/readyz` then reports
-   `writes: "protected_except_driver_assignment"`. This protects vehicle and
-   driver registration/profile edits, and trip creation/status changes. Driver
-   assignment is intentionally public for the console, while GPS ingestion at
-   `POST /api/locations` always requires an API key. Left unset, the other
-   operator write routes accept any caller and `/readyz` says
-   `writes: "unauthenticated"`.
+6. **Operator writes.** The showcase deploy leaves
+   `REQUIRE_OPERATOR_KEY=false`, so vehicle and driver registration/profile
+   edits, driver assignments, and trip creation/status changes are public.
+   GPS ingestion at `POST /api/locations` always requires an API key. To protect
+   the other operator writes instead, set `REQUIRE_OPERATOR_KEY=true`; `/readyz`
+   then reports `writes: "protected_except_driver_assignment"`.
    For a key held in Secret Manager, run a one-off job with that secret exposed
    as `OPERATOR_KEY` and the binary's `-register-key` flag. It stores only the
    digest and does not print the key; do not run `-issue-key` in a Cloud Run job,

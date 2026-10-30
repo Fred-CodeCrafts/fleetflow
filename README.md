@@ -227,9 +227,11 @@ the map draws.
 | `POST /api/route` | Route coordinates with OSRM; returns GeoJSON coordinates, distance, and duration |
 | `GET /api/locations` | Recent GPS positions |
 | `POST /api/locations` | Submit a vehicle GPS position (API key required) |
-| `GET /api/vehicles`, `POST /api/vehicles` | Vehicle records |
-| `GET /api/drivers`, `POST /api/drivers` | Driver records |
+| `GET /api/vehicles`, `POST /api/vehicles` | Vehicle records (create is public in showcase deployment) |
+| `GET /api/drivers`, `POST /api/drivers` | Driver records (create is public in showcase deployment) |
 | `PUT /api/drivers/{id}/vehicle` | Assign or unassign a driver (no API key required) |
+| `PUT /api/drivers/{id}` | Edit driver profile (public in showcase deployment) |
+| `POST /api/trips`, `PATCH /api/trips/{id}/status` | Create or update trips (public in showcase deployment) |
 | `POST /api/simulation/runs` | Start a seeded SUMO scenario |
 | `GET /api/simulation/runs` | List scenario runs |
 | `GET /api/simulation/runs/{id}` | Inspect run status and results |
@@ -269,13 +271,13 @@ Copy `.env.example` to `.env` for the Compose database values. Set `OSRM_URL`
 in the environment of the Go process; local shell processes do not load `.env`
 automatically.
 
-`REQUIRE_OPERATOR_KEY=true` protects vehicle/driver registration and edits, and
-trip creation and status changes. Driver assignment stays available without a
-key for the console; GPS ingestion always requires an API key independently.
+The showcase deploy sets `REQUIRE_OPERATOR_KEY=false`, so vehicle/driver
+registration and edits, driver assignment, and trip creation/status changes do
+not require a key. GPS ingestion always requires an API key independently.
 Starting a SUMO scenario stays available without a key and remains rate-limited.
-The setting is unset by default; `/readyz` reports
-`writes: "protected_except_driver_assignment"` or `"unauthenticated"` for the
-other operator write routes. Reads stay public in both modes.
+Set `REQUIRE_OPERATOR_KEY=true` to protect the other operator write routes;
+`/readyz` reports `writes: "protected_except_driver_assignment"` when enabled
+and `"unauthenticated"` otherwise. Reads stay public in both modes.
 
 ## Where the dynamic-weights idea came from
 
