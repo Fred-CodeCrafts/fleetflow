@@ -15,13 +15,14 @@ import (
 // repositories. That is how DESIGN 3.7 asks the layers above storage to be
 // tested: the transport and the rules, without a database. Each record type is
 // added as its endpoints appear.
-func fleetServer(t *testing.T) *Server {
+func fleetServer(t *testing.T, opts ...Option) *Server {
 	t.Helper()
 
-	return testServer(t,
+	opts = append([]Option{
 		WithVehicles(vehicle.NewService(vehiclememory.New())),
 		WithDrivers(driver.NewService(drivermemory.New())),
-	)
+	}, opts...)
+	return testServer(t, opts...)
 }
 
 // getJSON sends a GET to path and returns the recorder the server wrote to.

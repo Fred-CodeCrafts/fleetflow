@@ -42,7 +42,7 @@ type Server struct {
 	router     osrm.Router
 	simulation *simulation.Service
 	keys       *auth.Service
-	// operatorKeyRequired closes fleet write routes to callers without a key.
+	// operatorKeyRequired gates operator write routes; driver assignment stays public.
 	operatorKeyRequired bool
 	live                *liveVehicles
 
@@ -86,9 +86,10 @@ func WithAPIKeys(svc *auth.Service) Option {
 	return func(s *Server) { s.keys = svc }
 }
 
-// WithOperatorWritesProtected makes writes that change fleet data require an
-// API key: registering or editing a vehicle or driver, assigning a driver, and
-// creating or changing a trip. Starting a simulation stays public. Reads stay public.
+// WithOperatorWritesProtected makes fleet record changes require an API key:
+// registering or editing a vehicle or driver, and creating or changing a trip.
+// Driver assignment and simulation stay public. GPS ingestion always requires
+// an API key independently. Reads stay public.
 //
 // It is off in development, where the console has no key to present and the
 // demonstration has to work, and /readyz reports which of the two a running
@@ -151,8 +152,8 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/drivers", s.public(s.handleListDrivers))
 	s.mux.Handle("POST /api/drivers", s.writes(s.handleCreateDriver))
 	s.mux.Handle("PUT /api/drivers/{id}", s.writes(s.handleUpdateDriver))
-	s.mux.Handle("PUT /api/drivers/{id}/vehicle", s.writes(s.handleAssignDriverVehicle))
-	s.mux.Handle("POST /api/drivers/{id}/vehicle", s.writes(s.handleAssignDriverVehicle))
+	s.mux.Handle("PUT /api/drivers/{id}/vehicle", s.public(s.handleAssignDriverVehicle))
+	s.mux.Handle("POST /api/drivers/{id}/vehicle", s.public(s.handleAssignDriverVehicle))
 	s.mux.Handle("GET /api/trips", s.public(s.handleListTrips))
 	s.mux.Handle("POST /api/trips", s.writes(s.handleCreateTrip))
 	s.mux.Handle("PATCH /api/trips/{id}/status", s.writes(s.handleUpdateTripStatus))
@@ -256,7 +257,7 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 	}
 	writesStatus := "unauthenticated"
 	if s.operatorKeyRequired {
-		writesStatus = "protected"
+		writesStatus = "protected_except_driver_assignment"
 	}
 	body := map[string]any{"routing": "not_configured", "simulation": simulationStatus, "writes": writesStatus}
 	ready := false

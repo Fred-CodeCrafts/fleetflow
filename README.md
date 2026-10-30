@@ -229,6 +229,7 @@ the map draws.
 | `POST /api/locations` | Submit a vehicle GPS position (API key required) |
 | `GET /api/vehicles`, `POST /api/vehicles` | Vehicle records |
 | `GET /api/drivers`, `POST /api/drivers` | Driver records |
+| `PUT /api/drivers/{id}/vehicle` | Assign or unassign a driver (no API key required) |
 | `POST /api/simulation/runs` | Start a seeded SUMO scenario |
 | `GET /api/simulation/runs` | List scenario runs |
 | `GET /api/simulation/runs/{id}` | Inspect run status and results |
@@ -268,12 +269,13 @@ Copy `.env.example` to `.env` for the Compose database values. Set `OSRM_URL`
 in the environment of the Go process; local shell processes do not load `.env`
 automatically.
 
-`REQUIRE_OPERATOR_KEY=true` protects fleet changes (registering vehicles and
-drivers, assigning a driver, creating a trip, changing a trip's status, and GPS
-ingestion). Starting a SUMO scenario stays available without a key and remains
-rate-limited. The setting is unset by default; `/readyz` reports `writes:
-"protected"` or `"unauthenticated"` for the fleet-change routes. Reads stay
-public in both modes.
+`REQUIRE_OPERATOR_KEY=true` protects vehicle/driver registration and edits, and
+trip creation and status changes. Driver assignment stays available without a
+key for the console; GPS ingestion always requires an API key independently.
+Starting a SUMO scenario stays available without a key and remains rate-limited.
+The setting is unset by default; `/readyz` reports
+`writes: "protected_except_driver_assignment"` or `"unauthenticated"` for the
+other operator write routes. Reads stay public in both modes.
 
 ## Where the dynamic-weights idea came from
 

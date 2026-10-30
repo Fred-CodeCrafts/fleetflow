@@ -59,6 +59,25 @@ func TestUnprotectedOperatorWritesStayOpen(t *testing.T) {
 	}
 }
 
+func TestDriverAssignmentDoesNotRequireAnAPIKey(t *testing.T) {
+	s := fleetServer(t, WithOperatorWritesProtected(true))
+	created := postJSONAs(t, s, "/api/drivers", `{"name":"Ada Lovelace"}`, "Bearer "+testAPIKey)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("driver creation answered %d, want 201: %s", created.Code, created.Body)
+	}
+	driverID := field(t, decodeBody(t, created), "id")
+
+	for _, method := range []string{http.MethodPut, http.MethodPost} {
+		req := httptest.NewRequest(method, "/api/drivers/"+driverID+"/vehicle", strings.NewReader(`{"vehicle_id":"vehicle-1"}`))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		s.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Errorf("%s assignment without a key answered %d, want 200: %s", method, rec.Code, rec.Body)
+		}
+	}
+}
+
 func TestProtectedDriverProfileUpdatesRequireAnAPIKey(t *testing.T) {
 	protected := testServer(t, WithOperatorWritesProtected(true))
 	req := httptest.NewRequest(http.MethodPut, "/api/drivers/driver-1", strings.NewReader(`{"name":"Demo Driver 1"}`))
@@ -77,7 +96,7 @@ func TestReadyzReportsWhetherWritesAreProtected(t *testing.T) {
 		want string
 	}{
 		{name: "development", want: "unauthenticated"},
-		{name: "deployment", opts: []Option{WithOperatorWritesProtected(true)}, want: "protected"},
+		{name: "deployment", opts: []Option{WithOperatorWritesProtected(true)}, want: "protected_except_driver_assignment"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			s := testServer(t, test.opts...)
