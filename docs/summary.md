@@ -1,12 +1,12 @@
 # FleetFlow
 
 - **Tagline:** A dashboard that keeps measured data distinct from modelled results.
-- **Live URL:** Cloud Run deployment is blocked on an open billing account.
-- **Landing Page URL:** [Add landing page URL]
+- **Live URL:** https://fleetflow-12552607189.asia-southeast2.run.app/
+- **Landing Page URL:** https://fleetflow-12552607189.asia-southeast2.run.app/
 - **Repository:** https://github.com/Fred-CodeCrafts/fleetflow
-- **Short Demo Video (<= 3 min):** [Add YouTube link]
-- **Technical Deep-Dive Video (<= 15 min):** [Add video link]
-- **Presentation Deck:** Fleetflow_ppt.pdf (uploaded as a submission attachment).
+- **Short Demo Video (<= 3 min):** https://studio.youtube.com/video/HWd7_2_gQW4
+- **Technical Deep-Dive Video (<= 15 min):** https://youtu.be/Lu5DxM66I7c
+- **Presentation Deck:** https://canva.link/aodm7a4lgnln42x
 
 ## 1. Problem Statement
 
@@ -48,7 +48,7 @@ from noise. The grid is built in code, so a clone reproduces the result.
 - **Backend / Microservices:** Go 1.25 with PostgreSQL and Flyway migrations; OSRM over a Jakarta/Jabodetabek extract of OpenStreetMap.
 - **AI / LLM Integration:** No AI/LLM integration is described in this project summary.
 - **Security & Guardrails:** GPS reports from real devices are authenticated by API key, kept in their own store, and never blended with simulated positions on a map. Writes are unauthenticated by default so the demonstration console can operate; `REQUIRE_OPERATOR_KEY=true` closes them to API keys and `/readyz` publishes which mode is running.
-- **Deployment & Ops:** Google Cloud Run deployment is blocked on an open billing account.
+- **Deployment & Ops:** Deployed on Google Cloud Run.
 
 ## 4. Local Setup & Reproduction Steps
 
