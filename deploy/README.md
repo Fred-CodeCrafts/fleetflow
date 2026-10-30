@@ -29,9 +29,12 @@ that deployment cannot do.
    builds one) for real routing.
 6. **Operator writes.** Set `REQUIRE_OPERATOR_KEY=true` for a public deployment
    and issue a key with the API's key-issuing flag; `/readyz` then reports
-   `writes: "protected"`. Left unset, the eight write routes accept any caller and
-   `/readyz` says `writes: "unauthenticated"`, which is honest but is not what a
-   public URL should show.
+   `writes: "protected_except_driver_assignment"`. This protects vehicle and
+   driver registration/profile edits, and trip creation/status changes. Driver
+   assignment is intentionally public for the console, while GPS ingestion at
+   `POST /api/locations` always requires an API key. Left unset, the other
+   operator write routes accept any caller and `/readyz` says
+   `writes: "unauthenticated"`.
    For a key held in Secret Manager, run a one-off job with that secret exposed
    as `OPERATOR_KEY` and the binary's `-register-key` flag. It stores only the
    digest and does not print the key; do not run `-issue-key` in a Cloud Run job,

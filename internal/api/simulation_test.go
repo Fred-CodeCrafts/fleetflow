@@ -36,14 +36,14 @@ func TestSimulationRunEndpoints(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer service.Shutdown(context.Background())
-	server := testServer(t, WithSimulation(service))
+	server := testServer(t, WithSimulation(service), WithOperatorWritesProtected(true))
 	ready := getJSON(t, server, "/readyz")
 	if ready.Code != http.StatusOK || decodeBody(t, ready)["simulation"] != "available" {
 		t.Fatalf("configured simulation readiness = %d %s", ready.Code, ready.Body.String())
 	}
 
-	created := postJSON(t, server, "/api/simulation/runs",
-		`{"seed":42,"vehicles":1,"departure_window_s":60}`)
+	created := postJSONAs(t, server, "/api/simulation/runs",
+		`{"seed":42,"vehicles":1,"departure_window_s":60}`, "")
 	if created.Code != http.StatusAccepted {
 		t.Fatalf("POST run status = %d, want 202: %s", created.Code, created.Body.String())
 	}

@@ -51,7 +51,7 @@ export function GeneralSettingsPage() {
       <div><dt>Map data attribution</dt><dd>MapLibre GL with OpenFreeMap tiles · OpenStreetMap contributors (ODbL)</dd></div>
     </dl></Panel>
     <Panel title="Operator API key">
-      <p className="muted">When write access is protected, enter the operator key to enable changes from this console. The key is kept in this browser tab only.</p>
+      <p className="muted">When write access is protected, enter the operator key to enable fleet data changes from this console. SUMO scenarios can be started without a key. The key is kept in this browser tab only.</p>
       <form className="form-row" onSubmit={(event) => {
         event.preventDefault()
         saveOperatorKey(operatorKey)

@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { api, type EmissionsSummary, type Vehicle } from '../api/client'
+import { api, type EmissionProvenance, type Vehicle } from '../api/client'
 import { ErrorMessage, Loading, Metric, Page, Panel, runLabel, Table, formatNumber, useLoad } from './Shared'
 
 /**
@@ -13,11 +13,7 @@ import { ErrorMessage, Loading, Metric, Page, Panel, runLabel, Table, formatNumb
  * claims and the evidence are never on different screens.
  */
 
-function provenanceNote(summary: EmissionsSummary | null) {
-  const method = summary?.method
-  if (!method) {
-    return 'No completed scenario has been recorded yet, so there is no emission model to name.'
-  }
+function provenanceNote(method: EmissionProvenance) {
   return `${method.model} · ${method.class} · ${method.source}. Values are ${method.output_unit} converted from ${method.input_unit}. ${method.assumptions}`
 }
 
@@ -43,6 +39,7 @@ export function SustainabilityPage() {
   const summary = useLoad(api.emissionsSummary)
   const vehicles = useLoad(api.vehicles)
   const data = summary.data
+  const methods = data?.methods ?? (data?.method ? [data.method] : [])
 
   // The van trips that could move to the electric cargo motorcycle today: same
   // distance, same stops, no tailpipe CO2. This is arithmetic on trips that were
@@ -125,7 +122,16 @@ export function SustainabilityPage() {
       </Panel>
 
       <Panel title="What these numbers are">
-        <p className="help-text">{provenanceNote(data ?? null)}</p>
+        {methods.length === 0
+          ? <p className="help-text">{data?.totals.trips
+            ? 'Emission totals are available, but their model provenance was not recorded.'
+            : 'No completed scenario has recorded emissions yet, so there is no emission model to name.'}</p>
+          : <>
+            {methods.length > 1 && <p className="help-text">These totals combine estimates from multiple methods:</p>}
+            {methods.map((method) => <p className="help-text" key={`${method.model}:${method.class}:${method.source}`}>
+              {provenanceNote(method)}
+            </p>)}
+          </>}
         <p className="help-text">
           These are model estimates for simulated scenarios, not measured fleet emissions and not a verified carbon saving.
         </p>
