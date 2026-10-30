@@ -44,7 +44,7 @@ try {
     --timeout 300 `
     --no-cpu-throttling `
     --set-secrets "DATABASE_URL=fleetflow-database-url:latest" `
-    --set-env-vars "ENV=production,LOG_LEVEL=info,OSRM_URL=https://router.project-osrm.org"
+    --set-env-vars "ENV=production,LOG_LEVEL=info,OSRM_URL=https://router.project-osrm.org,REQUIRE_OPERATOR_KEY=false"
   if ($LASTEXITCODE -ne 0) { throw "deploy failed" }
 
   $url = gcloud run services describe $Service --project $Project --region $Region --format 'value(status.url)'

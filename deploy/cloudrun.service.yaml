@@ -38,6 +38,8 @@ spec:
               value: "info"
             - name: OSRM_URL
               value: "https://router.project-osrm.org"
+            - name: REQUIRE_OPERATOR_KEY
+              value: "false"
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
